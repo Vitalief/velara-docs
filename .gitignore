@@ -1,2 +1,5 @@
 velara-api/
 velara-web/
+.DS_Store
+.agents/
+.claude/

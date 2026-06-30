@@ -13,7 +13,7 @@
 baseline_commit: ce270b9b156554bd9b56cd1b0ad4a09fb9304aba
 ---
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -157,6 +157,40 @@ From `implementation-patterns-consistency-rules.md` "Enforcement Rules" + `core-
 - Code (verified at creation 2026-06-30): `queue_invocation` `app/api/v1/invocations.py:135-336`; `invoke_skill` `:343-361`; `invoke_proxy` `app/api/v1/invoke.py:55-88`; `InvocationRequest`/`InvokeRequest`/`InvocationAccepted` `app/schemas/invocation.py:17-70`; `get_job`/`list_jobs`/`cancel_job` `app/services/job_service.py:152-319`; job GET route + presign loop `app/api/v1/jobs.py:105-303`; `JobRead`/`JobReadWithResult`/`JobResult`/`OutputFileRef` `app/schemas/job.py:24-133`; `InvocationJob`/`InvocationResult` models `app/models/invocation.py:49-199`; `SkillRead` `app/schemas/skill.py:222-256`; `Skill`/`SkillVersion` models `app/models/skill.py:35-208`; internal skill routes `app/api/v1/skills.py:48,88,130,190,212,247,290,317`; `presign_download` `app/integrations/storage.py`; `reject`/role-gate precedent `_require_grantor` `app/api/v1/access_grants.py:36-41`; `HierarchyScopeValue`/`_INTERNAL_ROLES`/`HierarchyScope` `app/core/dependencies.py:106-167`; `get_current_user`/aliases `:57-87`; `AuthPrincipal` `app/integrations/auth.py:35-53`; seed users `:98-117`; `VelaraHTTPException` `app/core/exceptions.py:27-41`; `ClientNotFoundError`(404) `app/services/hierarchy_service.py:31-35`; `HierarchyScopeError`(403 FORBIDDEN) `:70-75`; cross-org-404 `get_client` `:187-197`; error envelope `app/schemas/common.py:25-33`; router mount `app/api/v1/router.py:5-29`; `error_message_for` `app/services/error_messages.py`; test scaffolding `tests/integration/api/test_invoke.py:28-233`, `test_invocations.py:57-393`, `test_openapi.py:111-146`, `test_access_grants.py`.
 - Deferred-work: no open 8.2 items in [deferred-work.md](../deferred-work.md) at creation.
 
+## Review Findings
+
+<!-- Added by bmad-code-review 2026-06-30. 3-layer adversarial review (Blind Hunter, Edge Case
+     Hunter, Acceptance Auditor) + orchestrator verification against the real velara-api/ tree,
+     diffed vs baseline_commit ce270b9 (Story 8.1). All 5 ACs verified PASS and D1/D2/D3 honored;
+     findings below are correctness (1 high) + coverage + process. 6 patch / 3 decision / 1 defer
+     / 4 dismissed. -->
+
+### Decision-needed (resolved 2026-06-30)
+
+- [x] [Review][Decision→Dismissed] Out-of-scope same-org client job poll returns 403, not 404 — **RESOLVED: keep 403.** Decision: match the internal `jobs.py` 8.1 semantics (same-org-out-of-scope = 403 FORBIDDEN) on the client router too; the existence oracle is accepted as intended. No code change. [`velara-api/app/api/v1/client.py:115`]
+- [x] [Review][Decision→Dismissed] `output_file_key` (singular) not presigned on the client route — **RESOLVED: dismissed after investigation.** Verified the SOLE output-writing path is `_persist_output` (`execution_service.py:191-237`), routed through by all 3 runtimes (prompt/code/hybrid at `:491/:632/:945`); it ALWAYS returns both `output_file_key` AND `result_metadata["output_files"]=[{key,...}]` carrying that same key. No path sets `output_file_key` without mirroring it into `output_files[]`, so the client's list-only loop captures every real output. Residual fragility: a future executor that sets `output_file_key` outside `_persist_output` would reintroduce the gap. [`velara-api/app/api/v1/client.py:120-160`]
+- [x] [Review][Decision→Patch] `reject_client` guard is a denylist (`role == "client"`), not an allowlist — **RESOLVED: harden to allowlist.** Reject any role not in `_INTERNAL_ROLES` (fails closed when a future external role is added). Moved to Patch below. [`velara-api/app/core/dependencies.py:182`]
+
+### Patch (all applied + verified 2026-06-30)
+
+- [x] [Review][Patch] **`blocked` job leaks held-for-review output to the client (HIGH)** — FIXED. `client.py` now gates the `output_files` presign block on `job.status == JOB_STATUS_COMPLETED and job.result is not None` (was `job.result is not None` alone). `mark_blocked` writes a full result row identical to `mark_completed` but its output is held for human review (QA egregious flag); the client no longer receives presigned URLs for it. Locked by `test_client_blocked_job_withholds_output` (asserts empty `output_files` + no key in body). [`velara-api/app/api/v1/client.py:117-127`]
+- [x] [Review][Patch] No completed-job / out-of-scope client-router test — ADDED 3 tests to `test_client_surface.py`: `test_client_completed_job_returns_presigned_output_no_internals` (drives a job to completed with a real MinIO output + result_metadata["output_files"], asserts a usable presigned url, basename filename, raw key absent, full-body no-internals search); `test_client_blocked_job_withholds_output` (locks the HIGH fix); `test_client_out_of_scope_same_org_job_is_403` (locks the kept-403 decision). All green. [`velara-api/tests/integration/api/test_client_surface.py`]
+- [x] [Review][Patch] 8.1 regression assertions retired without client-router replacement — RESOLVED (re-scoped after analysis): the only scope-limited role is `client`, which 404s at the router on every internal route, AND `ma_tech`/`consultant` are `unrestricted` (bypass scope) — so the retired behaviors are structurally unreachable via ANY internal HTTP route by ANY role. Correct homes: (a) **in-org-403** restored on the client router via `test_client_out_of_scope_same_org_job_is_403`; (b) **scope-matching** (exact/descendant/sibling-reject/parent-reject/empty/unrestricted/prefix-without-dot) already covered by 11 unit cases in `tests/unit/services/test_access_service.py` (verified present in tree); (c) **immediate revocation** — the genuine gap — restored by strengthening `test_revocation_is_immediate` to assert `resolve_scope_paths` CONTAINS the granted path before revoke and does NOT after (was: grant_id-uniqueness only). [`velara-api/tests/integration/api/test_access_grants.py:283`]
+- [x] [Review][Patch] Story File List under-reports churn — FIXED: `test_access_grants.py` enumerated; `ruff format` reflow churn in `invocations.py`/`skills.py`/`jobs.py` noted in the File List. [story File List]
+- [x] [Review][Patch] Comment mislabels Decision reference — FIXED: `client.py` comment now correctly attributes the S3-key exclusion to D1 (was "(D3)"). [`velara-api/app/api/v1/client.py:119`]
+- [x] [Review][Patch] Harden `reject_client` to a fail-closed allowlist — FIXED: now rejects any role `not in _INTERNAL_ROLES` (was `role == "client"`), keeping the 404 NOT_FOUND response. A future external/mis-cased/missing role fails closed on internal routes. AC2 guard tests (client→404, ma_tech→pass, unauth→401) all still green. [`velara-api/app/core/dependencies.py:170-189`]
+
+### Deferred
+
+- [x] [Review][Defer] Fan-out parent client poll degrades to permanently empty `output_files` + an unhelpful parent status — a fan-out parent's `result_metadata` carries a `"children"` roll-up (job_id/location_id/status/output_file_key per child), NOT a top-level `"output_files"` key, so the client loop finds nothing and returns `output_files: null`; the parent status never summarizes child completion. No leak (verified: the client loop keys on `"output_files"`, the parent metadata key is `"children"`, and `ClientJobRead` excludes `result_metadata`). Story 8.2 explicitly defers full client fan-out output aggregation to 8.4 — deferred, pre-acknowledged. [`velara-api/app/api/v1/client.py:120-160`]
+
+### Dismissed (4 — not written as action items)
+
+- `get_job` None → 500 / cross-org wrong-error (blind) — FALSE POSITIVE: `get_job` → `_get_job_or_404`, return type `InvocationJob`, raises 404; never returns None (`job_service.py:152-159`).
+- Fan-out parent presigns child output keys → leak (blind, HIGH) — FALSE POSITIVE: parent `result_metadata` key is `"children"`, not `"output_files"`; client loop keys on `"output_files"` and finds nothing; `ClientJobRead` excludes `result_metadata`. No leak (Edge Hunter corroborates). NOTE: safe only because the metadata key names differ — fragile.
+- Cross-org-404 tests now assert the guard not domain isolation (blind) — legitimate cascade; domain cross-org-404 remains covered for internal-role tokens; the real coverage concern is captured in the 8.1-regression patch above.
+- `format` silently coerced to `""` vs strict `key` handling (blind) — cosmetic; mirrors internal `jobs.py:190` exactly; no failure mode.
+
 ## Dev Agent Record
 
 ### Agent Model Used
@@ -203,6 +237,8 @@ claude-sonnet-4-6
 - `velara-api/tests/integration/api/test_invoke.py` — updated 1 cross-org assertion from `SKILL_NOT_FOUND` → `NOT_FOUND`
 - `velara-api/tests/integration/api/test_jobs.py` — updated 1 cross-org assertion from `JOB_NOT_FOUND` → `NOT_FOUND`
 - `velara-api/tests/integration/api/test_ingest.py` — updated 1 cross-org assertion from `FILE_REF_NOT_FOUND` → `NOT_FOUND`
+- `velara-api/tests/integration/api/test_access_grants.py` — **(omitted from original File List; added by code-review 2026-06-30)** rewrote ~7 client-token assertions from 8.1 `403 FORBIDDEN` / domain codes → `404 NOT_FOUND` (guard cascade); coverage of the retired 8.1 behaviors (immediate revocation, in-org-403, positive org-scoped filtering) restored via internal-role tokens — see Review Findings patch.
+- **Note (code-review 2026-06-30):** `ruff format` (Task 8) reflowed unrelated production code in `invocations.py`, `skills.py`, and `jobs.py` (behavior-preserving whitespace/line-wrap only). Those files are listed above as "added `dependencies=[RejectClient]`"; the reflow churn inflates their diff line-count beyond the guard edit.
 
 ### Change Log
 
