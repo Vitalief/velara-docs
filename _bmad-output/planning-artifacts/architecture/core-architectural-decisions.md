@@ -117,6 +117,26 @@ Hierarchy-scoped RBAC (Epic 8 / Story 8.1) enforces access at the route boundary
 
 ---
 
+## Authorization — Admin role & tiered internal authority (added 2026-07-01, Story 8.7)
+
+Amends the 2026-06-30 "Internal roles are org-global operators" ADR by exercising its stated revisit trigger. Trigger: the Story 8.6 code review — product requested a privileged internal tier for administrative operations. Architect: Winston.
+
+**Decision.** Introduce a third internal role, `admin`, above `ma_tech`/`consultant`. `_INTERNAL_ROLES = {ma_tech, consultant, admin}` — all three bypass hierarchy scope (`unrestricted=True`); the external `client` role remains the only scope-restricted role (the 2026-06-30 decision is otherwise unchanged). Administrative *authority* (attaching skills; granting access) is tiered: **`_GRANTOR_ROLES = {admin, ma_tech}`** — a single unified set gating **both** skill attach/detach and access-grant management. `consultant` is **demoted to read-only for these two administrative operations only**; it can no longer attach/detach skills or create/revoke grants. This reverses the 8.1 D4 ruling that `consultant` is a grantor.
+
+**Scope of the demotion — running skills is UNAFFECTED.** The demotion is limited to the `_GRANTOR_ROLES`-gated *administrative* surface (attach/grant). **Running a skill is a distinct, separately-gated operation** — the invocation route (`/api/v1/invocations`) is gated by `RejectClient` only (any internal role may run), with no `_GRANTOR_ROLES` check. Because `consultant` remains in `_INTERNAL_ROLES`, it **retains full skill-execution authority**: a consultant still runs skills from the Engagements screen (and elsewhere), still reads engagements/attached-skills/grants — it simply cannot *change* attachments or grants. Consultant is a read-only *administrator* of attachments/grants but a full *operator*. Implementation MUST NOT add a grantor gate to the run path.
+
+**Why one unified `_GRANTOR_ROLES` (not split attach vs grant).** The 2026-07-01 skill-attachment ADR mandates attachment mirror `user_access_grants` 1:1. Keeping a single grantor set preserves that attach≡grant symmetry — one gate, one mental model, one test surface. The alternative — a distinct `_ATTACH_ROLES` — was rejected: it forks the symmetry for no product benefit, since `consultant` loses both attach and grant.
+
+**Role-not-org still holds.** The 2026-06-30 rationale carries forward unchanged: the bypass keys on `role`, not `org`, because `role`/`org_id` are sibling Cognito ID-token claims of equal trust; forgery is defended upstream (Cognito user-pool integrity + `token_use=="id"` + signature checks in `CognitoAuthProvider`), not by a second claim cross-check. `admin` is a trusted `custom:role` claim like the others.
+
+**Issuance.** `admin` is a valid `custom:role` value the app recognizes. Phase 1: admins are designated **manually (Cognito console)** or via Epic 10 provisioning once built — there is **no** self-service role-management surface in Story 8.7 (that is Epic 10 territory: user list + `cognito-idp:AdminUpdateUserAttributes`). `create_grant` continues to reject internal-role grantees (now including `admin`) with 422 `INTERNAL_ROLE_NOT_GRANTABLE` — an operator is never a grantee.
+
+**Sequencing.** Independent of Story 8.4 (client discovery — disjoint code paths; may run in parallel). Prefer **before or with Story 8.5** (Access Control screen) so 8.5 is built against the final gate. No MVP scope change.
+
+**Seams touched (for 8.7 dev):** `app/core/dependencies.py` (`_INTERNAL_ROLES`, `_hierarchy_scope`); `app/api/v1/hierarchy.py` + `app/api/v1/access_grants.py` (`_GRANTOR_ROLES`); `app/services/access_service.py` (`_NON_GRANTABLE_ROLES` gains `admin`); FE `src/shared/utils/auth.ts` (`INTERNAL_ROLES`) + `features/admin/` gates (`NodeSkillAttachControls`, AccessControl). Cognito `custom:role` accepts `admin`; Epic 10 provisioning offers it. Amends the 2026-06-30 ADR (revisit trigger fired); the now-reachable `_require_grantor` 403 branch becomes testable via a demoted-`consultant` token.
+
+---
+
 ## Skill Attachment Model — explicit skill↔engagement attachment (added 2026-07-01, Story 8.6)
 
 Story 8.6 (correct-course `sprint-change-proposal-2026-07-01.md`) introduces an **explicit attachment** between a skill and a hierarchy node, replacing the Phase-1 scope-heuristic that the client portal (8.4) and the internal `useProjectSkills` mock relied on. Governing FR: **ACL-09**. Architect: Winston.

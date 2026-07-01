@@ -130,7 +130,7 @@ So that I can manage who can access which Clients/Projects/Studies without calli
 
 **Given** I open `/internal/access`
 **When** the screen loads
-**Then** the placeholder is replaced by a real screen listing existing grants (user_id, node, node_type, role, granted_at) for my org — backed by a NEW `GET /api/v1/access-grants` list route (consultant/ma_tech gated; this route does not exist today — 8.1 skipped it as optional)
+**Then** the placeholder is replaced by a real screen listing existing grants (user_id, node, node_type, role, granted_at) for my org — backed by a NEW `GET /api/v1/access-grants` list route (grantor-gated; this route does not exist today — 8.1 skipped it as optional). *(Grantor gate: `consultant`/`ma_tech` as originally built; Story 8.7 tiers this to `admin`/`ma_tech` with consultant read-only — build 8.5 against the 8.7 gate if 8.7 has merged first.)*
 
 **Given** I create a grant (pick a `user_id`, a hierarchy node, `node_type`, `role=client`)
 **When** I submit
@@ -166,7 +166,7 @@ So that a client's portal shows only the skills actually assigned to their engag
 
 **Given** I attach skill X to Project Y
 **When** I call `POST /api/v1/projects/{id}/skills` (or the equivalent attach route)
-**Then** the attachment persists; the unattach route removes it. Attach/unattach is consultant/ma_tech gated and hierarchy-scope checked
+**Then** the attachment persists; the unattach route removes it. Attach/unattach is grantor-gated (`consultant`/`ma_tech` as originally built; tiered to `admin`/`ma_tech` by Story 8.7) and hierarchy-scope checked
 
 **Given** an internal assignment UI on a Project/Study screen
 **When** I attach or detach a skill
@@ -179,5 +179,49 @@ So that a client's portal shows only the skills actually assigned to their engag
 **Given** the internal mock seam `useProjectSkills(_projectId)` (which today ignores `projectId` and filters global skills by `scope==='project'`)
 **When** this story lands
 **Then** it is rewired to query real attachments by `projectId` — the documented swap point
+
+---
+
+## Story 8.7: Admin Role & Attachment/Grant Authority
+
+<!-- Added 2026-07-01 via correct-course (sprint-change-proposal-2026-07-01-admin-role.md). Exercises the 2026-06-30 internal-role ADR's revisit trigger. Requires the architect ADR "Admin role & tiered internal authority" (present in core-architectural-decisions.md, added 2026-07-01) merged before dev. Independent of 8.4; prefer before/with 8.5. Admin assignment UI = Epic 10 (NOT here). -->
+
+As a Vitalief admin,
+I want a privileged `admin` role that (with `ma_tech`) can attach skills and manage access grants, while `consultant` becomes read-only for those operations,
+So that administrative authority over skill attachment and access is tiered rather than shared equally across all internal staff.
+
+**Acceptance Criteria:**
+
+**Given** a user whose Cognito `custom:role` is `admin`
+**When** they authenticate
+**Then** they are treated as an internal role (`_INTERNAL_ROLES` includes `admin`; bypass hierarchy scope `unrestricted=True`; `RequireInternal` admits them on the FE)
+
+**Given** the attach/detach routes (`POST`/`DELETE /api/v1/{projects,studies}/{id}/skills`) and the grant routes (`POST`/`DELETE /api/v1/access-grants`)
+**When** they are called
+**Then** they are gated to `_GRANTOR_ROLES = {admin, ma_tech}` — a single unified grantor set for BOTH attach and grant
+
+**Given** a `consultant`-role token
+**When** it calls any attach/detach or grant route
+**Then** it is rejected with **403** (the now-reachable `_require_grantor` branch); consultant retains internal READ access (sees engagements, attached skills, grants) but cannot attach/detach or create/revoke grants
+
+**Given** a `consultant`-role token
+**When** it runs a skill (invocation route) from the Engagements screen or elsewhere
+**Then** it **succeeds** — running is UNAFFECTED by the demotion. The invocation route stays gated by `RejectClient` only (any internal role may run); NO `_GRANTOR_ROLES`/grantor check is added to the run path. Consultant is a read-only *administrator* of attachments/grants but remains a full *operator* who executes skills.
+
+**Given** a grant is attempted with an internal-role grantee (`ma_tech`/`consultant`/`admin`)
+**When** `create_grant` runs
+**Then** it is rejected with `422 INTERNAL_ROLE_NOT_GRANTABLE` (the guard now covers `admin` too — an operator is never a grantee)
+
+**Given** the Engagements screen and the Access Control screen
+**When** an `admin` or `ma_tech` user views a Project/Study
+**Then** attach/detach affordances are shown; for a `consultant` they are hidden — but the **Run** button on each skill remains visible to consultant (read-only for *managing* attachments, full access to *running* skills)
+
+**Given** the app's role model
+**When** an `admin` identity is needed
+**Then** it is assigned via the Cognito console (or Epic 10 provisioning once built) — this story adds NO self-service role-management UI (that is Epic 10: user list + `AdminUpdateUserAttributes`)
+
+> **Out of scope (explicit):** role-management UI, `cognito-idp:AdminUpdateUserAttributes`, a users-list surface — all Epic 10. This story is the role plumbing + the unified grantor-gate tightening + tests.
+>
+> **Sequencing:** independent of Story 8.4 (disjoint code paths — parallel OK); prefer before/with Story 8.5 (Access Control screen) so 8.5 builds on the final gate. Reverses the 8.1 D4 consultant-grantor ruling; no MVP scope change.
 
 ---
