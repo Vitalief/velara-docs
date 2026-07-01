@@ -105,6 +105,24 @@ Requirements are numbered for traceability. BRD IDs are noted in parentheses whe
 | ACL-05 | The client-facing API surface exposes only invocation endpoints (`invoke`). There are no `read-definition`, `read-instructions`, or `read-code` endpoints accessible to client-scoped tokens. | P1 |
 | ACL-06 | Engagement leads can grant or revoke client access to specific skills without platform administrator involvement. | P2 |
 | ACL-07 | In the client portal, clients see both Project-level skills (labelled "available across all studies") and Study-level skills within each Study. Both are invocable if the client has been granted access. Project-level skills are surfaced at the Project dashboard and repeated inside each Study view. | P1 |
+| ACL-08 | Internal admins (Vitalief consultants) can view, create, and revoke client access grants across the engagement hierarchy via an in-app **Access Control** screen (not just the API). | P1 |
+| ACL-09 | Skills can be **attached** to specific Projects and Studies; a client's portal shows only the skills attached to their granted engagement (intersected with `client_facing` visibility), not all org skills of a matching scope. | P1 |
+
+> **Amended 2026-07-01** (`sprint-change-proposal-2026-07-01.md`): ACL-08 covers the **internal-admin** grant-management case being built now; ACL-06 (engagement-lead **self-service**, no admin involvement) remains **P2**. **ACL-09 supersedes** the Phase-1 stance in **INV-07** ("the context picker shows all Clients, Projects, and Studies **without filtering by skill attachment**") for the **client portal**: once the attachment model (Epic 8 Story 8.6) lands, client-portal availability is attachment-filtered. INV-07's no-filter behavior may remain for the *internal* run context picker.
+
+---
+
+## 5.7a Client User Provisioning
+
+*(Added 2026-07-01 via correct-course — `sprint-change-proposal-2026-07-01.md`. Net-new: SEC-06 previously assumed users pre-exist in the auth provider; USR-01/02 introduce in-platform provisioning. Delivered by the new **Epic 10**.)*
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| USR-01 | Vitalief admins can create a client user identity in the platform's auth provider (AWS Cognito) — including the user's `org_id` and `role` claims. | P1 (Epic 10) |
+| USR-02 | New client users receive an invitation (temporary-password / set-password flow) to activate their account. | P1 (Epic 10) |
+| USR-03 | Admins can view and manage client users (list, resend invite, deactivate). | P2 (Epic 10) |
+
+> **Supersedes note for SEC-06:** SEC-06 ("Phase 1: username/password") assumed users are created out-of-band. USR-01/USR-02 add in-platform provisioning; treat SEC-06 as satisfied *via* Epic 10 for client users.
 
 ---
 

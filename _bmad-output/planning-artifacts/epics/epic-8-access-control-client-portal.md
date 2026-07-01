@@ -117,3 +117,67 @@ So that I can run approved skills and receive outputs without any exposure to Vi
 **Then** an entry exists with the client's `user_id`, the engagement `hierarchy_path`, skill ID, and `outcome`
 
 ---
+
+## Story 8.5: Access Control Screen — Admin Grant Management
+
+<!-- Added 2026-07-01 via correct-course (see planning-artifacts/sprint-change-proposal-2026-07-01.md). -->
+
+As a Vitalief consultant (internal admin),
+I want a screen to view, create, and revoke client access grants across the engagement hierarchy,
+So that I can manage who can access which Clients/Projects/Studies without calling the API by hand.
+
+**Acceptance Criteria:**
+
+**Given** I open `/internal/access`
+**When** the screen loads
+**Then** the placeholder is replaced by a real screen listing existing grants (user_id, node, node_type, role, granted_at) for my org — backed by a NEW `GET /api/v1/access-grants` list route (consultant/ma_tech gated; this route does not exist today — 8.1 skipped it as optional)
+
+**Given** I create a grant (pick a `user_id`, a hierarchy node, `node_type`, `role=client`)
+**When** I submit
+**Then** `POST /api/v1/access-grants` is called and the new grant appears in the list
+
+**Given** I revoke a grant
+**When** I confirm
+**Then** `DELETE /api/v1/access-grants/{id}` is called and it disappears; the affected client's scope recalculates on their next request (no caching — 8.1 AC5)
+
+**Given** the grantee role is internal (`ma_tech`/`consultant`)
+**When** I attempt to create the grant
+**Then** the UI prevents it and surfaces the existing `422 INTERNAL_ROLE_NOT_GRANTABLE` cleanly (does not crash)
+
+**Given** the screen is under `/internal/*`
+**When** any user reaches it
+**Then** it is internal-only (`RequireInternal`), uses the response envelope + snake→camel mapping, and shows TanStack Query loading/error states
+
+---
+
+## Story 8.6: Skill Attachment Model & Assignment UI
+
+<!-- Added 2026-07-01 via correct-course. Sequenced BEFORE 8.4 so client skill discovery consumes real attachments (not the scope-heuristic mock). Requires an architecture ADR for the attachment model before dev. -->
+
+As a Vitalief consultant,
+I want to attach specific skills to specific Projects and Studies (and see/remove those attachments),
+So that a client's portal shows only the skills actually assigned to their engagement — not every org skill of a matching scope.
+
+**Acceptance Criteria:**
+
+**Given** the Alembic migration runs
+**When** I inspect the schema
+**Then** an attachment table exists (`project_skill` / `study_skill`, or a single polymorphic `skill_attachment`) linking a skill to a hierarchy node
+
+**Given** I attach skill X to Project Y
+**When** I call `POST /api/v1/projects/{id}/skills` (or the equivalent attach route)
+**Then** the attachment persists; the unattach route removes it. Attach/unattach is consultant/ma_tech gated and hierarchy-scope checked
+
+**Given** an internal assignment UI on a Project/Study screen
+**When** I attach or detach a skill
+**Then** the attachment set updates and reflects immediately
+
+**Given** the client portal (Story 8.4)
+**When** a client views available skills
+**Then** availability is filtered by REAL attachments (replacing the scope-heuristic mock) intersected with the client's grant and `client_facing` visibility
+
+**Given** the internal mock seam `useProjectSkills(_projectId)` (which today ignores `projectId` and filters global skills by `scope==='project'`)
+**When** this story lands
+**Then** it is rewired to query real attachments by `projectId` — the documented swap point
+
+---

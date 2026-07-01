@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Velara Admin UX — key screens (V3)</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Open+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --paper:#f4f6f9;--surface:#fff;--surface-2:#f8f9fc;--surface-sunk:#edf0f4;
+  --ink:#323843;--ink-2:#4C5270;--muted:#6b7280;--faint:#9ca3af;
+  --green-900:#2e3440;--green-800:#128F8B;--green-700:#0d6b68;--green-50:#e6f8f8;--green-100:#c8f0ee;
+  --line:#e2e6ec;--line-2:#d1d7e0;--line-strong:#bec5d0;
+  --st-client-tx:#0d6b68;--st-client-bg:#e6f8f8;--st-client-bd:#a8dedd;
+  --st-internal-tx:#363b54;--st-internal-bg:#eceef5;--st-internal-bd:#c8ccdd;
+  --st-draft-tx:#5b626d;--st-draft-bg:#eef0f3;--st-draft-bd:#d6dae1;
+  --danger:#d4186c;--danger-bg:#fde8f3;
+  --serif:'Poppins',system-ui,sans-serif;--sans:'Open Sans',system-ui,sans-serif;--mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  --r-sm:6px;--r:9px;--r-lg:12px;--r-xl:18px;
+  --sh-sm:0 1px 2px rgba(50,56,67,.05),0 1px 1px rgba(50,56,67,.04);
+  --sh:0 4px 16px -6px rgba(50,56,67,.12),0 1px 3px rgba(50,56,67,.06);
+  --sh-lg:0 24px 60px -24px rgba(30,35,48,.28),0 6px 18px -10px rgba(30,35,48,.16);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5}
+h1,h2,h3,h4{font-family:var(--serif);margin:0;font-weight:700;letter-spacing:-.01em}
+.mono{font-family:var(--mono)}.muted{color:var(--muted)}.faint{color:var(--faint)}
+.wrap{max-width:1080px;margin:0 auto;padding:28px 24px 80px}
+.legend{background:var(--green-900);color:#fff;border-radius:var(--r-lg);padding:16px 20px;margin-bottom:28px}
+.legend h1{color:#fff;font-size:19px}.legend p{margin:6px 0 0;opacity:.8;font-size:13px;max-width:760px}
+.screen{margin-bottom:40px}
+.screen-label{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--green-700);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.screen-label span.n{background:var(--green-50);border:1px solid var(--st-client-bd);color:var(--green-700);border-radius:999px;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px}
+.topbar{display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--surface);border:1px solid var(--line);border-bottom:none;border-radius:var(--r-lg) var(--r-lg) 0 0}
+.topbar h2{font-size:16px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:4px 9px;font-size:11.5px;color:var(--muted);font-weight:600}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:0 0 var(--r-lg) var(--r-lg);padding:20px 22px}
+.grow{flex:1}.row{display:flex;align-items:center}.gap8{gap:8px}.gap10{gap:10px}.gap12{gap:12px}
+.btn{font-family:var(--sans);font-size:13px;font-weight:600;border-radius:var(--r-sm);padding:7px 12px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--green-800);border-color:var(--green-800);color:#fff}
+.btn-ghost{background:transparent;border-color:var(--line-2)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.badge{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 8px;font-size:10.5px;font-weight:700}
+.b-client{background:var(--st-client-bg);color:var(--st-client-tx);border:1px solid var(--st-client-bd)}
+.b-internal{background:var(--st-internal-bg);color:var(--st-internal-tx);border:1px solid var(--st-internal-bd)}
+.b-draft{background:var(--st-draft-bg);color:var(--st-draft-tx);border:1px solid var(--st-draft-bd)}
+
+/* ── scalable client selector ── */
+.client-select{position:relative;width:340px}
+.cs-trigger{display:flex;align-items:center;gap:10px;width:100%;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);padding:9px 12px;cursor:pointer}
+.cs-trigger .avatar{width:26px;height:26px;border-radius:7px;background:var(--green-50);border:1px solid var(--st-client-bd);color:var(--green-700);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;font-family:var(--mono)}
+.cs-trigger .nm{font-weight:600;font-size:13.5px}
+.cs-menu{position:absolute;top:calc(100% + 6px);left:0;width:100%;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);box-shadow:var(--sh-lg);z-index:20;overflow:hidden}
+.cs-search{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.cs-search input{border:none;outline:none;font-family:var(--sans);font-size:13.5px;flex:1;color:var(--ink)}
+.cs-list{max-height:240px;overflow:auto;padding:6px}
+.cs-opt{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer}
+.cs-opt:hover{background:var(--surface-2)}
+.cs-opt.active{background:var(--green-50)}
+.cs-opt .avatar{width:24px;height:24px;border-radius:6px;background:var(--surface-sunk);color:var(--ink-2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10.5px;font-family:var(--mono)}
+.cs-opt .sub{font-size:11.5px;color:var(--muted)}
+.cs-opt.paused{opacity:.55}
+.svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* ── project / study assignment cards ── */
+.pcard{border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;margin-top:18px}
+.phead{display:flex;align-items:center;gap:12px;padding:13px 18px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+.phead .ic{width:32px;height:32px;border-radius:8px;background:#f0e8da;color:#7a5c33;display:flex;align-items:center;justify-content:center;flex:none}
+.section-k{font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--faint);text-transform:uppercase;margin-bottom:9px}
+.skill-chips{display:flex;flex-wrap:wrap;gap:8px}
+.skill-chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:var(--r);padding:7px 11px;background:var(--surface);position:relative}
+.skill-chip .x{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--faint);cursor:pointer}
+.skill-chip:hover .x{color:var(--danger)}
+.study-row{padding:12px 18px;border-top:1px solid var(--line)}
+.study-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.study-head .ic{width:24px;height:24px;border-radius:6px;background:#ece8f4;color:#5a4a7a;display:flex;align-items:center;justify-content:center;flex:none}
+
+/* ── modal (attach panel) ── */
+.modal-scrim{background:rgba(30,35,48,.32);border-radius:var(--r-lg);padding:34px;display:flex;justify-content:center}
+.modal{width:520px;background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--sh-lg);overflow:hidden}
+.modal-head{padding:16px 20px;border-bottom:1px solid var(--line)}
+.modal-head h3{font-size:15.5px}
+.modal-head .ctx{font-size:12px;color:var(--muted);margin-top:2px}
+.modal-search{display:flex;align-items:center;gap:8px;padding:11px 16px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.modal-search input{border:none;background:transparent;outline:none;font-family:var(--sans);font-size:13.5px;flex:1}
+.skill-opt{display:flex;align-items:center;gap:11px;padding:11px 18px;border-bottom:1px solid var(--line);cursor:pointer}
+.skill-opt:hover{background:var(--surface-2)}
+.skill-opt .ic{width:30px;height:30px;border-radius:7px;background:var(--green-50);color:var(--green-700);display:flex;align-items:center;justify-content:center;flex:none}
+.skill-opt .desc{font-size:12px;color:var(--muted);margin-top:1px}
+.skill-opt.disabled{opacity:.5;cursor:not-allowed}
+.modal-foot{padding:12px 18px;display:flex;justify-content:space-between;align-items:center;background:var(--surface-2)}
+
+/* ── provisioning form ── */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px 18px}
+.field label{display:block;font-size:11.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+.field input,.field select{width:100%;border:1px solid var(--line-2);border-radius:var(--r-sm);padding:9px 11px;font-family:var(--sans);font-size:13.5px;color:var(--ink);background:var(--surface)}
+.stepper{display:flex;gap:0;margin-bottom:20px}
+.step{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--faint);padding-right:14px}
+.step.done{color:var(--green-700)}.step.cur{color:var(--ink)}
+.step .dot{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:1.5px solid currentColor}
+.step.cur .dot{background:var(--green-800);border-color:var(--green-800);color:#fff}
+.step.done .dot{background:var(--green-50);border-color:var(--green-700)}
+.arrow{color:var(--line-strong);margin:0 12px}
+.callout{background:var(--green-50);border:1px solid var(--st-client-bd);border-radius:var(--r);padding:12px 14px;font-size:13px;color:var(--st-client-tx);display:flex;gap:10px;align-items:flex-start;margin-top:16px}
+.utable{width:100%;border-collapse:collapse;margin-top:4px}
+.utable th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);font-weight:700;padding:8px 10px;border-bottom:1px solid var(--line)}
+.utable td{padding:11px 10px;border-bottom:1px solid var(--line);font-size:13px}
+.pill-invited{background:#fff7ed;color:#b45309;border:1px solid #fcd9a8}
+.pill-active{background:var(--st-client-bg);color:var(--st-client-tx);border:1px solid var(--st-client-bd)}
+.mini-avatar{width:26px;height:26px;border-radius:50%;background:var(--green-900);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="legend">
+    <h1>Velara — Internal Admin UX (V3 theme)</h1>
+    <p>Two surfaces from the 2026-07-01 correct-course: <b>Access Control skill attach/detach</b> (Story 8.6) and <b>Client User Provisioning</b> (Epic 10). Internal admins only (consultant / ma_tech). This mock reuses the existing prototype's Access Control layout — the one deliberate redesign is the scalable client selector (▼).</p>
+  </div>
+
+  <!-- 1 ─ scalable client selector -->
+  <div class="screen">
+    <div class="screen-label"><span class="n">1</span> Scalable client selector — replaces the horizontal button row</div>
+    <div class="topbar">
+      <div>
+        <div style="font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-bottom:5px">Client</div>
+        <div class="client-select">
+          <div class="cs-trigger">
+            <div class="avatar">BI</div>
+            <div class="grow"><div class="nm">Beth Israel Lahey Health</div></div>
+            <span class="chip" style="padding:2px 7px">BILH</span>
+            <svg class="svg" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+          <!-- open state -->
+          <div class="cs-menu">
+            <div class="cs-search">
+              <svg class="svg muted" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+              <input placeholder="Search clients by name or code…" value="" />
+            </div>
+            <div class="cs-list">
+              <div class="cs-opt active"><div class="avatar">BI</div><div class="grow"><div style="font-weight:600;font-size:13px">Beth Israel Lahey Health</div><div class="sub">BILH · lead Karen</div></div><svg class="svg" style="color:var(--green-700)" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
+              <div class="cs-opt"><div class="avatar">MC</div><div class="grow"><div style="font-weight:600;font-size:13px">Memorial Cancer Institute</div><div class="sub">MCI · lead Dana</div></div></div>
+              <div class="cs-opt"><div class="avatar">AT</div><div class="grow"><div style="font-weight:600;font-size:13px">Atlas Research Partners</div><div class="sub">ATLAS · lead Karen</div></div></div>
+              <div class="cs-opt paused"><div class="avatar">NS</div><div class="grow"><div style="font-weight:600;font-size:13px">Northshore Health System</div><div class="sub">NS · lead Tomas · paused</div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="grow"></div>
+      <span class="chip"><svg class="svg" viewBox="0 0 24 24" style="width:13px;height:13px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Scoped to Client → Project → Study</span>
+    </div>
+    <div class="panel"><p class="muted" style="margin:0;font-size:13px">One client active at a time. Type to filter across the full client list — scales to hundreds without a wrapping wall of buttons. Paused clients are dimmed but still selectable. Collapses to a tidy context chip once chosen.</p></div>
+  </div>
+
+  <!-- 2 ─ assignment surface with live attach/detach affordances -->
+  <div class="screen">
+    <div class="screen-label"><span class="n">2</span> Skill assignment — project & study cards (existing layout, now with live Attach / detach)</div>
+    <div class="panel" style="border-radius:var(--r-lg)">
+      <div class="pcard">
+        <div class="phead">
+          <div class="ic"><svg class="svg" viewBox="0 0 24 24"><path d="M12 2l9 5-9 5-9-5 9-5zM3 12l9 5 9-5M3 17l9 5 9-5"/></svg></div>
+          <div class="grow"><div style="font-weight:700;font-size:15px">BILH Oncology Network</div><div class="mono faint" style="font-size:11px">PRJ-BILH-ONC · lead Karen</div></div>
+          <button class="btn btn-primary btn-sm"><svg class="svg" viewBox="0 0 24 24" style="width:13px;height:13px"><path d="M12 5v14M5 12h14"/></svg> Attach skill</button>
+        </div>
+        <div style="padding:12px 18px;border-bottom:1px solid var(--line)">
+          <div class="section-k">Project-level skills · available across all studies</div>
+          <div class="skill-chips">
+            <div class="skill-chip"><svg class="svg muted" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M4 4h16v16H4z"/></svg><span style="font-size:13px;font-weight:600">Governance Memo</span><span class="badge b-client"><svg class="svg" viewBox="0 0 24 24" style="width:10px;height:10px"><circle cx="12" cy="12" r="3"/><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/></svg> Outputs</span><span class="x" title="Detach">✕</span></div>
+            <div class="skill-chip"><svg class="svg muted" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M4 4h16v16H4z"/></svg><span style="font-size:13px;font-weight:600">Enrollment Forecast</span><span class="badge b-client"><svg class="svg" viewBox="0 0 24 24" style="width:10px;height:10px"><circle cx="12" cy="12" r="3"/><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/></svg> Outputs</span><span class="x" title="Detach">✕</span></div>
+          </div>
+        </div>
+        <div class="study-row">
+          <div class="study-head">
+            <div class="ic"><svg class="svg" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M9 2h6M10 2v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V2"/></svg></div>
+            <span style="font-weight:700;font-size:13.5px">ONC-204</span><span class="mono faint" style="font-size:11px">STD-ONC204</span>
+            <span class="badge b-client">active</span>
+            <div class="grow"></div>
+            <button class="btn btn-ghost btn-sm"><svg class="svg" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M12 5v14M5 12h14"/></svg> Attach</button>
+          </div>
+          <div class="skill-chips" style="padding-left:34px">
+            <div class="skill-chip"><svg class="svg muted" viewBox="0 0 24 24" style="width:13px;height:13px"><path d="M4 4h16v16H4z"/></svg><span style="font-size:12.5px;font-weight:600">Site Activation Risk</span><span class="x" title="Detach">✕</span></div>
+          </div>
+        </div>
+        <div class="study-row">
+          <div class="study-head">
+            <div class="ic"><svg class="svg" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M9 2h6M10 2v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V2"/></svg></div>
+            <span style="font-weight:700;font-size:13.5px">ONC-207</span><span class="mono faint" style="font-size:11px">STD-ONC207</span>
+            <span class="badge b-client">active</span>
+            <div class="grow"></div>
+            <button class="btn btn-ghost btn-sm"><svg class="svg" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M12 5v14M5 12h14"/></svg> Attach</button>
+          </div>
+          <div class="muted" style="font-size:13px;padding-left:34px">No skills attached to this study yet.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 ─ attach modal -->
+  <div class="screen">
+    <div class="screen-label"><span class="n">3</span> Attach-skill panel — opens from any "Attach" button (the dead stub, now designed)</div>
+    <div class="modal-scrim">
+      <div class="modal">
+        <div class="modal-head">
+          <h3>Attach a skill</h3>
+          <div class="ctx">to <b>ONC-204</b> · Study · BILH Oncology Network</div>
+        </div>
+        <div class="modal-search">
+          <svg class="svg muted" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input placeholder="Search client-ready skills…" value="" />
+        </div>
+        <div>
+          <div class="skill-opt">
+            <div class="ic"><svg class="svg" viewBox="0 0 24 24" style="width:15px;height:15px"><path d="M4 4h16v16H4z"/></svg></div>
+            <div class="grow"><div style="font-weight:600;font-size:13.5px">Startup Timeline</div><div class="desc">Projected activation milestones from protocol + site list.</div></div>
+            <button class="btn btn-primary btn-sm">Attach</button>
+          </div>
+          <div class="skill-opt">
+            <div class="ic"><svg class="svg" viewBox="0 0 24 24" style="width:15px;height:15px"><path d="M4 4h16v16H4z"/></svg></div>
+            <div class="grow"><div style="font-weight:600;font-size:13.5px">MVR Summarizer</div><div class="desc">Monitoring visit report digest for the study team.</div></div>
+            <button class="btn btn-primary btn-sm">Attach</button>
+          </div>
+          <div class="skill-opt disabled" title="Already attached">
+            <div class="ic"><svg class="svg" viewBox="0 0 24 24" style="width:15px;height:15px"><path d="M4 4h16v16H4z"/></svg></div>
+            <div class="grow"><div style="font-weight:600;font-size:13.5px">Site Activation Risk</div><div class="desc">Already attached to this study.</div></div>
+            <span class="badge b-client"><svg class="svg" viewBox="0 0 24 24" style="width:10px;height:10px"><path d="M20 6L9 17l-5-5"/></svg> Attached</span>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <span class="chip" style="background:transparent;border:none;color:var(--muted)"><svg class="svg" viewBox="0 0 24 24" style="width:13px;height:13px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg> Only client-ready skills appear — internal-only can't reach clients.</span>
+          <button class="btn btn-ghost">Done</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="border-radius:var(--r-lg);margin-top:12px"><p class="muted" style="margin:0;font-size:13px"><b>Guardrail by construction:</b> the picker lists only <span class="badge b-client" style="font-size:10px">client-ready</span> skills, so an admin <i>cannot</i> attach an internal-only skill to a client — the mistake you'd worry about is designed out, not warned against.</p></div>
+  </div>
+
+  <!-- 4 ─ provisioning: create + invite -->
+  <div class="screen">
+    <div class="screen-label"><span class="n">4</span> Client provisioning — create + invite, then grant, as one guided flow (Epic 10)</div>
+    <div class="topbar"><h2>Add a client user</h2><div class="grow"></div><span class="chip">Susan → BILH</span></div>
+    <div class="panel">
+      <div class="stepper">
+        <div class="step cur"><span class="dot">1</span> Create &amp; invite</div>
+        <span class="arrow">›</span>
+        <div class="step"><span class="dot">2</span> Grant access</div>
+        <span class="arrow">›</span>
+        <div class="step"><span class="dot">3</span> Done</div>
+      </div>
+      <div class="form-grid">
+        <div class="field"><label>Full name</label><input value="Susan Whitfield"/></div>
+        <div class="field"><label>Work email</label><input value="s.whitfield@bilh.org"/></div>
+        <div class="field"><label>Client / engagement</label><select><option>Beth Israel Lahey Health (BILH)</option></select></div>
+        <div class="field"><label>Role</label><select><option>Client</option></select></div>
+      </div>
+      <div class="callout">
+        <svg class="svg" viewBox="0 0 24 24" style="margin-top:1px"><path d="M4 4h16v16H4z"/><path d="M22 6l-10 7L2 6"/></svg>
+        <div>On <b>Create</b>, Cognito emails Susan a secure invitation with a temporary password. She sets her own password on first sign-in — Velara never sees or stores it. No email for you to send by hand.</div>
+      </div>
+      <div class="row" style="justify-content:flex-end;gap:10px;margin-top:20px">
+        <button class="btn btn-ghost">Cancel</button>
+        <button class="btn btn-primary">Create &amp; send invite →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5 ─ provisioning: grant step + user list -->
+  <div class="screen">
+    <div class="screen-label"><span class="n">5</span> Step 2 (grant) hands straight to Access Control · and the Users list</div>
+    <div class="panel" style="border-radius:var(--r-lg)">
+      <div class="callout" style="margin-top:0;background:var(--surface-2);border-color:var(--line);color:var(--ink-2)">
+        <svg class="svg" viewBox="0 0 24 24" style="margin-top:1px;color:var(--green-700)"><path d="M20 6L9 17l-5-5"/></svg>
+        <div><b>Susan is invited.</b> Now grant her engagement access — this reuses the exact Access Control grant control you already know, pre-filled to Susan. No context-switch, no re-typing who she is.</div>
+      </div>
+      <div style="margin-top:22px">
+        <div class="row gap10" style="margin-bottom:12px"><h3 style="font-size:15px">Client users</h3><span class="chip">BILH · 3</span><div class="grow"></div>
+          <div class="row gap8" style="border:1px solid var(--line-2);border-radius:var(--r-sm);padding:5px 10px"><svg class="svg muted" viewBox="0 0 24 24" style="width:14px;height:14px"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg><span class="muted" style="font-size:12.5px">Search users…</span></div>
+          <button class="btn btn-primary btn-sm"><svg class="svg" viewBox="0 0 24 24" style="width:13px;height:13px"><path d="M12 5v14M5 12h14"/></svg> Add user</button>
+        </div>
+        <table class="utable">
+          <thead><tr><th>User</th><th>Email</th><th>Engagement access</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><div class="row gap8"><span class="mini-avatar">SW</span> Susan Whitfield</div></td><td class="muted">s.whitfield@bilh.org</td><td class="muted">— <span class="faint" style="font-size:12px">(grant pending)</span></td><td><span class="badge pill-invited">Invited</span></td><td><button class="btn btn-ghost btn-sm">Resend</button></td></tr>
+            <tr><td><div class="row gap8"><span class="mini-avatar">KH</span> Karen Holt</div></td><td class="muted">k.holt@bilh.org</td><td class="muted">BILH Oncology Network</td><td><span class="badge pill-active">Active</span></td><td></td></tr>
+            <tr><td><div class="row gap8"><span class="mini-avatar">MR</span> Marcus Reed</div></td><td class="muted">m.reed@bilh.org</td><td class="muted">ONC-204</td><td><span class="badge pill-active">Active</span></td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -7,6 +7,8 @@
 > **Updated 2026-06-09** (see `sprint-change-proposal-2026-06-09.md`): V3 brand re-theme. Client brand guidelines drive a new palette (teal/navy/slate/pink) and typography (Poppins/Open Sans). Epic 1 gains **Story 1.6** (apply V3 brand theme); design-token references across architecture, UX-DR-02/03/04, branded output (Epic 3), and PRD §13 updated v2→v3.
 >
 > **Added 2026-06-18** (see `sprint-change-proposal-2026-06-18.md`): the client delivered the first real foundation skill (`velara-protocol-extractor`), a **code-driven hybrid** the current hybrid runtime cannot host. **New Epic 5.5** (positioned right after Epic 5) widens the hybrid runtime for code-driven trusted skills (multi-file bundle, deps, egress, injected secrets, raw-file input) and adds a schema-versioned canonical output contract + `blocked` QA job state. **Epics 2 & 3 stay `done`** (forward FR amendments only, no reopen). Phase-1 isolation = per-skill venv; container isolation deferred to an Epic 7 story. Headline gate = the client skill running **end-to-end** on the platform. _(Renumbered 2026-06-25: created as Epic 10, moved to **5.5** to sit where it belongs by dependency; Epics 6–9 keep their numbers.)_
+>
+> **Added 2026-07-01** (see `sprint-change-proposal-2026-07-01.md`): access-control admin surfaces gap found near Epic 8 close. Epic 8's stories delivered RBAC enforcement (8.1), the IP client surface (8.2), and the client portal (8.3/8.4) but never the internal admin UI, and the skill-attachment model was a documented deferral. **Epic 8 gains Story 8.5** (Access Control screen — admin grant management UI over the 8.1 API) and **Story 8.6** (Skill Attachment Model & Assignment UI — real join table + assignment, replacing the scope-heuristic mock; **sequenced before 8.4** so client discovery consumes real attachments). **New Epic 10: Client User Provisioning** (Cognito `AdminCreateUser` + invites + user-management screens — a distinct identity-lifecycle concern, `USR-*` FRs, net-new vs SEC-06's pre-existing-user assumption). New FRs ACL-08/ACL-09/USR-01..03; ACL-09 supersedes the INV-07 "no attachment filtering" Phase-1 stance for the client portal; requires architecture ADRs (attachment model + Cognito provisioning).
 
 ## Epic 1: Platform Foundation & Local Dev Environment
 Developers can run the full platform locally — FastAPI + Celery + Redis + PostgreSQL + local object storage (MinIO/LocalStack) — behind provider abstractions (storage, secrets, auth) that make the eventual AWS swap a configuration change. A dev-auth shim issues the same JWT claims contract (`user_id`, `org_id`, role) Cognito will later provide. HIPAA controls (PHI sanitizer, S3-key-reference pattern, append-only audit, structured logging) ship from the first commit. **AWS provisioning, CI/CD, Cognito, and cloud observability move to Epic 7** — removing the AWS-account dependency from the critical path.
@@ -74,9 +76,11 @@ The platform is provisioned onto HIPAA-eligible AWS infrastructure via Terraform
 ---
 
 ## Epic 8: Access Control & Client Portal
-Clients can access a dedicated portal to invoke client-facing skills and receive outputs — with project-level skills surfaced above study-level skills. Hierarchy-scoped RBAC is fully enforced across all API routes. Skill internals are structurally blocked from client-scoped tokens at the API router level (not just permissions). Internal-only and client-facing skill visibility is enforced end-to-end.
+Clients can access a dedicated portal to invoke client-facing skills and receive outputs — with project-level skills surfaced above study-level skills. Hierarchy-scoped RBAC is fully enforced across all API routes. Skill internals are structurally blocked from client-scoped tokens at the API router level (not just permissions). Internal-only and client-facing skill visibility is enforced end-to-end. **Internal admins get an Access Control screen to manage client grants (8.5), and skills are attached to specific Projects/Studies via a real attachment model + assignment UI (8.6, sequenced before 8.4).**
 
-**FRs covered:** FR-ACL-01, FR-ACL-02, FR-ACL-03, FR-ACL-04, FR-ACL-05, FR-ACL-07
+**Stories:** 8.1 RBAC enforcement · 8.2 IP client surface · 8.3 client portal shell · 8.4 client skill discovery · **8.5 Access Control screen (admin grant management)** · **8.6 Skill Attachment Model & Assignment UI** _(8.5/8.6 added 2026-07-01)_
+
+**FRs covered:** FR-ACL-01, FR-ACL-02, FR-ACL-03, FR-ACL-04, FR-ACL-05, FR-ACL-07, **FR-ACL-08, FR-ACL-09**
 **Also covers:** UX-DR-09
 
 ---
@@ -86,5 +90,20 @@ Operators and consultants can query the immutable, append-only audit log by any 
 
 **FRs covered:** FR-USE-01, FR-USE-02, FR-USE-03, FR-USE-04, FR-USE-06 (usage analytics — Overview + per-user), FR-SEC-09 (Part 11 audit-trail attributes)
 **Also covers:** UX-DR-13 (Analytics Overview + By-User)
+
+---
+
+## Epic 10: Client User Provisioning
+
+<!-- Added 2026-07-01 via correct-course (see planning-artifacts/sprint-change-proposal-2026-07-01.md). -->
+
+Vitalief admins can create client login identities and invite them, so a client can be onboarded end-to-end from within the platform rather than via out-of-band Cognito-console work. This is a distinct identity-lifecycle concern split out of Epic 8 (which manages *access grants* for users assumed to already exist). Requires an architecture ADR for Cognito `AdminCreateUser` + invite flow before dev.
+
+**Stories (to be detailed via create-story):**
+- 10.1 Cognito admin user provisioning (`AdminCreateUser` + `org_id`/`role` claims + invite / temporary-password flow; dev-mode path via `DevAuthProvider`)
+- 10.2 User-management screen (create/invite client users, list users, resend invite)
+- 10.3 Provisioning ↔ grant handoff (create user → immediately grant engagement access in one flow)
+
+**FRs covered:** FR-USR-01, FR-USR-02, FR-USR-03 _(new; USR-01/02 supersede the SEC-06 assumption that users pre-exist)_
 
 ---
