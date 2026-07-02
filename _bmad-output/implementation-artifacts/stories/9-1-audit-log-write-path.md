@@ -4,7 +4,7 @@ baseline_commit: 87e36e0e01f61c55287a6bf695d14403ab325329
 
 # Story 9.1: Audit Log Write Path
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -175,3 +175,16 @@ claude-sonnet-5
 - velara-api/tests/integration/services/test_audit_service.py (NEW)
 - velara-api/tests/integration/workers/test_execution_tasks.py
 - velara-api/tests/integration/api/test_invocations.py
+
+### Review Findings
+
+Code review 2026-07-02 (3 layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). All 7 ACs verified satisfied; no Critical/High. Migration (partitioning, composite PK, append-only triggers, downgrade fidelity), the `record_entry`→`record_invocation` rename + all callers, token forwarding (success/blocked only), and the four admin-audit wirings were all confirmed correct.
+
+- [x] [Review][Patch→Fixed] `job_id` audit column now populated — added a `job_id` param to `record_invocation`/`record_invocation_sync` and threaded the row's OWN job id at all 5 invocation call sites (execution_tasks success=`job.id`, blocked=`job.id`, failure=`job_uuid`, fan-out parent=`parent_uuid`; job_service cancellation=`cancelled_job.id`). Distinct from `parent_invocation_id` (the fan-out parent). New integration test `test_record_invocation_persists_own_job_id`. (all 3 layers) [velara-api/app/services/audit_service.py, execution_tasks.py, job_service.py]
+- [x] [Review][Patch→Fixed] Timezone-independent partition routing — partition bounds now rendered as explicit UTC timestamptz literals (`TIMESTAMPTZ '2026-07-01 00:00:00+00'`) instead of bare dates coerced via the session `TimeZone` GUC. Verified in `velara_test`: `audit_log_entries_2026_07` bound is `('2026-07-01 00:00:00+00')`. (blind+edge) [velara-api/app/db/migrations/versions/0018_partition_audit_log.py]
+- [x] [Review][Patch→Fixed] Idempotent re-grant now audited — the `prior is not None` early-return in `create_grant` writes a best-effort `admin.grant_reaffirmed` audit entry (new constant, distinct from `grant_created` so the trail doesn't imply a fresh grant) before returning. New integration test `test_idempotent_regrant_writes_admin_grant_reaffirmed_audit_entry`. (blind+edge+auditor) [velara-api/app/services/access_service.py, app/models/audit.py]
+- [x] [Review][Defer] DEFAULT-partition trap + no Phase-2 partition automation — rows after Oct 2026 pile into an unbounded DEFAULT partition; once an out-of-window row lands there, that month's `CREATE ... PARTITION OF` fails and the append-only trigger makes the row unremovable. Documented out-of-scope (Phase-2). [velara-api/app/db/migrations/versions/0018_partition_audit_log.py]
+- [x] [Review][Defer] Future partitions lack TRUNCATE protection — statement-level BEFORE TRUNCATE trigger doesn't propagate; any Phase-2-created partition is TRUNCATE-able, breaking append-only for that month. AC5 holds for the 6 shipped partitions. Documented in the migration docstring. [velara-api/app/db/migrations/versions/0018_partition_audit_log.py]
+- [x] [Review][Defer] Dead sync wrappers — `record_invocation_sync`/`record_admin_action_sync` have no callers (the latter is net-new dead code); delete or wire up. [velara-api/app/services/audit_service.py]
+
+Dismissed as noise (3): (a) best-effort admin audit commits the shared request session — VERIFIED not live-exploitable (audit is the last DB statement, serialization is scalar-only via `AccessGrantRead`/`SkillRead`, so no post-audit statement can hit a poisoned session) but a latent robustness note vs the worker's fresh-session pattern; (b) `_extract_token_metadata` keys on presence not value — would forward `{"input_tokens": None}` if a producer ever emitted None, but no producer does today; (c) certification auto-advance emits two admin entries (cert + lifecycle) — correct, a real transition occurred.
