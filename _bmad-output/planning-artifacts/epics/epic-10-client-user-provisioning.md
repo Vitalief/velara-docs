@@ -118,9 +118,76 @@ So that onboarding is a single action rather than "create user, then separately 
 
 ---
 
+## Story 10.4: First-Login Password Challenge + Invite Email Content
+
+As a newly-invited user (client or consultant),
+I want the invite email to tell me what I'm being invited to and where to sign in, and I want the app to actually let me set my password on first login,
+So that I can activate my account without hitting a dead end.
+
+**Discovered 2026-07-03** (post-10.2 manual smoke test, ma_tech creating a consultant user): confirmed **missing end-to-end** — not a regression, a scope gap left by 10.1/7.3 never being connected.
+
+- **Confirmed gap 1 (FE, blocking):** `AdminCreateUser`-provisioned users always start in Cognito's `NEW_PASSWORD_REQUIRED` challenge state (10.1's default invite mode, `auth.py:627`). Amplify's `signIn()` resolves this as a `nextStep.signInStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED'` result, **not** a thrown error — but `login()` (`velara-web/src/shared/utils/auth.ts:147-168`) never inspects `nextStep` at all. It falls through to `fetchAuthSession()`, gets no real tokens, throws `"Authentication failed — no ID token returned."`, which `LoginPage`'s blanket catch (`LoginPage.tsx:57-59`, AC3's "map all rejections to one string") flattens to **"Invalid username or password."** — actively misleading, since the credentials were correct. There is no FE screen/step anywhere that calls Amplify's `confirmSignIn()` with a new password.
+- **Confirmed gap 2 (BE, low-severity):** the invite email is Cognito's bare default template — `CognitoAuthProvider.create_user` (`auth.py:627-652`) invokes `AdminCreateUser` with `DesiredDeliveryMediums=["EMAIL"]` but no `MessageAction`/custom `ClientMetadata`/message template — so the email has zero product context (no "you've been invited to Velara," no login URL), just a bare username + temporary password.
+
+**Building blocks:** Amplify `signIn()`/`confirmSignIn()` ALREADY AVAILABLE (`aws-amplify/auth`, already imported in `auth.ts`). Cognito `AdminCreateUser` supports a custom invite message via `MessageAction` + a **User Pool message template** (`AdminCreateUserConfig.InviteMessageTemplate`, Terraform-configurable on `aws_cognito_user_pool`) — no new AWS API, just wiring. No new DB state either.
+
+**Acceptance Criteria (draft — refine at create-story):**
+
+**Given** a user logs in for the first time with their Cognito-issued temporary password
+**When** Amplify's `signIn()` resolves with `nextStep.signInStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED'`
+**Then** the app shows a "set your new password" step (not a login failure) and calls `confirmSignIn({ challengeResponse: newPassword })` to complete sign-in, landing the user in the app exactly as a normal login would
+
+**Given** the new-password step
+**When** the user submits a password that fails Cognito's password policy
+**Then** the error is shown inline (mirroring the existing `getErrorMessage`/inline-error convention) without losing entered state
+
+**Given** an admin/ma_tech provisions a new user or resends an invite
+**When** Cognito sends the invitation email
+**Then** the email names Velara and states the login URL (`InviteMessageTemplate` on the user pool, applied via Terraform; verify whether `{username}`/`{####}` template placeholders need to be preserved for Cognito to inject the temp password)
+
+**Given** this story ships
+**When** 10.3 (create→grant handoff) is developed/tested
+**Then** 10.3's manual verification is unblocked — a freshly-provisioned user can actually complete first login end-to-end (10.3 create-story should sequence after or alongside 10.4)
+
+**Sequencing note:** discovered after 10.2, before 10.3 starts — recommend 10.4 lands before or alongside 10.3, since 10.3's own manual verification requires a working first-login path.
+
+---
+
+## Story 10.5: Forgot Password / Reset Password
+
+As any logged-out user (client, consultant, admin, ma_tech) who has forgotten their password,
+I want a self-service "Forgot password?" flow from the login screen,
+So that I can regain access without asking an admin to re-provision or reset my account manually.
+
+**Discovered 2026-07-03** (same session as 10.4, user-reported): confirmed **completely absent** — no route, no page, no "Forgot password?" link on `LoginPage.tsx`, and no `resetPassword`/`confirmResetPassword` calls anywhere in the FE (`aws-amplify/auth` exposes both; only `signIn`/`signOut` are currently imported in `auth.ts`). Distinct from Story 10.4: 10.4 is a Cognito-*forced* challenge during first login for freshly-provisioned users; this is a *self-service*, user-initiated flow for an already-active user who forgot their password later. Different Amplify calls, different trigger, independently buildable/testable — tracked separately from 10.4.
+
+**Building blocks:** Amplify `resetPassword()` (sends the verification code) + `confirmResetPassword()` (submits code + new password) — both exported by `aws-amplify/auth`, same package already used for `signIn`/`signOut`. Cognito user pool already supports password-reset out of the box (no Terraform change expected — verify at create-story whether the pool's recovery mechanism / email settings need explicit configuration). No new DB state.
+
+**Acceptance Criteria (draft — refine at create-story):**
+
+**Given** the login screen
+**When** it renders
+**Then** a "Forgot password?" link is present and navigates to a new forgot-password screen/step
+
+**Given** a user enters their email on the forgot-password screen
+**When** they submit
+**Then** the app calls Amplify `resetPassword({ username })`, and shows a confirmation that a code was emailed (success state must not reveal whether the email exists — avoid a user-enumeration oracle mirrored from the same class of finding raised in the 10.2 review)
+
+**Given** a user has received the reset code
+**When** they submit the code + a new password
+**Then** the app calls `confirmResetPassword({ username, confirmationCode, newPassword })`, and on success routes them back to `/login` with a clear "password updated, sign in" message (mirrors the existing `?reason=expired` banner pattern on `LoginPage.tsx`)
+
+**Given** an invalid/expired code or a password that fails Cognito's policy
+**When** confirmation fails
+**Then** the error is shown inline without losing the entered email/code (mirrors 10.4 and the rest of the app's error-handling conventions)
+
+**Sequencing note:** independent of 10.4 — can be built in parallel or in either order. Both surfaced from the same manual-testing session and share `LoginPage.tsx`/`auth.ts`, so consider sequencing them adjacently to avoid merge friction on the same files.
+
+---
+
 ## Notes for create-story
 
-- **Sequence:** 10.1 (backend seam + route) → 10.2 (UI over it) → 10.3 (combines 10.1 + the existing grant flow). 10.3 depends on both.
+- **Sequence:** 10.1 (backend seam + route) → 10.2 (UI over it) → 10.3 (combines 10.1 + the existing grant flow). 10.3 depends on both. 10.4/10.5 are auth-lifecycle gaps discovered post-10.2 — sequence 10.4 before/alongside 10.3 (blocks 10.3's manual verification); 10.5 is independent and can run in parallel with either.
 - **P2 (retro) status:** the Cognito-provisioning architecture ADR is **already written** (`core-architectural-decisions.md:181-203`), so create-story is unblocked on both P1 (this doc) and P2 (the ADR).
 - **Grantor-gate decision (2026-07-03):** provisioning = `{admin, ma_tech}`, supersedes the ADR's older `consultant`/`ma_tech` phrasing. Bake `RejectNonGrantor` into 10.1.
 - **Route shape:** the read route is `GET /api/v1/users`; the natural mutation counterpart is `POST /api/v1/users` on the same router (already `RejectClient`-gated + grantor-checked). Confirm at create-story whether a `POST /api/v1/users/{id}/resend-invite` (USR-03) lands in 10.2 or a follow-up.

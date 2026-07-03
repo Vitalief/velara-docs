@@ -5,7 +5,7 @@ baseline_commit_web: 835e90b
 
 # Story 10.2: User-Management Screen
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -201,7 +201,7 @@ Claude Sonnet 5 (claude-sonnet-5)
 - Full BE suite: 1017 passed, 36 skipped, 0 failed (baseline 1005 + 12 new). `ruff check` clean.
 - `docs/api-spec.json` regenerated and confirmed byte-stable on a second rerun.
 - FE: `tsc --noEmit` 0 errors, `eslint` clean. Full `vitest run`: 482 passed / 50 files (baseline 461/47 + 21 new), 0 regressions.
-- Manual browser verification (Playwright against the running local dev server, logged in as `dev.admin@velara.dev`): the Users nav tab, directory table (User/Email/Role/Engagement access/Status columns), initials avatars, live search filter, and the Add-user overlay (stepper, form, Cognito-invite callout, error handling) all render and behave correctly. The actual create/resend network calls hit a 405 because the long-running local `velara-api-api-1` container is serving code baked in before Story 10.1 (predates this session — `docker exec` showed no `POST /users` route at all, i.e. stale relative to git HEAD `c4d4805`). Per explicit instruction and project memory, the live container was not rebuilt/restarted to work around this; BE behavior for create/resend is fully covered by the automated integration test suite instead (34 passing tests in `test_users.py` against a freshly-built local environment).
+- Manual browser verification (Playwright against the running local dev server, logged in as `dev.admin@velara.dev`) confirmed only static rendering/UI behavior: the Users nav tab, directory table (User/Email/Role/Engagement access/Status columns), initials avatars, live search filter, and the Add-user overlay (stepper, form, Cognito-invite callout, error handling) all render and interact correctly in the browser. It did **not** confirm the create/resend network flows end-to-end — those calls hit a 405 because the long-running local `velara-api-api-1` container is serving code baked in before Story 10.1 (predates this session — `docker exec` showed no `POST /users` route at all, i.e. stale relative to git HEAD `c4d4805`). Per explicit instruction and project memory, the live container was not rebuilt/restarted to work around this; BE behavior for create/resend (including the actual network request/response cycle) is verified only by the automated integration test suite (34 passing tests in `test_users.py` against a freshly-built local environment), not by manual browser verification.
 
 ### Completion Notes List
 
@@ -234,6 +234,21 @@ Claude Sonnet 5 (claude-sonnet-5)
 - `src/features/admin/components/UserStatusBadge.test.tsx` (new)
 - `src/features/admin/components/AddUserOverlay.tsx` (new)
 - `src/features/admin/components/AddUserOverlay.test.tsx` (new)
+
+### Review Findings
+
+- [x] [Review][Patch] `NavTabs.test.tsx` `GRANTOR_ONLY` array missing `'Users'` + `internal.test.tsx` has no route/title test for `/internal/users` — Task 6 was silently skipped, contradicting the Dev Agent Record's "needed no changes" claim. Fixed: added `'Users'` to `GRANTOR_ONLY`, added a `document.title` test for `/internal/users` in `internal.test.tsx`, and extended the `useUsers`/`useAccessGrants` mocks so the route renders (483/483 FE tests green, tsc/eslint clean) [velara-web/src/shared/components/NavTabs.test.tsx:20, velara-web/src/routes/internal.test.tsx]
+- [x] [Review][Patch] Dev Agent Record overstates manual verification — claims Playwright confirmed create/resend "render and behave correctly" while the same paragraph admits the live container 405'd on those exact calls. Fixed: reworded the Debug Log entry to state only rendering/static UI behavior was manually confirmed; create/resend network flows are verified by the automated integration suite only [10-2-user-management-screen.md — Debug Log References]
+- [x] [Review][Dismiss] `docs/api-spec.json` for `POST /users/resend-invite` documents only 200 + 422, omitting 404/409/502 — verified as consistent with the existing codebase-wide convention (no route anywhere in `api-spec.json`, including 10.1's already-shipped `POST /users`, documents these FastAPI-implicit error codes); not a defect introduced by this story [velara-api/docs/api-spec.json]
+- [x] [Review][Patch] FE `UserSummary.status` typed as unconstrained `string` instead of a `'invited' | 'active' | 'unknown'` union, discarding compile-time safety in `UserStatusBadge`/`UsersScreen` status checks. Fixed: extracted a `UserStatus` union type and typed `UserSummary.status` with it [velara-web/src/api/users.ts]
+- [x] [Review][Patch] `ResendButton`'s `setTimeout(4000)` "Sent" state reset has no cleanup on unmount — if the row disappears (search filter / list refetch) before the timer fires, `setState` runs on an unmounted component. Fixed: track the timeout in a ref and clear it in a `useEffect` cleanup on unmount [velara-web/src/features/admin/components/UsersScreen.tsx — ResendButton]
+- [x] [Review][Defer] `>200 access grants` truncates `UsersScreen`'s engagement-access resolution map, only comment-documented, no warning/guard — deferred, pre-existing scope decision (story's Dev Notes accept this at current volume) [velara-web/src/features/admin/components/UsersScreen.tsx]
+- [x] [Review][Defer] Resend/list directory has no per-org fencing on the target email (pool-wide by design, matching `GET /users`); enumeration via distinct 404/409/200 responses with no rate limiting — deferred, pre-existing single-tenant-pool architecture, story's Dev Notes explicitly forbid inventing org fencing here [velara-api/app/api/v1/users.py — resend_invite]
+- [x] [Review][Defer] Dev-shim `_INVITED_EMAILS` is a bare module-level mutable set with no concurrency guard for parallel test workers — deferred, extends a pre-existing pattern rather than introducing a new one [velara-api/app/integrations/auth.py]
+- [x] [Review][Defer] Route "trap" comment (`Do NOT add RejectNonGrantor`) is prose-only, not enforced by a test asserting the router dependency list itself — deferred, matches the existing 10.1 convention for the same trap [velara-api/app/api/v1/users.py — resend_invite]
+- [x] [Review][Defer] Unmapped `boto3.client()` construction failures could propagate as an unhandled 500 instead of the documented 404/409/502 contract — deferred, pre-existing gap already present in 10.1's `create_user` [velara-api/app/integrations/auth.py — CognitoAuthProvider.resend_invite]
+- [x] [Review][Defer] `AddUserOverlay` has no initial autofocus/focus-trap into the dialog on open — deferred, pre-existing a11y gap shared with `DetachDialog`/`RevokeGrantDialog` [velara-web/src/features/admin/components/AddUserOverlay.tsx]
+- [x] [Review][Defer] `test_resend_already_active_user_returns_409` manipulates `_INVITED_EMAILS` module state directly rather than exercising a real activation flow — tautological test coverage — deferred, test-quality concern not a code defect [velara-api/tests/integration/api/test_users.py]
 
 ## Change Log
 
