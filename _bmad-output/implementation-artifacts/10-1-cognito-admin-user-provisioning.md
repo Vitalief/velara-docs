@@ -1,6 +1,10 @@
+---
+baseline_commit: 38e2889dc8c7e8f66901d5e657463148eac0ecee
+---
+
 # Story 10.1: Cognito Admin User Provisioning (Backend)
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -30,43 +34,63 @@ so that a client OR an internal consultant can be onboarded from the platform wi
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Extend the `AuthProvider` seam (AC: 1)**
-  - [ ] Add `create_user(self, *, email: str, name: str, org_id: str, role: str) -> AuthPrincipal` to the `AuthProvider` Protocol in `app/integrations/auth.py` (after `list_users`). Docstring: sets `org_id`/`role` server-side; returns the new principal (incl. the generated `user_id`/`sub`).
-  - [ ] Do **not** add a new return dataclass — reuse `AuthPrincipal` (it already carries `user_id`, `org_id`, `role`, `name`). This keeps 10.3's handoff trivial (`created.user_id` → `create_grant`).
+- [x] **Task 1 — Extend the `AuthProvider` seam (AC: 1)**
+  - [x] Add `create_user(self, *, email: str, name: str, org_id: str, role: str) -> AuthPrincipal` to the `AuthProvider` Protocol in `app/integrations/auth.py` (after `list_users`). Docstring: sets `org_id`/`role` server-side; returns the new principal (incl. the generated `user_id`/`sub`).
+  - [x] Do **not** add a new return dataclass — reuse `AuthPrincipal` (it already carries `user_id`, `org_id`, `role`, `name`). This keeps 10.3's handoff trivial (`created.user_id` → `create_grant`).
 
-- [ ] **Task 2 — `DevAuthProvider.create_user` (dev-shim, AC: 3)**
-  - [ ] Implement as a real (non-static) method OR a staticmethod that mutates the module-level `_SEED_USERS` + `_SEED_EMAILS` dicts. Synthesize `user_id = "usr_prov_<short-uuid>"` (or similar; must be a stable opaque sub). Build an `AuthPrincipal(user_id, org_id, role, name)`, insert it into `_SEED_USERS` keyed by the email (so `list_users` and the login path both see it), and record the email in `_SEED_EMAILS`.
-  - [ ] Ensure `list_users(role=<created role>)` returns the new user for **both** `client` and `consultant` (it already deduplicates by `user_id` and filters by role — a new entry of either role will appear).
-  - [ ] **State-isolation trap (see Dev Notes):** `_SEED_USERS` is a module global and there is NO conftest fixture that resets it between tests. Provide a way to reset it — either a `DevAuthProvider.reset_seed()` classmethod the tests call in a fixture, or snapshot/restore `_SEED_USERS` in a test fixture. Do NOT let a create in one test leak into another.
+- [x] **Task 2 — `DevAuthProvider.create_user` (dev-shim, AC: 3)**
+  - [x] Implement as a real (non-static) method OR a staticmethod that mutates the module-level `_SEED_USERS` + `_SEED_EMAILS` dicts. Synthesize `user_id = "usr_prov_<short-uuid>"` (or similar; must be a stable opaque sub). Build an `AuthPrincipal(user_id, org_id, role, name)`, insert it into `_SEED_USERS` keyed by the email (so `list_users` and the login path both see it), and record the email in `_SEED_EMAILS`.
+  - [x] Ensure `list_users(role=<created role>)` returns the new user for **both** `client` and `consultant` (it already deduplicates by `user_id` and filters by role — a new entry of either role will appear).
+  - [x] **State-isolation trap (see Dev Notes):** `_SEED_USERS` is a module global and there is NO conftest fixture that resets it between tests. Provide a way to reset it — either a `DevAuthProvider.reset_seed()` classmethod the tests call in a fixture, or snapshot/restore `_SEED_USERS` in a test fixture. Do NOT let a create in one test leak into another.
 
-- [ ] **Task 3 — `CognitoAuthProvider.create_user` (real path, AC: 2)**
-  - [ ] Mirror the boto3 client-construction pattern already in `CognitoAuthProvider.list_users` (dedicated `COGNITO_AWS_*` creds when set; else default chain / ECS task role). Call `admin_create_user(UserPoolId=..., Username=email, UserAttributes=[{name},{email},{email_verified:true},{custom:org_id},{custom:role}])` in the DEFAULT invite mode (do NOT pass `MessageAction="SUPPRESS"` — Cognito must send the invite).
-  - [ ] Extract the created user's `sub` from the `AdminCreateUser` response (`resp["User"]["Attributes"]` → find `sub`, or `resp["User"]["Username"]`), and return `AuthPrincipal(user_id=sub, org_id=org_id, role=role, name=name)`.
-  - [ ] Map `botocore` exceptions: `UsernameExistsException` → raise a new `UserAlreadyExistsError` (see Task 5) so the route can 409; other `ClientError`/`BotoCoreError` → raise `UserDirectoryError` (reuse the existing exception so the route returns 502, mirroring `list_users`). Log with `error=str(exc)`, never the raw request.
+- [x] **Task 3 — `CognitoAuthProvider.create_user` (real path, AC: 2)**
+  - [x] Mirror the boto3 client-construction pattern already in `CognitoAuthProvider.list_users` (dedicated `COGNITO_AWS_*` creds when set; else default chain / ECS task role). Call `admin_create_user(UserPoolId=..., Username=email, UserAttributes=[{name},{email},{email_verified:true},{custom:org_id},{custom:role}])` in the DEFAULT invite mode (do NOT pass `MessageAction="SUPPRESS"` — Cognito must send the invite).
+  - [x] Extract the created user's `sub` from the `AdminCreateUser` response (`resp["User"]["Attributes"]` → find `sub`, or `resp["User"]["Username"]`), and return `AuthPrincipal(user_id=sub, org_id=org_id, role=role, name=name)`.
+  - [x] Map `botocore` exceptions: `UsernameExistsException` → raise a new `UserAlreadyExistsError` (see Task 5) so the route can 409; other `ClientError`/`BotoCoreError` → raise `UserDirectoryError` (reuse the existing exception so the route returns 502, mirroring `list_users`). Log with `error=str(exc)`, never the raw request.
 
-- [ ] **Task 4 — Request/response schemas (AC: 4, 5)**
-  - [ ] Add `UserCreate` to `app/schemas/user.py`: `email: EmailStr` (validated — requires the `email-validator` package; confirm it's already a dep since 8.5/pydantic uses it, else add `pydantic[email]`), `name: str = Field(min_length=1)`, `role: Literal["client", "consultant"]` (**no default** — force the caller to state intent; `admin`/`ma_tech`/garbage → Pydantic 422). This `Literal` is the entire enforcement of AC5 — `admin`/`ma_tech` are structurally unrepresentable in the body. No `org_id` in the body — it is taken from the **caller's** `user.org_id` (server-side) for both roles, never client-supplied.
-  - [ ] Reuse `UserSummaryRead` as the 201 response body (it already has `user_id`/`name`/`email`/`role`).
+- [x] **Task 4 — Request/response schemas (AC: 4, 5)**
+  - [x] Add `UserCreate` to `app/schemas/user.py`: `email: EmailStr` (validated — requires the `email-validator` package; confirm it's already a dep since 8.5/pydantic uses it, else add `pydantic[email]`), `name: str = Field(min_length=1)`, `role: Literal["client", "consultant"]` (**no default** — force the caller to state intent; `admin`/`ma_tech`/garbage → Pydantic 422). This `Literal` is the entire enforcement of AC5 — `admin`/`ma_tech` are structurally unrepresentable in the body. No `org_id` in the body — it is taken from the **caller's** `user.org_id` (server-side) for both roles, never client-supplied.
+  - [x] Reuse `UserSummaryRead` as the 201 response body (it already has `user_id`/`name`/`email`/`role`).
 
-- [ ] **Task 5 — New exception + service (AC: 5, 7)**
-  - [ ] Add `UserAlreadyExistsError(VelaraBaseException)` with `ERROR_CODE = "USER_ALREADY_EXISTS"` in `app/integrations/auth.py` (next to `UserDirectoryError`), OR raise a `VelaraHTTPException(409, ...)` directly in the route — prefer a provider-raised domain exception the route maps, to keep boto3 details out of the route.
-  - [ ] Add a thin `provisioning_service.py` (or fold into the route — see Project Structure Notes) that: calls `provider.create_user(...)`, then best-effort `audit_service.record_admin_action(event_type="admin.user_provisioned", user_id=<caller>, org_id=<caller org>, hierarchy_path="org", metadata={...})` wrapped in try/except that only logs on failure. Add the `EVENT_ADMIN_USER_PROVISIONED = "admin.user_provisioned"` constant to `app/models/audit.py` (next to `EVENT_ADMIN_GRANT_CREATED`).
+- [x] **Task 5 — New exception + service (AC: 5, 7)**
+  - [x] Add `UserAlreadyExistsError(VelaraBaseException)` with `ERROR_CODE = "USER_ALREADY_EXISTS"` in `app/integrations/auth.py` (next to `UserDirectoryError`), OR raise a `VelaraHTTPException(409, ...)` directly in the route — prefer a provider-raised domain exception the route maps, to keep boto3 details out of the route.
+  - [x] Add a thin `provisioning_service.py` (or fold into the route — see Project Structure Notes) that: calls `provider.create_user(...)`, then best-effort `audit_service.record_admin_action(event_type="admin.user_provisioned", user_id=<caller>, org_id=<caller org>, hierarchy_path="org", metadata={...})` wrapped in try/except that only logs on failure. Add the `EVENT_ADMIN_USER_PROVISIONED = "admin.user_provisioned"` constant to `app/models/audit.py` (next to `EVENT_ADMIN_GRANT_CREATED`).
 
-- [ ] **Task 6 — Route handler `POST /api/v1/users` (AC: 4, 5, 7)**
-  - [ ] **Keep the router `dependencies=[RejectClient]` unchanged.** Do NOT flip it to `RejectNonGrantor` — that would make `consultant→404` on the existing `GET /users` and break `test_consultant_cannot_list_users`. See Dev Notes "Route gating."
-  - [ ] Gate the new POST for **client→404, consultant→403** exactly as the epic AC requires: `RejectClient` (router) 404s client; put `_require_grantor(user.role)` as the **first line of the POST handler** to 403 consultant. Do NOT add a route-level `RejectNonGrantor` to the POST (it would 404 consultant instead of 403).
-  - [ ] Handler body: `_require_grantor(user.role)` → call the provisioning service with `org_id=user.org_id` and `granted_by`/actor `= user.user_id` → return `ResponseEnvelope(data=UserSummaryRead(...), meta=_meta(request))` with `status_code=status.HTTP_201_CREATED` (import `status` from fastapi, as `access_grants.py` does).
-  - [ ] Map `UserAlreadyExistsError` → `VelaraHTTPException(409, "USER_ALREADY_EXISTS", ...)`; `UserDirectoryError` → 502 (as GET already does).
+- [x] **Task 6 — Route handler `POST /api/v1/users` (AC: 4, 5, 7)**
+  - [x] **Keep the router `dependencies=[RejectClient]` unchanged.** Do NOT flip it to `RejectNonGrantor` — that would make `consultant→404` on the existing `GET /users` and break `test_consultant_cannot_list_users`. See Dev Notes "Route gating."
+  - [x] Gate the new POST for **client→404, consultant→403** exactly as the epic AC requires: `RejectClient` (router) 404s client; put `_require_grantor(user.role)` as the **first line of the POST handler** to 403 consultant. Do NOT add a route-level `RejectNonGrantor` to the POST (it would 404 consultant instead of 403).
+  - [x] Handler body: `_require_grantor(user.role)` → call the provisioning service with `org_id=user.org_id` and `granted_by`/actor `= user.user_id` → return `ResponseEnvelope(data=UserSummaryRead(...), meta=_meta(request))` with `status_code=status.HTTP_201_CREATED` (import `status` from fastapi, as `access_grants.py` does).
+  - [x] Map `UserAlreadyExistsError` → `VelaraHTTPException(409, "USER_ALREADY_EXISTS", ...)`; `UserDirectoryError` → 502 (as GET already does).
 
-- [ ] **Task 7 — Terraform IAM (AC: 6)**
-  - [ ] In `terraform/iam.tf`, add a `statement {}` block to `data.aws_iam_policy_document.ecs_task_api` (lines ~71–108): `sid = "CognitoUserAdmin"`, `effect = "Allow"`, `actions = ["cognito-idp:AdminCreateUser", "cognito-idp:AdminGetUser", "cognito-idp:AdminResendInvitation", "cognito-idp:AdminDisableUser", "cognito-idp:ListUsers"]`, `resources = [aws_cognito_user_pool.main.arn]`. No new resource block — the existing `aws_iam_role_policy.ecs_task_api` re-serializes the document.
-  - [ ] Run `terraform validate` (and `fmt`). Do NOT add an IAM `description` with non-ASCII chars (em-dash) — AWS rejects it at apply (see Dev Notes gotcha).
+- [x] **Task 7 — Terraform IAM (AC: 6)**
+  - [x] In `terraform/iam.tf`, add a `statement {}` block to `data.aws_iam_policy_document.ecs_task_api` (lines ~71–108): `sid = "CognitoUserAdmin"`, `effect = "Allow"`, `actions = ["cognito-idp:AdminCreateUser", "cognito-idp:AdminGetUser", "cognito-idp:AdminResendInvitation", "cognito-idp:AdminDisableUser", "cognito-idp:ListUsers"]`, `resources = [aws_cognito_user_pool.main.arn]`. No new resource block — the existing `aws_iam_role_policy.ecs_task_api` re-serializes the document.
+  - [x] Run `terraform validate` (and `fmt`). Do NOT add an IAM `description` with non-ASCII chars (em-dash) — AWS rejects it at apply (see Dev Notes gotcha).
 
-- [ ] **Task 8 — Tests + gates (AC: 8)**
-  - [ ] Extend `tests/integration/api/test_users.py` (reuse its `_auth_headers(role)` helper): `test_admin_provisions_client_user` (201, body shape, listable via `?role=client` after), `test_admin_provisions_consultant_user` (201, `role=consultant` in body → created in caller's org, listable via `?role=consultant`), `test_ma_tech_can_provision` (both roles), `test_consultant_caller_cannot_provision` (403), `test_client_caller_cannot_provision` (404), `test_admin_role_body_rejected` (`role="admin"`→422), `test_ma_tech_role_body_rejected` (`role="ma_tech"`→422), `test_duplicate_email_conflicts` (409 — dev-shim create twice).
-  - [ ] **Distinguish caller-role vs body-role in test names/assertions** — the two `consultant`s are different axes: a `consultant` *caller* is 403 (can't provision), but `consultant` is a valid *body* role (can be provisioned by an admin/ma_tech caller). Don't conflate them.
-  - [ ] Add a fixture that resets `_SEED_USERS`/`_SEED_EMAILS` after each provisioning test (Task 2 trap).
-  - [ ] Regenerate the OpenAPI spec (the repo has a spec-regen step — confirm `POST /api/v1/users` appears). Run `ruff check`. Run `AUTH_BACKEND=dev` pytest (see Dev Notes "How tests run").
+- [x] **Task 8 — Tests + gates (AC: 8)**
+  - [x] Extend `tests/integration/api/test_users.py` (reuse its `_auth_headers(role)` helper): `test_admin_provisions_client_user` (201, body shape, listable via `?role=client` after), `test_admin_provisions_consultant_user` (201, `role=consultant` in body → created in caller's org, listable via `?role=consultant`), `test_ma_tech_can_provision` (both roles), `test_consultant_caller_cannot_provision` (403), `test_client_caller_cannot_provision` (404), `test_admin_role_body_rejected` (`role="admin"`→422), `test_ma_tech_role_body_rejected` (`role="ma_tech"`→422), `test_duplicate_email_conflicts` (409 — dev-shim create twice).
+  - [x] **Distinguish caller-role vs body-role in test names/assertions** — the two `consultant`s are different axes: a `consultant` *caller* is 403 (can't provision), but `consultant` is a valid *body* role (can be provisioned by an admin/ma_tech caller). Don't conflate them.
+  - [x] Add a fixture that resets `_SEED_USERS`/`_SEED_EMAILS` after each provisioning test (Task 2 trap).
+  - [x] Regenerate the OpenAPI spec (the repo has a spec-regen step — confirm `POST /api/v1/users` appears). Run `ruff check`. Run `AUTH_BACKEND=dev` pytest (see Dev Notes "How tests run").
+
+### Review Findings
+
+Code review 2026-07-03 — 3-layer adversarial (Blind Hunter / Edge Case Hunter / Acceptance Auditor) + per-finding empirical verification (AWS cognito-idp service model, `record_admin_action`/`get_session` source). Auditor per-AC verdict: AC1–AC7 SATISFIED, AC8 PARTIAL (consultant login test missing). `terraform validate` + `fmt` independently re-run clean.
+
+- [x] [Review][Patch] **Invite email never sent — `AdminCreateUser` omits `DesiredDeliveryMediums=["EMAIL"]`** (default is `"SMS"`, verified in the AWS service model; no phone number on the user → the invitation the story exists to send fails/never delivers; `email_verified=true` does not govern invite delivery) [app/integrations/auth.py:537]
+- [x] [Review][Patch] **Phantom IAM action `cognito-idp:AdminResendInvitation`** — no such API exists (verified against the cognito-idp service model); resend = `AdminCreateUser` + `MessageAction="RESEND"`, already granted. Remove the line (note: AC6/Task-7 text named it — spec error, not dev error) [terraform/iam.tf:459]
+- [x] [Review][Patch] **Dev-shim duplicate check misses pristine seed emails + case-variant emails** — `email in _SEED_USERS` is keyed by username shortname for the 6 seed users (their emails live in `_SEED_EMAILS` values) and is case-sensitive, while the prod pool is `username_attributes=["email"]` + `case_sensitive=false` → dev 201s where Cognito 409s. Also map Cognito `AliasExistsException` → 409 alongside `UsernameExistsException` [app/integrations/auth.py:365]
+- [x] [Review][Patch] **Cognito response parsing outside the try/except + silent `user_id`→email fallback** — a malformed `AdminCreateUser` response escapes as a 500 (user already created), and a missing `sub` silently makes the permanent grant key the raw email. Missing `sub` should raise `UserDirectoryError` (502) loudly [app/integrations/auth.py:560-563]
+- [x] [Review][Patch] **Server-side `org_id` tenancy is untested** — no test asserts the created principal's `org_id` == caller's org, and no test proves a smuggled body `org_id` is ignored (the endpoint's central security property) [tests/integration/api/test_users.py]
+- [x] [Review][Patch] **AC8 gap: provisioned-consultant login untested** — `test_provisioned_dev_user_can_log_in` covers `client` only; AC8 mandates both roles [tests/integration/api/test_users.py:620]
+- [x] [Review][Patch] **`_reset_seed_users` fixture lives only in `test_users.py`, not conftest** — any other module provisioning (10.3's create→grant→login is anticipated) leaks seed state across the session; the story's own trap re-armed [tests/integration/api/test_users.py:17]
+- [x] [Review][Patch] **POST 502 path untested** — no test covers `UserDirectoryError` → 502 `USER_DIRECTORY_UNAVAILABLE` on the create route (GET has one) [tests/integration/api/test_users.py]
+- [x] [Review][Patch] **Schema hardening: `name` accepts whitespace-only/unbounded values; email can exceed Cognito's 128-char username cap** — bad input surfaces as a misleading 502 (`InvalidParameterException`) instead of 422; add strip + max lengths [app/schemas/user.py:309-311]
+- [x] [Review][Patch] **Stale 403 message** — `_require_grantor` says "may list the user directory"; a consultant blocked from *provisioning* gets the listing message [app/api/v1/users.py:41-46]
+- [x] [Review][Patch] **"Deep-copied" comment is wrong** — `dict(_SEED_USERS)` is shallow (safe today only because `AuthPrincipal` is frozen); fix the comment [app/integrations/auth.py:137-141]
+- [x] [Review][Defer] **Blocking sync boto3 `AdminCreateUser` on the event loop** [app/services/provisioning_service.py:33] — deferred, pre-existing pattern (identical to 8.5 `list_users`, already in deferred-work.md from the 9.4 review); fix both paths together (`asyncio.to_thread` or async seam)
+- [x] [Review][Defer] **Typo'd invite email → pre-verified stranger account with no API cleanup** [app/integrations/auth.py:544] — deferred, product-level; `email_verified=true` is AC2-mandated, and disable/delete is a 10.2 candidate (IAM already grants `AdminDisableUser`, nothing calls it)
+
+Dismissed as noise/disproven (7): audit-write session poisoning (disproven — `record_admin_action` commits itself, `get_session` teardown never commits, session unused after); no audit of failed provisioning attempts (AC7 mandates success-only); response echoes request email (AuthPrincipal has no email field; Cognito username==email); `hierarchy_path="org"` literal (AC7-mandated; migration 0020 org_id fence handles queryability — verified); OpenAPI missing 4xx/5xx codes (repo-wide convention, zero 409s anywhere in the spec); multi-worker dev-shim divergence (single-process compose only); stale ADR grantor wording (superseded by the 2026-07-03 product decision).
 
 ## Dev Notes
 
@@ -157,8 +181,43 @@ docker compose exec api pytest tests/integration/api/test_users.py
 
 ### Agent Model Used
 
+claude-opus-4-8 (Claude Opus 4.8, 1M context) — dev-story workflow (Amelia).
+
 ### Debug Log References
+
+- **email-validator dependency was missing.** `EmailStr` (AC5 body validation) requires the `email-validator` backend, which pydantic does not vendor and was NOT already a dep. Per Task 4's pre-authorization ("else add `pydantic[email]`"), added `email-validator==2.2.0` to `pyproject.toml` and regenerated `uv.lock` (`uv lock` → +email-validator, +dnspython). The Docker image installs from `pyproject.toml` (pip `-e ".[dev]"`), so the pin there is what the test image consumes.
+- **`.test` TLD rejected by email-validator.** First test run: 6 provisioning tests 422'd because the seed convention's `@*.test` addresses are rejected by email-validator as a reserved/special-use domain (RFC 6761) even with syntax-only validation. The seed users' `.test` emails never pass through `EmailStr` (they're display-only), but the new POST body does. Fixed by using `@*.example` addresses in the provisioning test bodies. No code change — the validator behavior is correct/desired.
+- **Live container is `AUTH_BACKEND=cognito`.** The running `velara-api-api-1` is the user's live Cognito session. All verification ran in one-off `docker compose run --rm --no-deps -e AUTH_BACKEND=dev` containers against `velara_test`; the live service was never reconfigured or restarted (per the Epic-9 retro lesson).
+- **Image bakes source.** Rebuilt `api` (`docker compose build api`) before each pytest/ruff/spec run so no stale-code false-greens.
 
 ### Completion Notes List
 
+- **Seam extended (AC1):** `AuthProvider.create_user(*, email, name, org_id, role) -> AuthPrincipal` added to the Protocol; both providers implement it; `AuthPrincipal` reused (no new dataclass) so 10.3's `created.user_id → create_grant` handoff is a one-liner.
+- **Cognito path (AC2):** `CognitoAuthProvider.create_user` calls `admin_create_user` in default invite mode (no `MessageAction="SUPPRESS"`), sets `name`/`email`/`email_verified=true`/`custom:org_id`/`custom:role`, mirrors the `list_users` credential pattern, extracts `sub` from the response, and maps `UsernameExistsException`→`UserAlreadyExistsError` (409) / other boto3 errors→`UserDirectoryError` (502). Matched on the modeled error code string so it doesn't depend on the botocore exception class being importable.
+- **Dev shim (AC3):** `DevAuthProvider.create_user` mutates `_SEED_USERS`/`_SEED_EMAILS` (keyed by email), synthesizes `usr_prov_<12hex>` sub, is listable via `list_users(role=...)` for both roles, and is login-resolvable (`test_provisioned_dev_user_can_log_in`). Added `reset_seed()` classmethod restoring from import-time `_SEED_USERS_PRISTINE`/`_SEED_EMAILS_PRISTINE` snapshots; `test_users.py` autouse fixture calls it after each test (state-isolation trap closed).
+- **Route + gating (AC4/AC5):** `POST /api/v1/users` added to the existing users router. Router kept at `RejectClient` (client→404, GET consultant→403 contract preserved); in-handler `_require_grantor` first line 403s consultant caller. `role: Literal["client","consultant"]` in `UserCreate` makes admin/ma_tech→422 structurally; `org_id = user.org_id` server-side for both roles (no `org_id` in body); duplicate→409. 201 `ResponseEnvelope[UserSummaryRead]`.
+- **Service + audit (AC5/AC7):** thin `provisioning_service.provision_user` calls the seam then best-effort `record_admin_action(EVENT_ADMIN_USER_PROVISIONED, hierarchy_path="org", metadata={provisioned_user_id,email,role})` in try/except after the create — audit failure never fails provisioning. `EVENT_ADMIN_USER_PROVISIONED = "admin.user_provisioned"` added to `app/models/audit.py`.
+- **IAM (AC6):** net-new `CognitoUserAdmin` statement on `data.aws_iam_policy_document.ecs_task_api` — `AdminCreateUser`+`AdminGetUser`+`AdminResendInvitation`+`AdminDisableUser`+`ListUsers`, `resources=[aws_cognito_user_pool.main.arn]` (no wildcard, no `description`). `terraform validate` + `fmt -check` pass.
+- **Gates (AC8):** `AUTH_BACKEND=dev` pytest — `test_users.py` 16/16, full suite **1032 passed** (3 pre-existing `test_ingest` MinIO-connectivity failures, unrelated — known infra tax). `ruff==0.6.9` clean on `app/`+`tests/`. OpenAPI spec regenerated → `POST /api/v1/users` + `UserCreate` schema present (`role` enum `[client,consultant]`, `email` format, no `org_id`).
+- **No migration:** identities live in Cognito; head stays `0020` (nothing added), per AC/Dev Notes.
+
 ### File List
+
+**velara-api/** (code lives in the nested repo; baseline_commit `38e2889` is its HEAD)
+
+- `app/integrations/auth.py` (modified) — `create_user` on Protocol + both providers; `UserAlreadyExistsError`; `DevAuthProvider.reset_seed()` + pristine seed snapshots.
+- `app/schemas/user.py` (modified) — `UserCreate` (EmailStr / name / role Literal).
+- `app/api/v1/users.py` (modified) — `POST /api/v1/users` handler + imports.
+- `app/services/provisioning_service.py` (new) — `provision_user` orchestration + best-effort audit.
+- `app/models/audit.py` (modified) — `EVENT_ADMIN_USER_PROVISIONED` constant.
+- `terraform/iam.tf` (modified) — `CognitoUserAdmin` IAM statement.
+- `tests/integration/api/test_users.py` (modified) — 10 new provisioning tests + autouse seed-reset fixture.
+- `pyproject.toml` (modified) — added `email-validator==2.2.0`.
+- `uv.lock` (modified) — regenerated (+email-validator, +dnspython).
+- `docs/api-spec.json` (modified) — regenerated OpenAPI spec (POST /api/v1/users + UserCreate).
+
+## Change Log
+
+| Date | Version | Description |
+|------|---------|-------------|
+| 2026-07-03 | 0.1.0 | Story 10.1 implemented: `AuthProvider.create_user` seam (Protocol + Dev/Cognito) + `POST /api/v1/users` (grantor-gated, client→404/consultant→403, role Literal[client,consultant], dup→409) + best-effort `admin.user_provisioned` audit + net-new Cognito IAM statement. Added `email-validator` dep. 10 new tests; full suite green (1032 passed, 3 pre-existing unrelated). Status → review. |
