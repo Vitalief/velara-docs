@@ -5,7 +5,7 @@ baseline_commit_web: 835e90b
 
 # Story 10.2: User-Management Screen
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -56,54 +56,54 @@ Three decisions resolved via AskUserQuestion — they reshape the epic's 10.2 AC
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — BE: surface `UserStatus` in the directory (AC: 1)**
-  - [ ] `app/integrations/auth.py`: add `status: str = "unknown"` to `UserSummary` (`:61` — frozen dataclass; a defaulted field must stay last and keeps the only two constructor sites, `:336` and `:506`, safe while both are updated). In `CognitoAuthProvider.list_users` (`:470-519`), read `u.get("UserStatus")` (top-level per-user key, sibling of `Attributes`) and normalize via a module-level `_normalize_user_status(raw)` helper: `FORCE_CHANGE_PASSWORD→invited`, `CONFIRMED→active`, `EXTERNAL_PROVIDER→active`, else/missing→`unknown`.
-  - [ ] `DevAuthProvider`: track invite-pending emails in a module-level set (e.g. `_INVITED_EMAILS`), populated by `create_user`, restored by `reset_seed()` (extend the pristine-snapshot pattern at `auth.py:137-141, 375-386`). `list_users` reports `invited` for tracked emails, `active` for seed users.
-  - [ ] `app/schemas/user.py`: `UserSummaryRead.status: str = "unknown"` (`:14-20`; defaulted so the field is additive for any existing constructor). `POST /users` handler (`users.py:129-137`) sets `status="invited"` on the 201 body.
+- [x] **Task 1 — BE: surface `UserStatus` in the directory (AC: 1)**
+  - [x] `app/integrations/auth.py`: add `status: str = "unknown"` to `UserSummary` (`:61` — frozen dataclass; a defaulted field must stay last and keeps the only two constructor sites, `:336` and `:506`, safe while both are updated). In `CognitoAuthProvider.list_users` (`:470-519`), read `u.get("UserStatus")` (top-level per-user key, sibling of `Attributes`) and normalize via a module-level `_normalize_user_status(raw)` helper: `FORCE_CHANGE_PASSWORD→invited`, `CONFIRMED→active`, `EXTERNAL_PROVIDER→active`, else/missing→`unknown`.
+  - [x] `DevAuthProvider`: track invite-pending emails in a module-level set (e.g. `_INVITED_EMAILS`), populated by `create_user`, restored by `reset_seed()` (extend the pristine-snapshot pattern at `auth.py:137-141, 375-386`). `list_users` reports `invited` for tracked emails, `active` for seed users.
+  - [x] `app/schemas/user.py`: `UserSummaryRead.status: str = "unknown"` (`:14-20`; defaulted so the field is additive for any existing constructor). `POST /users` handler (`users.py:129-137`) sets `status="invited"` on the 201 body.
 
-- [ ] **Task 2 — BE: `resend_invite` seam (AC: 2)**
-  - [ ] Add `resend_invite(self, *, email: str) -> AuthPrincipal` to the `AuthProvider` Protocol (`auth.py:124-170`, after `create_user`).
-  - [ ] `CognitoAuthProvider.resend_invite`: same boto3 client construction as `create_user` (`:521-596`); call `admin_create_user(UserPoolId=..., Username=email, MessageAction="RESEND", DesiredDeliveryMediums=["EMAIL"])` — **no `UserAttributes`** on RESEND. Reuse the existing response-parsing (sub extraction, loud 502 on missing sub) and error-mapping shape. Map `UserNotFoundException` → new `UserNotFoundError`; `UnsupportedUserStateException` → new `UserNotPendingError`; other boto errors → `UserDirectoryError`. Match on the modeled error-code string like `create_user` does.
-  - [ ] `DevAuthProvider.resend_invite`: email unknown (not in `_SEED_EMAILS`/created set) → raise `UserNotFoundError`; email known but not invite-pending → raise `UserNotPendingError`; else return the stored principal (no state change).
-  - [ ] Add `UserNotFoundError` + `UserNotPendingError` next to `UserAlreadyExistsError` in `auth.py`.
+- [x] **Task 2 — BE: `resend_invite` seam (AC: 2)**
+  - [x] Add `resend_invite(self, *, email: str) -> AuthPrincipal` to the `AuthProvider` Protocol (`auth.py:124-170`, after `create_user`).
+  - [x] `CognitoAuthProvider.resend_invite`: same boto3 client construction as `create_user` (`:521-596`); call `admin_create_user(UserPoolId=..., Username=email, MessageAction="RESEND", DesiredDeliveryMediums=["EMAIL"])` — **no `UserAttributes`** on RESEND. Reuse the existing response-parsing (sub extraction, loud 502 on missing sub) and error-mapping shape. Map `UserNotFoundException` → new `UserNotFoundError`; `UnsupportedUserStateException` → new `UserNotPendingError`; other boto errors → `UserDirectoryError`. Match on the modeled error-code string like `create_user` does.
+  - [x] `DevAuthProvider.resend_invite`: email unknown (not in `_SEED_EMAILS`/created set) → raise `UserNotFoundError`; email known but not invite-pending → raise `UserNotPendingError`; else return the stored principal (no state change).
+  - [x] Add `UserNotFoundError` + `UserNotPendingError` next to `UserAlreadyExistsError` in `auth.py`.
 
-- [ ] **Task 3 — BE: resend route + audit (AC: 2)**
-  - [ ] `app/schemas/user.py`: `UserInviteResend(BaseModel)` with `model_config = ConfigDict(str_strip_whitespace=True)` and `email: EmailStr = Field(max_length=128)` (mirror `UserCreate` `:29-52`).
-  - [ ] `app/api/v1/users.py`: `@router.post("/users/resend-invite", response_model=ResponseEnvelope[UserSummaryRead])` (200, not 201). First line `_require_grantor(user.role)` — router stays `dependencies=[RejectClient]`; do NOT add `RejectNonGrantor` anywhere (10.1's gating trap: it would 404 consultant and regress the GET contract).
-  - [ ] Extend `app/services/provisioning_service.py` with `resend_user_invite(...)`: call the seam, then best-effort `record_admin_action(event_type=EVENT_ADMIN_USER_INVITE_RESENT, hierarchy_path="org", org_id=<caller org>, user_id=<caller>, metadata={"email": ..., "resent_user_id": ...})` in the same try/except-log shape as `provision_user` (`:56-74`).
-  - [ ] `app/models/audit.py`: `EVENT_ADMIN_USER_INVITE_RESENT = "admin.user_invite_resent"` (next to `EVENT_ADMIN_USER_PROVISIONED` `:53`).
-  - [ ] Route error mapping: `UserNotFoundError` → `VelaraHTTPException(404, "USER_NOT_FOUND", ...)`; `UserNotPendingError` → `(409, "USER_NOT_PENDING", "This user has already activated their account.")`; `UserDirectoryError` → 502 `USER_DIRECTORY_UNAVAILABLE` (existing pattern `users.py:123-127`).
+- [x] **Task 3 — BE: resend route + audit (AC: 2)**
+  - [x] `app/schemas/user.py`: `UserInviteResend(BaseModel)` with `model_config = ConfigDict(str_strip_whitespace=True)` and `email: EmailStr = Field(max_length=128)` (mirror `UserCreate` `:29-52`).
+  - [x] `app/api/v1/users.py`: `@router.post("/users/resend-invite", response_model=ResponseEnvelope[UserSummaryRead])` (200, not 201). First line `_require_grantor(user.role)` — router stays `dependencies=[RejectClient]`; do NOT add `RejectNonGrantor` anywhere (10.1's gating trap: it would 404 consultant and regress the GET contract).
+  - [x] Extend `app/services/provisioning_service.py` with `resend_user_invite(...)`: call the seam, then best-effort `record_admin_action(event_type=EVENT_ADMIN_USER_INVITE_RESENT, hierarchy_path="org", org_id=<caller org>, user_id=<caller>, metadata={"email": ..., "resent_user_id": ...})` in the same try/except-log shape as `provision_user` (`:56-74`).
+  - [x] `app/models/audit.py`: `EVENT_ADMIN_USER_INVITE_RESENT = "admin.user_invite_resent"` (next to `EVENT_ADMIN_USER_PROVISIONED` `:53`).
+  - [x] Route error mapping: `UserNotFoundError` → `VelaraHTTPException(404, "USER_NOT_FOUND", ...)`; `UserNotPendingError` → `(409, "USER_NOT_PENDING", "This user has already activated their account.")`; `UserDirectoryError` → 502 `USER_DIRECTORY_UNAVAILABLE` (existing pattern `users.py:123-127`).
 
-- [ ] **Task 4 — BE: tests + spec (AC: 8)**
-  - [ ] Extend `tests/integration/api/test_users.py` (reuse `_auth_headers(role)`; the suite-wide seed-reset autouse fixture already lives in `tests/conftest.py` since the 10.1 review): status assertions on GET (seed active / provisioned invited) and POST 201 (`status="invited"`); resend 200 for admin AND ma_tech; consultant→403 / client→404 on resend; unknown email→404; resend on an active seed user→409; audit row `admin.user_invite_resent` written (mirror 10.1's audit test).
-  - [ ] Use `@*.example` emails in request bodies (email-validator rejects the seed convention's `.test` TLD — 10.1 debug log).
-  - [ ] `docker compose build api` BEFORE `docker compose exec api pytest ...` (image bakes source — false greens otherwise). `ruff check` clean. Regenerate `docs/api-spec.json` (new path + `status` field; confirm byte-stable rerun).
+- [x] **Task 4 — BE: tests + spec (AC: 8)**
+  - [x] Extend `tests/integration/api/test_users.py` (reuse `_auth_headers(role)`; the suite-wide seed-reset autouse fixture already lives in `tests/conftest.py` since the 10.1 review): status assertions on GET (seed active / provisioned invited) and POST 201 (`status="invited"`); resend 200 for admin AND ma_tech; consultant→403 / client→404 on resend; unknown email→404; resend on an active seed user→409; audit row `admin.user_invite_resent` written (mirror 10.1's audit test).
+  - [x] Use `@*.example` emails in request bodies (email-validator rejects the seed convention's `.test` TLD — 10.1 debug log).
+  - [x] `docker compose build api` BEFORE `docker compose exec api pytest ...` (image bakes source — false greens otherwise). `ruff check` clean. Regenerate `docs/api-spec.json` (new path + `status` field; confirm byte-stable rerun).
 
-- [ ] **Task 5 — FE: API client + hooks (AC: 4, 6, 7)**
-  - [ ] `src/api/users.ts`: add `status: string` to `UserSummary`; add `createUser(body: {email, name, role}): Promise<UserSummary>` (`POST /api/v1/users`, unwrap `response.data.data`) and `resendInvite(body: {email}): Promise<UserSummary>` (`POST /api/v1/users/resend-invite`). Extend `src/api/users.test.ts` accordingly (mock `@/api/client`).
-  - [ ] `src/features/admin/hooks/useUsers.ts`: add `useCreateUser()` and `useResendInvite()` mutations in the house shape (`useQueryClient` + `useMutation` + `onSuccess: qc.invalidateQueries({ queryKey: ['users'] })` — the key-prefix invalidation catches `['users', params]`; per-call `onError` at the component, mirroring `useCreateGrant` in `useAccessGrants.ts:17-35`).
+- [x] **Task 5 — FE: API client + hooks (AC: 4, 6, 7)**
+  - [x] `src/api/users.ts`: add `status: string` to `UserSummary`; add `createUser(body: {email, name, role}): Promise<UserSummary>` (`POST /api/v1/users`, unwrap `response.data.data`) and `resendInvite(body: {email}): Promise<UserSummary>` (`POST /api/v1/users/resend-invite`). Extend `src/api/users.test.ts` accordingly (mock `@/api/client`).
+  - [x] `src/features/admin/hooks/useUsers.ts`: add `useCreateUser()` and `useResendInvite()` mutations in the house shape (`useQueryClient` + `useMutation` + `onSuccess: qc.invalidateQueries({ queryKey: ['users'] })` — the key-prefix invalidation catches `['users', params]`; per-call `onError` at the component, mirroring `useCreateGrant` in `useAccessGrants.ts:17-35`).
 
-- [ ] **Task 6 — FE: nav tab + route (AC: 3)**
-  - [ ] `src/shared/components/navTabsData.ts`: insert `{ id: 'users', label: 'Users', path: 'users', grantorOnly: true }` after the `access` entry.
-  - [ ] `src/routes/internal.tsx`: import `UsersScreen`, add `<Route path="users/*" element={<RequireGrantor><div className="p-6"><UsersScreen /></div></RequireGrantor>} />` beside the `audit`/`analytics` routes (`:93-108`).
-  - [ ] Update `NavTabs.test.tsx` `GRANTOR_ONLY` list + `internal.test.tsx` route/title expectations (same mechanical update 9.5 made).
+- [x] **Task 6 — FE: nav tab + route (AC: 3)**
+  - [x] `src/shared/components/navTabsData.ts`: insert `{ id: 'users', label: 'Users', path: 'users', grantorOnly: true }` after the `access` entry.
+  - [x] `src/routes/internal.tsx`: import `UsersScreen`, add `<Route path="users/*" element={<RequireGrantor><div className="p-6"><UsersScreen /></div></RequireGrantor>} />` beside the `audit`/`analytics` routes (`:93-108`).
+  - [x] Update `NavTabs.test.tsx` `GRANTOR_ONLY` list + `internal.test.tsx` route/title expectations (same mechanical update 9.5 made).
 
-- [ ] **Task 7 — FE: UsersScreen list (AC: 4, 5)**
-  - [ ] New `src/features/admin/components/UsersScreen.tsx`: `usePageTitle('Users')`; header + "Add user" primary button (`<Icon name="plus" />`, gated `isGrantor()` — belt-and-suspenders, the route already guarantees it); "Search users…" input; AccessControl-style table (`AccessControl.tsx:1009-1055` for thead/row classes). Avatar = navy circle + initials (copy the `initials()` helper idea from `AuditLog.tsx:19-23`; `bg-` navy token + white text, no image).
-  - [ ] Engagement-access column: fetch grants via the existing `listAccessGrants` API/hook (`useAccessGrants`, per_page 200, page 1 — the directory and grant set are small; add a code comment noting the >200-grants truncation caveat), build a `user_id → grants[]` map, resolve node display names the same way `GrantManagementSection` does (client name via `useClients()`; project label via the grant's node data). Render: single grant → node name; multiple → first + `+N more`; none + role `client` → `— (grant pending)`; internal roles → `—`.
-  - [ ] New `src/features/admin/components/UserStatusBadge.tsx` mirroring `AuditOutcomeBadge`'s pill markup (`inline-flex items-center gap-[6px] rounded-full border px-[9px] py-[3px] text-[11.5px] font-semibold`): invited → amber arbitrary values `bg-[#fff7ed] text-[#b45309] border-[#fcd9a8]` (Tailwind v4 — arbitrary classes are fine; only add `@theme` tokens if reused elsewhere), active → existing teal/brand tokens, unknown → `text-muted` neutral. Loading = hand-rolled skeleton rows (house pattern); error = `getErrorMessage` text; empty = plain centered text ("No users in the directory yet.").
+- [x] **Task 7 — FE: UsersScreen list (AC: 4, 5)**
+  - [x] New `src/features/admin/components/UsersScreen.tsx`: `usePageTitle('Users')`; header + "Add user" primary button (`<Icon name="plus" />`, gated `isGrantor()` — belt-and-suspenders, the route already guarantees it); "Search users…" input; AccessControl-style table (`AccessControl.tsx:1009-1055` for thead/row classes). Avatar = navy circle + initials (copy the `initials()` helper idea from `AuditLog.tsx:19-23`; `bg-` navy token + white text, no image).
+  - [x] Engagement-access column: fetch grants via the existing `listAccessGrants` API/hook (`useAccessGrants`, per_page 200, page 1 — the directory and grant set are small; add a code comment noting the >200-grants truncation caveat), build a `user_id → grants[]` map, resolve node display names the same way `GrantManagementSection` does (client name via `useClients()`; project label via the grant's node data). Render: single grant → node name; multiple → first + `+N more`; none + role `client` → `— (grant pending)`; internal roles → `—`.
+  - [x] New `src/features/admin/components/UserStatusBadge.tsx` mirroring `AuditOutcomeBadge`'s pill markup (`inline-flex items-center gap-[6px] rounded-full border px-[9px] py-[3px] text-[11.5px] font-semibold`): invited → amber arbitrary values `bg-[#fff7ed] text-[#b45309] border-[#fcd9a8]` (Tailwind v4 — arbitrary classes are fine; only add `@theme` tokens if reused elsewhere), active → existing teal/brand tokens, unknown → `text-muted` neutral. Loading = hand-rolled skeleton rows (house pattern); error = `getErrorMessage` text; empty = plain centered text ("No users in the directory yet.").
 
-- [ ] **Task 8 — FE: Add-user overlay (AC: 6)**
-  - [ ] New `src/features/admin/components/AddUserOverlay.tsx`: fixed overlay + scrim (copy `DetachDialog`/`RevokeGrantDialog` a11y mechanics — `role="dialog"` `aria-modal`, initial focus, Esc close, stop-propagation; `AccessControl.tsx:67-129, 656-721`). Contains a small `Stepper` sub-component taking `steps: string[]` + `current` (dots per DESIGN.md: current filled teal, done teal-ring + check, upcoming faint) — 10.2 passes `['Create & invite', 'Done']`; 10.3 will insert `'Grant access'`.
-  - [ ] Step 1: 2-col form grid (label/input classes from `GrantManagementSection`, `AccessControl.tsx:937-994`): Full name (text), Work email (`type="email"`), Role (`<select>`: `client` default / `consultant`), teal-wash callout (`border-brand-600`-family tokens) with the Cognito-invite copy. Buttons: Cancel (ghost) + "Create & send invite" (primary; pending → "Creating…" + form disabled).
-  - [ ] Submit → `createUser.mutate(body, { onSuccess, onError })`. onError: inspect `err.response?.data?.error?.code` (AccessControl inline pattern `:884-891`) → 409/422/other copy per AC6; keep all field values. onSuccess → advance to Done step (confirmation text names the email; "Add another" resets the form to Step 1; "Done" closes). No optimistic update.
+- [x] **Task 8 — FE: Add-user overlay (AC: 6)**
+  - [x] New `src/features/admin/components/AddUserOverlay.tsx`: fixed overlay + scrim (copy `DetachDialog`/`RevokeGrantDialog` a11y mechanics — `role="dialog"` `aria-modal`, initial focus, Esc close, stop-propagation; `AccessControl.tsx:67-129, 656-721`). Contains a small `Stepper` sub-component taking `steps: string[]` + `current` (dots per DESIGN.md: current filled teal, done teal-ring + check, upcoming faint) — 10.2 passes `['Create & invite', 'Done']`; 10.3 will insert `'Grant access'`.
+  - [x] Step 1: 2-col form grid (label/input classes from `GrantManagementSection`, `AccessControl.tsx:937-994`): Full name (text), Work email (`type="email"`), Role (`<select>`: `client` default / `consultant`), teal-wash callout (`border-brand-600`-family tokens) with the Cognito-invite copy. Buttons: Cancel (ghost) + "Create & send invite" (primary; pending → "Creating…" + form disabled).
+  - [x] Submit → `createUser.mutate(body, { onSuccess, onError })`. onError: inspect `err.response?.data?.error?.code` (AccessControl inline pattern `:884-891`) → 409/422/other copy per AC6; keep all field values. onSuccess → advance to Done step (confirmation text names the email; "Add another" resets the form to Step 1; "Done" closes). No optimistic update.
 
-- [ ] **Task 9 — FE: resend row action (AC: 7)**
-  - [ ] In the row: `status === 'invited'` → ghost "Resend" button. `resendInvite.mutate({ email }, ...)`; track the in-flight/confirmed row locally (single-row state — don't disable all rows). Success → inline "Invitation resent to <email>" (`aria-live="polite"`, e.g. replacing the button with a check `<Icon name="check" />` + "Sent" for a few seconds, then restore). Error → inline `role="alert"` with `getErrorMessage`.
+- [x] **Task 9 — FE: resend row action (AC: 7)**
+  - [x] In the row: `status === 'invited'` → ghost "Resend" button. `resendInvite.mutate({ email }, ...)`; track the in-flight/confirmed row locally (single-row state — don't disable all rows). Success → inline "Invitation resent to <email>" (`aria-live="polite"`, e.g. replacing the button with a check `<Icon name="check" />` + "Sent" for a few seconds, then restore). Error → inline `role="alert"` with `getErrorMessage`.
 
-- [ ] **Task 10 — FE: tests + gates (AC: 8)**
-  - [ ] `UsersScreen.test.tsx` + `AddUserOverlay.test.tsx` (+ badge test) in the house convention: `vi.mock` the hooks (`useUsers`, `useAccessGrants`, `useEngagements` hooks used for name resolution, `usePageTitle`), `q(data)`/`noOpMutation`/`makeQC()` helpers, `_mockAuthSession` seeding (see `AccessControl.test.tsx:10-48, 142-165`). Cover: rows/pills/search/resend-visibility, create success → Done + `invalidateQueries`, 409 error keeps values, resend success + error.
-  - [ ] `tsc --noEmit` 0 errors; eslint clean (the pre-existing `Icon.tsx` react-refresh warning is known); full `vitest run` green (baseline 461 tests / 47 files — expect additions, zero regressions).
+- [x] **Task 10 — FE: tests + gates (AC: 8)**
+  - [x] `UsersScreen.test.tsx` + `AddUserOverlay.test.tsx` (+ badge test) in the house convention: `vi.mock` the hooks (`useUsers`, `useAccessGrants`, `useEngagements` hooks used for name resolution, `usePageTitle`), `q(data)`/`noOpMutation`/`makeQC()` helpers, `_mockAuthSession` seeding (see `AccessControl.test.tsx:10-48, 142-165`). Cover: rows/pills/search/resend-visibility, create success → Done + `invalidateQueries`, 409 error keeps values, resend success + error.
+  - [x] `tsc --noEmit` 0 errors; eslint clean (the pre-existing `Icon.tsx` react-refresh warning is known); full `vitest run` green (baseline 461 tests / 47 files — expect additions, zero regressions).
 
 ## Dev Notes
 
@@ -193,8 +193,50 @@ Reconciliations (binding):
 
 ### Agent Model Used
 
+Claude Sonnet 5 (claude-sonnet-5)
+
 ### Debug Log References
+
+- BE tests run on host with `AUTH_BACKEND=dev` env overrides (localhost PG/MinIO/Redis pointing at the existing docker-compose containers) per the 10.1 host recipe — the live `AUTH_BACKEND=cognito` containers were never restarted/reconfigured.
+- Full BE suite: 1017 passed, 36 skipped, 0 failed (baseline 1005 + 12 new). `ruff check` clean.
+- `docs/api-spec.json` regenerated and confirmed byte-stable on a second rerun.
+- FE: `tsc --noEmit` 0 errors, `eslint` clean. Full `vitest run`: 482 passed / 50 files (baseline 461/47 + 21 new), 0 regressions.
+- Manual browser verification (Playwright against the running local dev server, logged in as `dev.admin@velara.dev`): the Users nav tab, directory table (User/Email/Role/Engagement access/Status columns), initials avatars, live search filter, and the Add-user overlay (stepper, form, Cognito-invite callout, error handling) all render and behave correctly. The actual create/resend network calls hit a 405 because the long-running local `velara-api-api-1` container is serving code baked in before Story 10.1 (predates this session — `docker exec` showed no `POST /users` route at all, i.e. stale relative to git HEAD `c4d4805`). Per explicit instruction and project memory, the live container was not rebuilt/restarted to work around this; BE behavior for create/resend is fully covered by the automated integration test suite instead (34 passing tests in `test_users.py` against a freshly-built local environment).
 
 ### Completion Notes List
 
+- **BE (Tasks 1-4):** Added `status` to `UserSummary`/`UserSummaryRead` (additive), a `_normalize_user_status` helper mapping Cognito's top-level `UserStatus` field, and dev-shim invite-tracking (`_INVITED_EMAILS`, reset by `reset_seed()`). Added `resend_invite` to the `AuthProvider` Protocol with `CognitoAuthProvider` (AdminCreateUser `MessageAction="RESEND"`) and `DevAuthProvider` implementations, plus `UserNotFoundError`/`UserNotPendingError`. Added `POST /api/v1/users/resend-invite` (identical gating to `POST /users`: router `RejectClient` + in-handler `_require_grantor`), `provisioning_service.resend_user_invite` with best-effort `admin.user_invite_resent` audit, and the `EVENT_ADMIN_USER_INVITE_RESENT` constant. No migration, no Terraform change (as scoped).
+- **BE tests:** 12 new tests in `test_users.py` (status on GET/POST, resend happy path for admin+ma_tech, consultant→403, client→404, unknown email→404, already-active→409, audit-row assertion via `session_scope()`, 502 on provider failure) plus 2 existing-test updates (added `status` to key-set assertions). Full suite green, spec regenerated and byte-stable.
+- **FE (Tasks 5-10):** Added `status` to the `UserSummary` type, `createUser`/`resendInvite` API functions, and `useCreateUser`/`useResendInvite` mutations (house shape, key-prefix invalidation). Added the `Users` grantor-only nav tab + route. Built `UsersScreen.tsx` (flat directory table with client-side search, engagement-access resolution via `useAccessGrants` + `useClients`, per-row Resend on invited rows), `UserStatusBadge.tsx` (amber/teal/neutral pill), and `AddUserOverlay.tsx` (Stepper component accepting a `steps` array for 10.3 extensibility, 2-step Create→Done flow, form-value preservation on error, 409/422/502 error mapping).
+- **FE tests:** 21 new tests across `UsersScreen.test.tsx`, `AddUserOverlay.test.tsx`, `UserStatusBadge.test.tsx`, plus additive assertions in `users.test.ts`. All existing nav/route gating tests pass unmodified (NavTabs' generic grantor-filter test and `internal.test.tsx` needed no changes).
+- **Design reconciliation applied as scoped:** flat directory (no client-selector), no "Client/engagement" select in the create form (deferred to 10.3), Stepper renders 2 of its eventual 3 steps, inline `aria-live` confirmation instead of a toast system, amber status-pill tokens are net-new arbitrary Tailwind values.
+
 ### File List
+
+**velara-api:**
+- `app/integrations/auth.py` (modified — `status` field, `_normalize_user_status`, `resend_invite` Protocol method + both provider implementations, `UserNotFoundError`/`UserNotPendingError`, dev-shim `_INVITED_EMAILS`)
+- `app/schemas/user.py` (modified — `UserSummaryRead.status`, new `UserInviteResend`)
+- `app/api/v1/users.py` (modified — `status` on GET/POST responses, new `POST /users/resend-invite` route)
+- `app/services/provisioning_service.py` (modified — new `resend_user_invite`)
+- `app/models/audit.py` (modified — `EVENT_ADMIN_USER_INVITE_RESENT`)
+- `tests/integration/api/test_users.py` (modified — 12 new tests, 2 updated assertions)
+- `docs/api-spec.json` (regenerated)
+
+**velara-web:**
+- `src/api/users.ts` (modified — `status` field, `createUser`, `resendInvite`)
+- `src/api/users.test.ts` (modified — additive `status` assertions, new `createUser`/`resendInvite` tests)
+- `src/features/admin/hooks/useUsers.ts` (modified — `useCreateUser`, `useResendInvite`)
+- `src/shared/components/navTabsData.ts` (modified — `users` nav tab)
+- `src/routes/internal.tsx` (modified — `users/*` route)
+- `src/features/admin/components/UsersScreen.tsx` (new)
+- `src/features/admin/components/UsersScreen.test.tsx` (new)
+- `src/features/admin/components/UserStatusBadge.tsx` (new)
+- `src/features/admin/components/UserStatusBadge.test.tsx` (new)
+- `src/features/admin/components/AddUserOverlay.tsx` (new)
+- `src/features/admin/components/AddUserOverlay.test.tsx` (new)
+
+## Change Log
+
+| Date | Version | Description |
+|------|---------|-------------|
+| 2026-07-03 | 0.1.0 | Story 10.2 implemented (full-stack): BE — `status` surfaced on the user directory (`UserSummary`/`UserSummaryRead`, additive) + `POST /api/v1/users/resend-invite` (`AuthProvider.resend_invite` seam, gating identical to `POST /users`, best-effort `admin.user_invite_resent` audit); FE — grantor-only Users nav tab/route, `UsersScreen` (flat searchable directory table with engagement-access resolution), `UserStatusBadge`, `AddUserOverlay` (Stepper-based create→invite flow, 10.3-extensible). 12 new BE tests (34 total in `test_users.py`, full suite 1017/0 fail), 21 new FE tests (482 total, 0 regressions). `ruff`/`tsc`/`eslint` clean; `docs/api-spec.json` regenerated byte-stable. Manual browser verification confirmed FE rendering/behavior end-to-end; live create/resend calls blocked by a pre-existing stale local API container (predates this session, left untouched per instruction) — BE behavior fully covered by the automated suite instead. Status → review. |
