@@ -4,7 +4,7 @@ baseline_commit: 910c5dc14cb378bd4220cfc315dd95f21a99392e
 
 # Story 9.5: Usage & Value Analytics UI (Overview + By User)
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -40,8 +40,8 @@ so that I can see platform-wide adoption and value, and analyze metrics for an i
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — API client + types: `src/api/analytics.ts` (AC: #1, #2, #3)**
-  - [ ] NEW file. Mirror `src/api/audit.ts` exactly: use the shared `apiClient` from `@/api/client`, unwrap `response.data.data`. Three functions:
+- [x] **Task 1 — API client + types: `src/api/analytics.ts` (AC: #1, #2, #3)**
+  - [x] NEW file. Mirror `src/api/audit.ts` exactly: use the shared `apiClient` from `@/api/client`, unwrap `response.data.data`. Three functions:
     ```ts
     export async function getOverview(): Promise<AnalyticsOverview> {
       const res = await apiClient.get<{ data: AnalyticsOverview }>('/api/v1/analytics/overview')
@@ -56,69 +56,77 @@ so that I can see platform-wide adoption and value, and analyze metrics for an i
       return res.data.data
     }
     ```
-  - [ ] ⚠️ **Overview path is `/api/v1/analytics/overview`, NOT bare `/api/v1/analytics`** (the latter 404s). Verified against the shipped route.
-  - [ ] Define the TS interfaces to match the shipped wire contract EXACTLY (see Dev Notes → "The exact 9.4 wire contract"). Mark the nullable fields `| null`:
+  - [x] ⚠️ **Overview path is `/api/v1/analytics/overview`, NOT bare `/api/v1/analytics`** (the latter 404s). Verified against the shipped route.
+  - [x] Define the TS interfaces to match the shipped wire contract EXACTLY (see Dev Notes → "The exact 9.4 wire contract"). Mark the nullable fields `| null`:
     - `WeeklyBucket { week_start: string; count: number }` (`week_start` is an ISO **date** string `"2026-04-14"`, not datetime).
     - `SkillRun { skill_id: string | null; name: string | null; runs: number }`.
     - `AnalyticsOverview { total_invocations: number; success_rate: number; series: WeeklyBucket[]; top_skills: SkillRun[]; hours_saved: number; value_cost_avoided: number; token_cost: number; minutes_saved_per_run: number }`.
     - `AnalyticsUserSummary { user_id: string; name: string; invocations: number; success_rate: number; skills_used: number }`; `AnalyticsUsersData { users: AnalyticsUserSummary[] }`.
     - `ActivityRow { id: string; created_at: string; event_type: string; skill_name: string | null; outcome: string | null }`.
     - `AnalyticsUserDetail { user_id: string; name: string; invocations: number; success_rate: number; skills_used: number; avg_runtime_ms: number | null; trend_pct: number | null; hours_saved: number; top_skills: SkillRun[]; weekly: WeeklyBucket[]; recent_activity: ActivityRow[] }`.
-  - [ ] `success_rate` is a **percent 0–100** (already scaled server-side — do NOT ×100). Dollar fields are **unrounded floats** — format FE-side (see the formatting helpers task).
+  - [x] `success_rate` is a **percent 0–100** (already scaled server-side — do NOT ×100). Dollar fields are **unrounded floats** — format FE-side (see the formatting helpers task).
 
-- [ ] **Task 2 — Hooks: `src/features/analytics/hooks/useAnalytics.ts` (AC: #1, #2, #3)**
-  - [ ] Mirror `src/features/audit/hooks/useAudit.ts` (react-query `useQuery`, `staleTime: 30_000` — or 60_000 like `useUsers`; pick and note):
+- [x] **Task 2 — Hooks: `src/features/analytics/hooks/useAnalytics.ts` (AC: #1, #2, #3)**
+  - [x] Mirror `src/features/audit/hooks/useAudit.ts` (react-query `useQuery`, `staleTime: 30_000` — or 60_000 like `useUsers`; pick and note):
     - `useOverview()` → `useQuery({ queryKey: ['analytics-overview'], queryFn: getOverview, staleTime })`.
     - `useAnalyticsUsers()` → `useQuery({ queryKey: ['analytics-users'], queryFn: listAnalyticsUsers, staleTime })`.
     - `useUserDetail(userId: string | null)` → `useQuery({ queryKey: ['analytics-user', userId], queryFn: () => getUserDetail(userId!), enabled: !!userId, staleTime })` — the `enabled: !!userId` gate is the AC3 pattern (mirror `useAuditChildren`'s `enabled: !!parentJobId`) so no fetch fires before a user is selected.
 
-- [ ] **Task 3 — Formatting helpers (AC: #1, #2, #7)**
-  - [ ] Small module-local helpers (or reuse existing in `@/shared/utils` if present — grep first): `fmtNum(n)` = thousands separators (`Intl.NumberFormat`); `fmtUsd(n)` = `$` + compact/thousands (the mock shows `$412K` — use `Intl.NumberFormat(undefined, {notation:'compact', style:'currency', currency:'USD'})` for the big value figure; token_cost is small so show `$X.XX`); `fmtPct(n)` = `n.toFixed(1) + '%'`; `fmtMs(ms)` = `ms>=1000 ? (ms/1000).toFixed(1)+'s' : ms+'ms'` (copy from the mock's `fmtMs`, `shared.jsx:109`); `fmtTrend(pct)` = signed `+X.X%`/`-X.X%` with null→"—". Reuse the audit screen's `formatTs`/timestamp helper for `recent_activity` + `week_start` labels (grep `AuditLog.tsx` for its `Intl.DateTimeFormat` usage).
+- [x] **Task 3 — Formatting helpers (AC: #1, #2, #7)**
+  - [x] Small module-local helpers (or reuse existing in `@/shared/utils` if present — grep first): `fmtNum(n)` = thousands separators (`Intl.NumberFormat`); `fmtUsd(n)` = `$` + compact/thousands (the mock shows `$412K` — use `Intl.NumberFormat(undefined, {notation:'compact', style:'currency', currency:'USD'})` for the big value figure; token_cost is small so show `$X.XX`); `fmtPct(n)` = `n.toFixed(1) + '%'`; `fmtMs(ms)` = `ms>=1000 ? (ms/1000).toFixed(1)+'s' : ms+'ms'` (copy from the mock's `fmtMs`, `shared.jsx:109`); `fmtTrend(pct)` = signed `+X.X%`/`-X.X%` with null→"—". Reuse the audit screen's `formatTs`/timestamp helper for `recent_activity` + `week_start` labels (grep `AuditLog.tsx` for its `Intl.DateTimeFormat` usage).
 
-- [ ] **Task 4 — Screen shell + tabs: `src/features/analytics/components/AnalyticsScreen.tsx` (AC: #1, #2, #4, #6, #8)**
-  - [ ] NEW. `usePageTitle('Usage & Value')` first line (import from `@/shared/hooks/useDocumentTitle`).
-  - [ ] **Tab switcher is GREENFIELD** (no in-page tab pattern exists in the app). Build with `const [tab, setTab] = useState<'overview' | 'user'>('overview')` + two `<button>`s. Style the active/inactive pills on the **audit event-kind pill** precedent (`AuditLog.tsx:299-312`): active = `border-brand-800 bg-brand-800 text-white`, inactive = `border-line-2 bg-surface text-ink-2 hover:text-ink`; each button has a leading `<Icon name="chart"|"user" size={13}/>` (Overview / By User). Header title text "Usage & Value" (`text-[22px] font-semibold text-ink` per `AuditLog.tsx:288`).
-  - [ ] Keep the outer `<div className="p-6">` from the route (or add page padding here — match audit). Render `<OverviewTab/>` or `<ByUserTab/>` by `tab`.
-  - [ ] **No emoji** anywhere; every glyph via `<Icon>`. All the icons the mock uses (`chart`, `user`, `clock`, `bolt`, `layers`, `sparkle`, `doc2`, `play`, `x`, `check`, `download`) already exist in `Icon.tsx` — none need adding.
+- [x] **Task 4 — Screen shell + tabs: `src/features/analytics/components/AnalyticsScreen.tsx` (AC: #1, #2, #4, #6, #8)**
+  - [x] NEW. `usePageTitle('Usage & Value')` first line (import from `@/shared/hooks/useDocumentTitle`).
+  - [x] **Tab switcher is GREENFIELD** (no in-page tab pattern exists in the app). Build with `const [tab, setTab] = useState<'overview' | 'user'>('overview')` + two `<button>`s. Style the active/inactive pills on the **audit event-kind pill** precedent (`AuditLog.tsx:299-312`): active = `border-brand-800 bg-brand-800 text-white`, inactive = `border-line-2 bg-surface text-ink-2 hover:text-ink`; each button has a leading `<Icon name="chart"|"user" size={13}/>` (Overview / By User). Header title text "Usage & Value" (`text-[22px] font-semibold text-ink` per `AuditLog.tsx:288`).
+  - [x] Keep the outer `<div className="p-6">` from the route (or add page padding here — match audit). Render `<OverviewTab/>` or `<ByUserTab/>` by `tab`.
+  - [x] **No emoji** anywhere; every glyph via `<Icon>`. All the icons the mock uses (`chart`, `user`, `clock`, `bolt`, `layers`, `sparkle`, `doc2`, `play`, `x`, `check`, `download`) already exist in `Icon.tsx` — none need adding.
 
-- [ ] **Task 5 — Overview tab: `OverviewTab.tsx` (AC: #1, #6, #7, #8)**
-  - [ ] `useOverview()`. Loading → skeleton (mirror `AuditLog.tsx` `SkeletonRows` `animate-pulse`); error → `getErrorMessage(error)` from `@/shared/utils/errors`.
-  - [ ] **KPI tiles (reconciled — AC7):** render ONLY API-backed tiles — Total invocations (`total_invocations`, `fmtNum`), Success rate (`success_rate`, `fmtPct`), Hours saved (`hours_saved`, `fmtNum`+"h", subtext `"modeled at {minutes_saved_per_run} min / run"` — this IS API-supplied), Token cost (`token_cost`, `fmtUsd`). **Drop** the mock's "+18% vs prior", "Active projects / across 3 clients", "Avg platform overhead 1.4s". Tile visual: mirror the mock `StatMini` (card, `.k` label with leading Icon, `.v` big `font-serif` value, `.delta` subtext) → Tailwind (`bg-surface border border-line rounded-lg p-4`, value `font-serif text-[34px]`, first tile accent = `border-brand-100 bg-gradient` optional).
-  - [ ] **Usage time-series bar chart (AC6):** container `flex items-end gap-2 h-40` (160px); per bucket a column (`flex-1 flex flex-col items-center gap-1.5`) with a bar div `style={{ height: max ? (b.count / max) * 140 : 0 }}` (px number), `w-full max-w-[30px] rounded-t-[5px]`, color = **last bucket** `bg-brand-700` else `bg-brand-300` (`i === series.length - 1`), and an x-label `<span className="text-[9.5px] text-faint">` = the day-of-month from `week_start` (parse the ISO date; the mock shows just the day number). `const max = Math.max(1, ...series.map(b => b.count))` to avoid /0. The API ALWAYS returns exactly 12 buckets.
-  - [ ] **Most-used skills (AC6/#7):** map `top_skills` → ranked rows (rank `{i+1}` mono, name `font-semibold` with **null fallback** `name ?? '(deleted skill)'`, a horizontal bar track+fill `width: runs / maxRuns * 100%`, run count mono). `const maxRuns = Math.max(1, ...top_skills.map(s => s.runs))`. Horizontal bar = a track `<div className="h-[7px] rounded-full bg-surface-sunk overflow-hidden">` + fill `<div className="h-full bg-brand-600" style={{ width: pct+'%' }}/>`.
-  - [ ] **Value summary card (AC1/#7):** the green-tinted "Renewal value snapshot" card, but reconciled — show `value_cost_avoided` (`fmtUsd`, big `font-serif text-brand-700`, label "est. delivery cost avoided") + `hours_saved` + `token_cost`. **Drop** `6.2×`/`2,165`/`11` (not API-supplied). The "Generate renewal report" button: omit or render `disabled` (no endpoint).
+- [x] **Task 5 — Overview tab: `OverviewTab.tsx` (AC: #1, #6, #7, #8)**
+  - [x] `useOverview()`. Loading → skeleton (mirror `AuditLog.tsx` `SkeletonRows` `animate-pulse`); error → `getErrorMessage(error)` from `@/shared/utils/errors`.
+  - [x] **KPI tiles (reconciled — AC7):** render ONLY API-backed tiles — Total invocations (`total_invocations`, `fmtNum`), Success rate (`success_rate`, `fmtPct`), Hours saved (`hours_saved`, `fmtNum`+"h", subtext `"modeled at {minutes_saved_per_run} min / run"` — this IS API-supplied), Token cost (`token_cost`, `fmtUsd`). **Drop** the mock's "+18% vs prior", "Active projects / across 3 clients", "Avg platform overhead 1.4s". Tile visual: mirror the mock `StatMini` (card, `.k` label with leading Icon, `.v` big `font-serif` value, `.delta` subtext) → Tailwind (`bg-surface border border-line rounded-lg p-4`, value `font-serif text-[34px]`, first tile accent = `border-brand-100 bg-gradient` optional).
+  - [x] **Usage time-series bar chart (AC6):** container `flex items-end gap-2 h-40` (160px); per bucket a column (`flex-1 flex flex-col items-center gap-1.5`) with a bar div `style={{ height: max ? (b.count / max) * 140 : 0 }}` (px number), `w-full max-w-[30px] rounded-t-[5px]`, color = **last bucket** `bg-brand-700` else `bg-brand-300` (`i === series.length - 1`), and an x-label `<span className="text-[9.5px] text-faint">` = the day-of-month from `week_start` (parse the ISO date; the mock shows just the day number). `const max = Math.max(1, ...series.map(b => b.count))` to avoid /0. The API ALWAYS returns exactly 12 buckets.
+  - [x] **Most-used skills (AC6/#7):** map `top_skills` → ranked rows (rank `{i+1}` mono, name `font-semibold` with **null fallback** `name ?? '(deleted skill)'`, a horizontal bar track+fill `width: runs / maxRuns * 100%`, run count mono). `const maxRuns = Math.max(1, ...top_skills.map(s => s.runs))`. Horizontal bar = a track `<div className="h-[7px] rounded-full bg-surface-sunk overflow-hidden">` + fill `<div className="h-full bg-brand-600" style={{ width: pct+'%' }}/>`.
+  - [x] **Value summary card (AC1/#7):** the green-tinted "Renewal value snapshot" card, but reconciled — show `value_cost_avoided` (`fmtUsd`, big `font-serif text-brand-700`, label "est. delivery cost avoided") + `hours_saved` + `token_cost`. **Drop** `6.2×`/`2,165`/`11` (not API-supplied). The "Generate renewal report" button: omit or render `disabled` (no endpoint).
 
-- [ ] **Task 6 — By-User tab: `ByUserTab.tsx` (AC: #2, #3, #6, #7, #8)**
-  - [ ] `useAnalyticsUsers()` for the selector; `const [selUser, setSelUser] = useState<string | null>(null)`; default to the first user once loaded (`useEffect` set to `users[0]?.user_id` when `selUser == null && users.length`). `useUserDetail(selUser)`.
-  - [ ] **User selector chips:** `flex gap-2 flex-wrap`; each `<button onClick={() => setSelUser(u.user_id)}>` styled selected = `bg-brand-800 text-white border-brand-800`, unselected = `bg-surface text-ink-2 border-line-2`; label = `u.name` (already resolved server-side; NO avatar unless a shared Avatar exists — grep; the mock uses `Avatar` but skip if not present in velara-web).
-  - [ ] **User header card:** name (`font-bold text-lg`) + 3 big `font-serif text-[24px] text-brand-700` stats: `invocations` (fmtNum), `success_rate` (fmtPct), `hours_saved` (fmtNum + "h", label "hours modeled saved").
-  - [ ] **Metrics grid — 2 columns (NOT 3; AC7):** Weekly activity + Skills used. **OMIT the "By surface" card entirely.**
+- [x] **Task 6 — By-User tab: `ByUserTab.tsx` (AC: #2, #3, #6, #7, #8)**
+  - [x] `useAnalyticsUsers()` for the selector; `const [selUser, setSelUser] = useState<string | null>(null)`; default to the first user once loaded (`useEffect` set to `users[0]?.user_id` when `selUser == null && users.length`). `useUserDetail(selUser)`.
+  - [x] **User selector chips:** `flex gap-2 flex-wrap`; each `<button onClick={() => setSelUser(u.user_id)}>` styled selected = `bg-brand-800 text-white border-brand-800`, unselected = `bg-surface text-ink-2 border-line-2`; label = `u.name` (already resolved server-side; NO avatar unless a shared Avatar exists — grep; the mock uses `Avatar` but skip if not present in velara-web).
+  - [x] **User header card:** name (`font-bold text-lg`) + 3 big `font-serif text-[24px] text-brand-700` stats: `invocations` (fmtNum), `success_rate` (fmtPct), `hours_saved` (fmtNum + "h", label "hours modeled saved").
+  - [x] **Metrics grid — 2 columns (NOT 3; AC7):** Weekly activity + Skills used. **OMIT the "By surface" card entirely.**
     - **Weekly activity chart:** same div-bar technique as Overview but smaller (`h-24`/96px container, bar `height = v / maxWeekly * 82`, `rounded-t-[3px]`, last bucket `bg-brand-700` else `bg-brand-300`; x-labels only every 4th bucket). Header shows `trend_pct` via `fmtTrend` (**null → "—"; negative → red/`text-danger`, positive → `text-brand-600`**) + "vs prior". Footer `~{Math.round(invocations/12)}/wk avg · {fmtMs(avg_runtime_ms)} runtime` (avg_runtime_ms null → "—").
     - **Skills used card:** chip `{skills_used} distinct`; map `top_skills` rows (name + null fallback + horizontal bar `runs/maxRuns*100%` + run count).
-  - [ ] **Recent activity feed (AC2/#7):** map `recent_activity` (≤7 rows). Each row: a 30×30 `rounded-[7px] bg-surface-sunk` icon tile with an `<Icon>` chosen by event — **success** `outcome==='success'` → `play` tinted `text-brand-600`; **failure** → `x` tinted `text-danger`; admin events (`event_type` starts `admin.`) → map (`admin.certification`→`cert`, `admin.grant_*`→`shield`, `admin.lifecycle_transition`→`layers`, else `dots`); label = `skill_name ?? <humanized event_type>`; detail line = a short `{event_type} · {outcome ?? ''}` (⚠️ **NO surface** — the mock's `"Web · 8.4s · success"` used descoped `surface`/`ms`; the ActivityRow has neither → show `{outcome}` / event only); right-aligned timestamp via the audit `formatTs`. Empty → "No recent activity."
-  - [ ] Loading/error same as Overview. While `selUser` is set but detail is loading, show a skeleton in the panel (don't blank the whole tab).
+  - [x] **Recent activity feed (AC2/#7):** map `recent_activity` (≤7 rows). Each row: a 30×30 `rounded-[7px] bg-surface-sunk` icon tile with an `<Icon>` chosen by event — **success** `outcome==='success'` → `play` tinted `text-brand-600`; **failure** → `x` tinted `text-danger`; admin events (`event_type` starts `admin.`) → map (`admin.certification`→`cert`, `admin.grant_*`→`shield`, `admin.lifecycle_transition`→`layers`, else `dots`); label = `skill_name ?? <humanized event_type>`; detail line = a short `{event_type} · {outcome ?? ''}` (⚠️ **NO surface** — the mock's `"Web · 8.4s · success"` used descoped `surface`/`ms`; the ActivityRow has neither → show `{outcome}` / event only); right-aligned timestamp via the audit `formatTs`. Empty → "No recent activity."
+  - [x] Loading/error same as Overview. While `selUser` is set but detail is loading, show a skeleton in the panel (don't blank the whole tab).
 
-- [ ] **Task 7 — Wire the route (AC: #4)**
-  - [ ] In `src/routes/internal.tsx:112-115`, **replace** the analytics placeholder body:
+- [x] **Task 7 — Wire the route (AC: #4)**
+  - [x] In `src/routes/internal.tsx:112-115`, **replace** the analytics placeholder body:
     ```tsx
     <Route path="analytics/*" element={<RequireGrantor><div className="p-6"><AnalyticsScreen /></div></RequireGrantor>} />
     ```
     (mirror the audit line `:116-119`). Import `AnalyticsScreen` near `:18` alongside the `AuditLog` import. **Do NOT** add a new `<Route>` or a new guard — the guarded placeholder already exists.
-  - [ ] **Decision (rename the nav label):** `navTabsData.ts:20` currently labels the tab `'Analytics'` but the design/PRD name is **"Usage & Value"** (UX-DR-02/13; mock TopBar title "Usage & Value"). **Rename `label: 'Analytics'` → `label: 'Usage & Value'`** (keep `id:'analytics'`, `path:'analytics'`, `grantorOnly:true` unchanged — id/path are the route contract). Update any test asserting the old label. Note the change in Completion Notes.
+  - [x] **Decision (rename the nav label):** `navTabsData.ts:20` currently labels the tab `'Analytics'` but the design/PRD name is **"Usage & Value"** (UX-DR-02/13; mock TopBar title "Usage & Value"). **Rename `label: 'Analytics'` → `label: 'Usage & Value'`** (keep `id:'analytics'`, `path:'analytics'`, `grantorOnly:true` unchanged — id/path are the route contract). Update any test asserting the old label. Note the change in Completion Notes.
 
-- [ ] **Task 8 — Tests: `src/features/analytics/**/*.test.tsx` + `src/api/analytics.test.ts` (AC: #1–#7)**
-  - [ ] Mirror `AuditLog.test.tsx`: `vi.mock('@/features/analytics/hooks/useAnalytics', ...)`, `mockReturnValue({ data, isLoading, error } as never)`, render inside `<QueryClientProvider client={makeQC()}><MemoryRouter initialEntries={['/internal/analytics']}>`. `beforeEach(vi.clearAllMocks + defaultMocks)`.
-  - [ ] **AC1 (overview):** given a mocked overview → assert total invocations, success-rate %, the 12 bars render (query the bar container), top-skills rows with names + run counts, and the value figures ($ cost avoided, hours saved, token cost). Assert the **descoped** mock figures are ABSENT (no "+18% vs prior", no "By surface", no "6.2×").
-  - [ ] **AC2/#3 (by-user):** mock `useAnalyticsUsers` (2 users) + `useUserDetail`; assert user chips render; clicking a chip calls `useUserDetail` with the new `user_id` (read `vi.mocked(useUserDetail).mock.calls.at(-1)?.[0]`); assert the panel shows the user's invocations/success/weekly/recent-activity. Assert switching users doesn't remount the whole screen (no `usePageTitle` re-assert needed — just that the detail query key changed).
-  - [ ] **AC6 (charts):** with a `series` where `max=0` (all zero counts) → no crash, bars render at height 0. With a normal series → the last bucket has the accent class.
-  - [ ] **AC7 (null-safety):** `top_skills` with `name: null` → fallback label; `avg_runtime_ms: null` → "—"; `trend_pct: null` → "—" and a **negative** `trend_pct` → shows `-` + danger color; `recent_activity` row with `outcome: null` + `skill_name: null` (an admin event) → renders with a fallback label and no success/fail badge.
-  - [ ] **API client test** (`analytics.test.ts`): `vi.mock('@/api/client', () => ({ apiClient: { get: vi.fn() } }))`; assert `getOverview` calls `'/api/v1/analytics/overview'` and unwraps `.data.data`; `getUserDetail('u1')` calls `/api/v1/analytics/users/u1`.
-  - [ ] (Optional but cheap) a nav/label test if one asserts tab labels — update it for "Usage & Value".
+- [x] **Task 8 — Tests: `src/features/analytics/**/*.test.tsx` + `src/api/analytics.test.ts` (AC: #1–#7)**
+  - [x] Mirror `AuditLog.test.tsx`: `vi.mock('@/features/analytics/hooks/useAnalytics', ...)`, `mockReturnValue({ data, isLoading, error } as never)`, render inside `<QueryClientProvider client={makeQC()}><MemoryRouter initialEntries={['/internal/analytics']}>`. `beforeEach(vi.clearAllMocks + defaultMocks)`.
+  - [x] **AC1 (overview):** given a mocked overview → assert total invocations, success-rate %, the 12 bars render (query the bar container), top-skills rows with names + run counts, and the value figures ($ cost avoided, hours saved, token cost). Assert the **descoped** mock figures are ABSENT (no "+18% vs prior", no "By surface", no "6.2×").
+  - [x] **AC2/#3 (by-user):** mock `useAnalyticsUsers` (2 users) + `useUserDetail`; assert user chips render; clicking a chip calls `useUserDetail` with the new `user_id` (read `vi.mocked(useUserDetail).mock.calls.at(-1)?.[0]`); assert the panel shows the user's invocations/success/weekly/recent-activity. Assert switching users doesn't remount the whole screen (no `usePageTitle` re-assert needed — just that the detail query key changed).
+  - [x] **AC6 (charts):** with a `series` where `max=0` (all zero counts) → no crash, bars render at height 0. With a normal series → the last bucket has the accent class.
+  - [x] **AC7 (null-safety):** `top_skills` with `name: null` → fallback label; `avg_runtime_ms: null` → "—"; `trend_pct: null` → "—" and a **negative** `trend_pct` → shows `-` + danger color; `recent_activity` row with `outcome: null` + `skill_name: null` (an admin event) → renders with a fallback label and no success/fail badge.
+  - [x] **API client test** (`analytics.test.ts`): `vi.mock('@/api/client', () => ({ apiClient: { get: vi.fn() } }))`; assert `getOverview` calls `'/api/v1/analytics/overview'` and unwraps `.data.data`; `getUserDetail('u1')` calls `/api/v1/analytics/users/u1`.
+  - [x] (Optional but cheap) a nav/label test if one asserts tab labels — update it for "Usage & Value".
 
-- [ ] **Task 9 — Gates & handoff**
-  - [ ] `npm run typecheck` (tsc --noEmit) = 0 errors; `npm run lint` clean; `npm run test` (vitest) green — baseline is **440 tests / 44 files**; add the new analytics tests on top.
-  - [ ] Manually sanity-check against a running API if available (the 3 endpoints are live post-9.4). Not required for the gate, but confirm the envelope unwrap + null handling on real data.
-  - [ ] This is the **final Epic 9 story** — after code-review passes, epic-9 is complete (9.1–9.5 all done) → a retrospective is the natural next step.
+- [x] **Task 9 — Gates & handoff**
+  - [x] `npm run typecheck` (tsc --noEmit) = 0 errors; `npm run lint` clean; `npm run test` (vitest) green — baseline is **440 tests / 44 files**; add the new analytics tests on top.
+  - [x] Manually sanity-check against a running API if available (the 3 endpoints are live post-9.4). Not required for the gate, but confirm the envelope unwrap + null handling on real data.
+  - [x] This is the **final Epic 9 story** — after code-review passes, epic-9 is complete (9.1–9.5 all done) → a retrospective is the natural next step.
+
+### Review Findings
+
+_Code review 2026-07-03 (3-layer adversarial: Blind Hunter / Edge Case Hunter / Acceptance Auditor — all 3 completed; Auditor verdict: all 8 ACs satisfied). 3 patch (all applied), 0 defer, 11 dismissed as noise. D1 decision → resolved as patch (reconcile in useEffect). Gates after patches: tsc 0, eslint clean (1 pre-existing Icon.tsx warning), vitest 461/461 (1 AC7 admin-row test assertion updated for the now-humanized detail line)._
+
+- [x] [Review][Patch] Stale user selection survives a users-list refetch → persistent 404 panel (was D1) — reconciled `selUser` in the `useEffect`: reset to `users[0]` when the current `selUser` is null OR no longer in the fetched list, so a departed/out-of-scope selection can no longer strand the error panel via a `/users/{gone_id}` 404. [ByUserTab.tsx:127-133]
+- [x] [Review][Patch] `cancelled`/`blocked` recent-activity rows get a neutral "dots" icon instead of a distinct one — added `cancelled` (`x`/`text-faint`) and `blocked` (`x`/`text-danger`) branches to `activityIcon` ahead of the `admin.*` checks; the outcome vocab is `success|failure|cancelled|blocked` (auditOutcomeMeta.ts). [ByUserTab.tsx:12-20]
+- [x] [Review][Patch] Recent-activity detail line showed raw un-humanized `event_type` — now wraps `event_type` in `humanizeEvent()` for both the outcome and no-outcome branches, matching the humanized label. [ByUserTab.tsx:81]
 
 ## Dev Notes
 
@@ -213,8 +221,44 @@ Tailwind v4, `@theme` in `src/index.css` (NO `tailwind.config.js`). The V3 rebra
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (Claude Opus 4.8, 1M context) — bmad-dev-story workflow.
+
 ### Debug Log References
+
+- Compact USD formatting: `Intl.NumberFormat({notation:'compact', maximumFractionDigits:1})` emitted `$412.0K`, but the mock (and the cleaner read) is `$412K` → set `maximumFractionDigits: 0` for the compact branch (standard branch keeps 2 for `token_cost` → `$3.14`).
+- Recent-activity feed and the Skills-used card both surface a skill name, so `CTMS Data Extractor` legitimately appears twice → the AC2 test uses `getAllByText(...).length >= 1` instead of a unique match.
 
 ### Completion Notes List
 
+FE-only build of the internal **Usage & Value** screen (Overview + By-User tabs) over the SHIPPED 9.4 analytics API. Mirrors the 9.3 audit feature exactly (api client `.data.data` unwrap, react-query hooks with an `enabled` gate, screen skeleton/pill-tab patterns).
+
+- **AC1 (Overview):** `total_invocations`, `success_rate`, a 12-week hand-rolled vertical bar chart (`series`), Most-used skills horizontal bars (`top_skills`), and a reconciled value card (`value_cost_avoided` + `hours_saved` + `token_cost`). Loading skeleton (`animate-pulse`) + retryable `getErrorMessage(error)`.
+- **AC2/AC3 (By-User):** user chips from `/analytics/users` (fetched once), detail from `/analytics/users/{id}` via a react-query key `['analytics-user', userId]` — switching a chip re-queries without a page reload; `enabled: !!selUser` (mirrors `useAuditChildren`) so no fetch fires before a user is selected; defaults to the first user on load.
+- **AC4/AC7 (route + nav):** swapped the existing `RequireGrantor`-guarded `analytics/*` placeholder body for `<AnalyticsScreen/>` and removed the now-dead `Placeholder` helper (+ its `ReactNode`/`usePageTitle` imports). Renamed the nav label `'Analytics' → 'Usage & Value'` (id/path/grantorOnly unchanged) and updated `NavTabs.test.tsx`'s `GRANTOR_ONLY` list.
+- **AC5 (consultant/client hidden):** unchanged scaffolding — `grantorOnly` NavTab filter + `RequireGrantor` route guard already exclude consultant (→`/internal/engagements`) and client; the API also 404s them via `RejectNonGrantor`. No code change needed.
+- **AC6 (hand-rolled charts):** plain divs + inline `height/width`; `max = Math.max(1, ...counts)` guards divide-by-zero on an all-zero series; last bucket accented `bg-brand-700`.
+- **AC7 (mock-vs-API reconciliation):** OMITTED the By-surface card (surfaces descoped in 9.4) → per-user grid collapsed 3→2 columns; DROPPED the mock's `+18% vs prior`, active-projects, `1.4s overhead`, and the renewal extras (`6.2×`/`2,165`/`11`) + the non-functional "Generate renewal report" button; full null-safety on `top_skills[].name` (→ `(deleted skill)`), `avg_runtime_ms`/`trend_pct` (→ `—`; negative trend → signed + `text-danger`), and `recent_activity` skill_name/outcome (admin/fan-out events → humanized `event_type`, no outcome badge).
+- **AC8 (no emoji / V3 tokens):** every glyph via `<Icon>`; V3 `--green-*` mapped to `brand-*` Tailwind v4 tokens.
+
+Gates: `tsc --noEmit` 0 errors; eslint clean (1 pre-existing `Icon.tsx` react-refresh warning, unrelated); vitest **461 passed / 47 files** (baseline 440/44 → +21 tests / +3 files). This is the FINAL Epic 9 story → epic-9 complete after review → retrospective is the natural next step.
+
 ### File List
+
+- `velara-web/src/api/analytics.ts` (new) — API client + wire-contract TS types.
+- `velara-web/src/api/analytics.test.ts` (new) — API client tests.
+- `velara-web/src/features/analytics/hooks/useAnalytics.ts` (new) — react-query hooks.
+- `velara-web/src/features/analytics/analyticsFormat.ts` (new) — fmtNum/fmtUsd/fmtPct/fmtMs/fmtTrend/weekDayLabel helpers.
+- `velara-web/src/features/analytics/analyticsFormat.test.ts` (new) — format-helper tests.
+- `velara-web/src/features/analytics/components/AnalyticsScreen.tsx` (new) — screen shell + tab switcher.
+- `velara-web/src/features/analytics/components/OverviewTab.tsx` (new) — Overview tab (KPIs, usage chart, top skills, value card).
+- `velara-web/src/features/analytics/components/ByUserTab.tsx` (new) — By-User tab (selector, header, weekly chart, skills, recent activity).
+- `velara-web/src/features/analytics/components/AnalyticsScreen.test.tsx` (new) — screen tests (AC1–AC7).
+- `velara-web/src/routes/internal.tsx` (modified) — wired `<AnalyticsScreen/>` into the guarded `analytics/*` route; removed the dead `Placeholder` helper + its now-unused imports.
+- `velara-web/src/shared/components/navTabsData.ts` (modified) — renamed nav label `'Analytics' → 'Usage & Value'`.
+- `velara-web/src/shared/components/NavTabs.test.tsx` (modified) — updated `GRANTOR_ONLY` label to `'Usage & Value'`.
+
+## Change Log
+
+| Date       | Change                                                                 |
+|------------|------------------------------------------------------------------------|
+| 2026-07-03 | Story 9.5 implemented — Usage & Value Analytics UI (Overview + By-User tabs) consuming the shipped 9.4 API. New `src/features/analytics/` + `src/api/analytics.ts`; hand-rolled charts; mock-vs-API reconciliation (By-surface + demo figures dropped); route wired + nav label renamed. Gates green (tsc 0, eslint clean, vitest 461/47). Status → review. |

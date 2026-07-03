@@ -96,6 +96,7 @@ Operators and consultants can query the immutable, append-only audit log by any 
 ## Epic 10: Client User Provisioning
 
 <!-- Added 2026-07-01 via correct-course (see planning-artifacts/sprint-change-proposal-2026-07-01.md). -->
+<!-- Promoted to a full story-able epic doc 2026-07-03 (Epic 9 retro P1): see epics/epic-10-client-user-provisioning.md — the authoritative version with Given/When/Then ACs. Summary below retained for the roadmap index. Architecture ADR already written: architecture/core-architectural-decisions.md:181-203. Provisioning gate resolved 2026-07-03 to {admin, ma_tech} (supersedes the ADR's older consultant/ma_tech phrasing). -->
 
 Vitalief admins can create client login identities and invite them, so a client can be onboarded end-to-end from within the platform rather than via out-of-band Cognito-console work. This is a distinct identity-lifecycle concern split out of Epic 8 (which manages *access grants* for users assumed to already exist). Requires an architecture ADR for Cognito `AdminCreateUser` + invite flow before dev.
 
