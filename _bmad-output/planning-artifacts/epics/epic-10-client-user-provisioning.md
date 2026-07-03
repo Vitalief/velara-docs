@@ -48,9 +48,9 @@ So that a client user can be onboarded from the platform without anyone touching
 **When** it is called
 **Then** it is gated to `_GRANTOR_ROLES = {admin, ma_tech}` (router `RejectNonGrantor` + in-handler `_require_grantor`), a client token gets **404** (router-absent, mirroring the read route), and a `consultant` token gets **403**
 
-**Given** an admin submits a provisioning request with `role` set to an internal role (`admin`/`ma_tech`/`consultant`)
+**Given** an admin submits a provisioning request with `role`
 **When** the route validates the body
-**Then** it is rejected (Epic 10 provisions **client** users; internal identities are assigned via the Cognito console per Story 8.7). A duplicate email surfaces Cognito's `UsernameExistsException` as a clean `409`/`422`, not a 500
+**Then** `role` must be **`client` or `consultant`** (`role: Literal["client", "consultant"]`); `admin` and `ma_tech` are **rejected** with 422 (privileged/grantor accounts stay Cognito-console-only, least privilege — updated 2026-07-03, supersedes the earlier "client users only" phrasing). `org_id` is set server-side to the **caller's** org for both roles (new client *organizations* are set up out-of-band via the console; this route does not select a foreign client org). A duplicate email surfaces Cognito's `UsernameExistsException` as a clean `409`, not a 500
 
 **Given** the ECS task role
 **When** Terraform applies
