@@ -241,12 +241,21 @@ claude-sonnet-5
 ### File List
 
 - velara-api/app/db/migrations/versions/0019_audit_hierarchy_gist.py (NEW)
+- velara-api/app/db/migrations/versions/0020_audit_log_org_id.py (NEW, post-review fix)
 - velara-api/app/models/audit.py
 - velara-api/app/schemas/audit.py (NEW)
 - velara-api/app/services/audit_service.py
+- velara-api/app/services/access_service.py (post-review fix — org_id threaded through record_admin_action calls)
+- velara-api/app/services/certification_service.py (post-review fix)
+- velara-api/app/services/skill_service.py (post-review fix)
+- velara-api/app/services/job_service.py (post-review fix — org_id threaded through record_invocation call)
+- velara-api/app/workers/execution_tasks.py (post-review fix — org_id threaded through all record_invocation calls + job_ctx)
 - velara-api/app/api/v1/audit.py (NEW)
 - velara-api/app/api/v1/router.py
+- velara-api/tests/unit/services/test_audit_service.py (post-review fix)
 - velara-api/tests/integration/services/test_audit_service.py
+- velara-api/tests/integration/api/test_invocations.py (post-review fix)
+- velara-api/tests/integration/workers/test_execution_tasks.py (post-review fix)
 - velara-api/docs/api-spec.json
 
 ## Review Findings
@@ -260,3 +269,5 @@ _Code review 2026-07-02 (3-layer adversarial: Blind Hunter, Edge Case Hunter, Ac
 - [x] [Review][Patch] **Inverted range (`from > to`) returns a silent empty page** [velara-api/app/api/v1/audit.py:102-103] — `?from=2026-06-01&to=2026-01-01` yields `created_at >= Jun AND created_at <= Jan` → always empty, 200 OK, `total: 0`. On a compliance/audit surface an operator can't distinguish a from/to typo from "no activity." **FIXED 2026-07-02**: the handler now raises 422 `VALIDATION_ERROR` ("'from' must be on or before 'to'.") when `from_dt > to_dt`; equal from/to (single-day query) stays valid. Regression test `test_audit_route_inverted_range_returns_422` added (passes).
 
 - [x] [Review][Defer] **Deep-page OFFSET pagination is unbounded-ish** [velara-api/app/services/audit_service.py:239] — `page` capped at `le=100_000` × `per_page` up to 200 allows `.offset(~20,000,000)`, a full-partition scan per deep-page request (+ a `func.count()` scan on every page). A pre-existing pattern inherited verbatim from `list_jobs` (`jobs.py` has the identical shape), not introduced by this change — deferred, pre-existing.
+
+- [x] [Post-review][Patch — production bug, user-reported 2026-07-02] **Corrected: the earlier "org-global rows invisible" finding above was under-scoped and wrongly deferred as a write-path-only issue.** User ran a real skill invocation via the app and it never appeared in the Audit Log UI. Root-caused live: the invocation's own `invocation_jobs.hierarchy_path` was `"org"` (the established, CORRECT convention for a run outside any client/project/study context — not a 9.1 write-path bug at all), and `list_entries`'s org-fence (`hierarchy_path <@ CAST(_org_segment(org_id) AS ltree)`) excludes it because `'org' <@ 'org_org_vitalief'` is false. So the real defect was always in THIS story's query-side org isolation mechanism, not (only) in 9.1's admin-event write path — it silently hid **every** org-global row, invocations included, for every caller, always. **FIX (migration 0020, this story's service + all 9.1 write-path callers)**: added a real `org_id` column to `audit_log_entries` (mirrors `invocation_jobs.org_id`/`skills.org_id`), backfilled from `invocation_jobs.org_id` via `job_id` join (append-only trigger disabled for the single backfill UPDATE, then re-enabled — the only legitimate reason to touch existing rows). `list_entries` now filters `AuditLogEntry.org_id == org_id` directly instead of any hierarchy_path containment fence — org-global rows are now correctly visible to unrestricted callers, matching how `list_jobs` already handles org-global `invocation_jobs` via its own `org_id` column. `record_invocation`/`record_admin_action` (and all 10 call sites across `execution_tasks.py`/`job_service.py`/`access_service.py`/`skill_service.py`/`certification_service.py`) now require and pass `org_id`. Verified against the user's actual broken data: the real invocation now returns correctly from `GET /api/v1/audit`. New regression test `test_list_entries_includes_org_global_rows_for_unrestricted_caller` (passes) plus `org_id` assertions added throughout the existing test suite. Gates: ruff clean, migration up/down verified, full suite 987 passed (984 baseline + 3 new), 0 regressions.
