@@ -2,6 +2,13 @@
 
 Items deferred during reviews — real but not actionable in their originating story.
 
+## Deferred from: code review of 12-2-audit-log-context-names (2026-07-06)
+
+- **Name resolution is live, not point-in-time.** `resolve_hierarchy_names` (`velara-api/app/services/hierarchy_service.py`) resolves entity names against *current* DB state, not a snapshot at event time — a renamed (not deleted) client/project/study/location will retroactively change how every past audit row displays its context. Deferred: this is the story's stated design intent (a display concern layered on already-scoped rows, not a historical-name capture), not a bug. Revisit only if compliance requirements demand point-in-time name fidelity.
+- **Run Console's ad-hoc name-chain builder has no `(unknown)`-style placeholder for missing ancestor levels.** `[clientName, projectName, studyName].filter(Boolean).join(' › ')` in `velara-web/src/features/run/components/RunConsole.tsx` silently drops undefined levels (e.g. a study-only job renders just the study name), indistinguishable from "no client/project exist." Inconsistent with the backend resolver's explicit `(deleted <type>)` marker for the audit surfaces. Pre-existing pattern, not introduced by 12.2's AC4 fix. Cosmetic; revisit if it causes real confusion.
+- **Raw hierarchy path demoted to a hover-only `title` tooltip is inaccessible on touch devices.** `velara-web/src/features/audit/components/AuditLog.tsx` and `AuditDetailPanel.tsx` keep the raw ltree path only as a `title` attribute for debugging/compliance — unreachable without a mouse hover. Explicitly endorsed in the story's Dev Notes/Task 7 as the intended tradeoff (names read better than raw UUIDs as primary display). Revisit only if tablet/touch use by compliance staff becomes a real workflow.
+- **No test exercises the batched resolver with multiple rows sharing one `hierarchy_path`, or a large mixed-type batch.** `velara-api/tests/integration/services/test_audit_service.py`'s three new Story 12.2 tests each cover a single relevant row; the per-type batched `IN (...)` query assembly/reassembly under multi-row, multi-type conditions is untested beyond the single-path happy path. Coverage gap, not a known defect.
+
 ## Production gap found post-10.2 manual smoke test (2026-07-03) — first-login is broken end-to-end
 
 - **NOT A REGRESSION — a scope gap between Story 7.3 (Cognito swap) and Epic 10 (provisioning) that nobody connected.** Logged in as `ma_tech`, created a consultant user via the new 10.2 Users screen, opened the Cognito invite email, and tried to log in with the temporary password: the app showed **"Invalid username or password."** with correct credentials.

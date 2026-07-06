@@ -4,7 +4,7 @@ baseline_commit: 6c5eab0
 
 # Story 12.2: Audit Log Context Names (Backend-Enriched)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -247,6 +247,15 @@ claude-sonnet-5 (Claude Code)
 - `src/features/run/components/RunConsole.tsx` — threaded `clientName`/`projectName`/`studyName` through `RunShell` → `JobStatusPanel`; context line renders names instead of raw path
 - `src/features/run/components/RunConsole.test.tsx` — new AC4 test asserting resolved names render and the raw path does not
 
+### Review Findings
+
+- [x] [Review][Patch] Org-global list rows show an orphaned `layers` icon beside empty text, plus no test covers this case — [AuditLog.tsx:151-156](../../../velara-web/src/features/audit/components/AuditLog.tsx#L151-L156), [AuditLog.test.tsx](../../../velara-web/src/features/audit/components/AuditLog.test.tsx). `formatContextNames([])` returns `''` for admin/org-global rows (`hierarchy_path === "org"`), but the row unconditionally renders `<Icon name="layers" .../>` next to the now-empty span — a floating icon with nothing beside it, unlike the `{metaLine && (...)}` guard used a few lines above for the same row. No existing test renders an empty-`context_names` row on this surface. **Fixed:** gated the icon+span block on non-empty `formatContextNames(...)`; added a rendering test asserting no `layers` icon renders for an org-global row.
+- [x] [Review][Defer] Name resolution is live, not point-in-time — a renamed (not deleted) entity shows its *current* name on historical audit rows [hierarchy_service.py:resolve_hierarchy_names](../../../velara-api/app/services/hierarchy_service.py) — deferred, pre-existing design choice explicitly scoped by this story's Dev Notes (resolution is a display concern over current state, not a snapshot); revisiting it is a design decision, not a bug fix.
+- [x] [Review][Defer] Run Console's ad-hoc name-chain builder has no `(unknown)`-style placeholder for missing ancestor levels (e.g. a study-only job renders just the study name, indistinguishable from "no client/project exist") [RunConsole.tsx](../../../velara-web/src/features/run/components/RunConsole.tsx) — deferred, cosmetic inconsistency with the BE resolver's explicit `(deleted x)` marker, predates this story, not a regression.
+- [x] [Review][Defer] Raw hierarchy path demoted to a hover-only `title` tooltip is inaccessible on touch devices [AuditLog.tsx](../../../velara-web/src/features/audit/components/AuditLog.tsx), [AuditDetailPanel.tsx](../../../velara-web/src/features/audit/components/AuditDetailPanel.tsx) — deferred, this tradeoff was explicitly endorsed in Task 7/Dev Notes ("keep raw path as tooltip"), a spec-level decision rather than an implementation defect.
+- [x] [Review][Defer] No test exercises the batched resolver with multiple rows sharing one `hierarchy_path` or a large mixed-type batch [test_audit_service.py](../../../velara-api/tests/integration/services/test_audit_service.py) — deferred, coverage gap not a defect; the single-path tests already prove per-type batching correctness.
+
 ## Change Log
 
 - 2026-07-06 — Implemented Story 12.2 (Audit Log Context Names, backend-enriched): batched `resolve_hierarchy_names` resolver + additive `AuditRead.context_names` + router enrichment (BE); `formatContextNames` wired into 3 audit surfaces + Run Console context line, `prettifyPath` removed (FE). All 10 tasks complete; gates green (BE 1053/1056 pass, 3 pre-existing unrelated failures; FE 511/511 pass, tsc 0, eslint 1 pre-existing warning). Status → review.
+- 2026-07-06 — Code review (3-layer adversarial): 1 patch fixed (org-global list rows showed an orphaned `layers` icon beside empty context text — gated the icon+text block on non-empty `formatContextNames`, added a regression test), 4 items deferred (live vs. point-in-time name resolution, RunConsole partial-chain placeholder gap, touch-inaccessible raw-path tooltip, batched-resolver multi-row test coverage), 6 dismissed as noise/false positives. `tsc --noEmit` clean, `vitest run src/features/audit/` 19/19 pass. Status → done.
