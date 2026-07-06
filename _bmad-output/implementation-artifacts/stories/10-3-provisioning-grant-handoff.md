@@ -4,7 +4,7 @@ baseline_commit: 661f40c539eac4bf22b44cf663903be922185509
 
 # Story 10.3: Provisioning ↔ Grant Handoff (Create-then-Grant)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -92,6 +92,24 @@ Then `tsc --noEmit` is clean, `eslint` is clean (the one pre-existing `Icon.tsx`
 - [x] **Task 5 — Gates & story record (AC6).**
   - [x] `cd velara-web && npx tsc --noEmit && npx eslint . && npx vitest run` — all green (492 baseline + net-new).
   - [x] Fill Dev Agent Record (files, tests, gate output). Note honestly whether manual end-to-end verification (real create → grant → the invited user logging in via 10.4's challenge) was done or left to the operator — do NOT reconfigure/restart the live `AUTH_BACKEND=cognito` stack just to verify (project guidance).
+
+### Review Findings (code review 2026-07-06)
+
+- [x] [Review][Decision] (RESOLVED 2026-07-06: skip the grant step for non-client roles — applied as a patch) Consultant-created user flows into a grant step that hardcodes `role: 'client'` — Step 1 offers Consultant (`AddUserOverlay.tsx:240-241`) but `onSuccess` unconditionally advances to Grant access, and `handleGrant` sends `role: 'client'`. Because the backend's `INTERNAL_ROLE_NOT_GRANTABLE` guard keys on the grant body's `role` field (not the opaque `user_id`), the grant SUCCEEDS silently, creating a client-role grant row for an internal user — data the Epic-8 internal-role-bypass ADR forbids. (Reviewers assumed a guaranteed 422; verified it's a silent bogus grant instead — worse.) The spec's AC3 hardcode assumed a client grantee and never addressed the consultant path from 10.2's role select. Needs a call: skip the grant step for consultants, show an explanatory non-form step, or accept as-is.
+- [x] [Review][Patch] Esc inside the open ClientCombobox listbox bubbles to the overlay's document-level Escape handler and closes the whole overlay, discarding the created-user context (AC4) [velara-web/src/features/admin/components/AccessControl.tsx:562-565 + AddUserOverlay.tsx:81-86]
+- [x] [Review][Patch] Esc / scrim click / header X are not guarded while the grant mutation is pending — overlay can unmount mid-flight; grant may succeed server-side with zero feedback [velara-web/src/features/admin/components/AddUserOverlay.tsx:79-91,170,181-188]
+- [x] [Review][Patch] Client/Project inputs stay enabled while the grant is in flight — selection can change under a pending request [velara-web/src/features/admin/components/AddUserOverlay.tsx:293-320]
+- [x] [Review][Patch] Done-step node name is re-resolved live from the clients/projects query caches instead of snapshotted at grant time — a refetch that drops the node renders "granted access to ‹empty›" [velara-web/src/features/admin/components/AddUserOverlay.tsx:75-77,357-361]
+- [x] [Review][Patch] `grantError` lifecycle: cleared synchronously before `mutate` so the "Retrying…" label is dead code and the AC4 alert vanishes during a retry; conversely it is NOT cleared when the user changes client/project, leaving a stale banner + misleading "Retry" label on a fresh selection [velara-web/src/features/admin/components/AddUserOverlay.tsx:134,346]
+- [x] [Review][Patch] Null `email` renders empty parentheses "()" in the grant-step banner — `UserSummary.email` is nullable and rendered unguarded [velara-web/src/features/admin/components/AddUserOverlay.tsx:287]
+- [x] [Review][Patch] Project-level grant path untested — the `[x]` Task-4 subtask promised "(+ optional project)" but no test selects a project; `node_type: 'project'` resolution and the project-name Done copy are never exercised [velara-web/src/features/admin/components/AddUserOverlay.test.tsx:166]
+- [x] [Review][Patch] Create-user request-body assertion was deleted in the test rewrite — no remaining test verifies the Step-1 create payload [velara-web/src/features/admin/components/AddUserOverlay.test.tsx:111]
+- [x] [Review][Patch] Retry behavior untested — AC4 test asserts the Retry button exists but never clicks it to confirm `createGrant.mutate` re-fires [velara-web/src/features/admin/components/AddUserOverlay.test.tsx:213-231]
+- [x] [Review][Patch] Temporary-password guidance ("Cognito has emailed a secure invitation with a temporary password.") silently dropped from the Done step — restore alongside the new granted/skipped copy [velara-web/src/features/admin/components/AddUserOverlay.tsx:352-364]
+- [x] [Review][Defer] ClientCombobox free-typed text masks the real selection (no way to clear back to null; stale selection grants silently) [velara-web/src/features/admin/components/AccessControl.tsx:602-615] — deferred, pre-existing shared-component behavior, identical in Access Control's grant form
+- [x] [Review][Defer] `useClients` loading/error states swallowed on the grant step (empty combobox with no loading/error/empty message) [velara-web/src/features/admin/components/AddUserOverlay.tsx:72] — deferred, mirrors the reference grant form exactly (AC5 mandated mirroring); fix both together
+- [x] [Review][Defer] `useProjects` loading not surfaced — admin can submit a whole-client grant before the project list arrives [velara-web/src/features/admin/components/AddUserOverlay.tsx:73,306-320] — deferred, same mirroring rationale
+- [x] [Review][Defer] Focus drops to `<body>` on step transitions (0→1, 1→2) — no focus management for the new step content [velara-web/src/features/admin/components/AddUserOverlay.tsx:113-116,140-144] — deferred, pre-existing pattern from the 2-step 10.2 overlay
 
 ## Dev Notes
 
@@ -182,4 +200,5 @@ claude-sonnet-5
 
 ## Change Log
 
+- 2026-07-06: Code review (Blind Hunter + Edge Case Hunter + Acceptance Auditor) → done. 1 decision resolved (consultant creations now SKIP the grant step — the grant body's hardcoded `role: 'client'` would have silently created an ADR-forbidden internal-role grant, since the backend guard keys on the body role, not the opaque user_id) + 10 patches applied: Esc inside ClientCombobox no longer closes the overlay (stopPropagation when listbox open, AccessControl.tsx); all close paths (Esc/scrim/X) gated while a mutation is pending; grant-step inputs disabled during pending (new ClientCombobox `disabled` prop); granted node name snapshotted at grant time for the Done copy; grantError persists through Retry ("Retrying…" now reachable) and clears on selection change; null-email guard in the grant banner; Done copy restores the Cognito temp-password sentence; tests add project-level-grant path, consultant-skip, Esc-dropdown containment, Retry re-fire, and the restored create-body assertion. 4 findings deferred (pre-existing: combobox typed-text masking, clients/projects loading-error states mirroring the reference form, step-transition focus) → deferred-work.md; 5 dismissed as noise. Gates re-verified: tsc clean, eslint 1 pre-existing warning, vitest 499/499 (50 files). Manual E2E still owed by operator (unchanged from Dev Record).
 - 2026-07-06: Implemented Story 10.3 (Provisioning ↔ Grant Handoff) — extended `AddUserOverlay` into a 3-step create→grant flow reusing `POST /api/v1/users` (10.1) and `POST /api/v1/access-grants` (Epic 8) unchanged. No backend/migration/Terraform. Gates green: tsc 0, eslint clean (1 pre-existing warning), vitest 496/496 (50 files). Status → review.
