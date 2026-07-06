@@ -4,7 +4,7 @@ baseline_commit: 6c5eab0
 
 # Story 12.2: Audit Log Context Names (Backend-Enriched)
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -45,55 +45,55 @@ so that the audit trail is human-readable.
 
 ### Backend — `velara-api` (resolution + schema)
 
-- [ ] **Task 1 — Add a batched path→names resolver in `hierarchy_service` (AC1, AC2, AC5)**
-  - [ ] Add a new function to [hierarchy_service.py](../../../velara-api/app/services/hierarchy_service.py) — e.g. `async def resolve_hierarchy_names(session: AsyncSession, hierarchy_paths: list[str]) -> dict[str, list[HierarchySegmentName]]`. It takes the **distinct** set of raw ltree paths across the whole page and returns, per path, an ordered list of resolved segment names.
-  - [ ] **Parse each path** by splitting on `.`; for each segment, split on the **first** `_` into `(prefix, hex)`. Prefixes are exactly `org | client | project | study | location` (see Dev Notes §Segment format). The `org_...` root is **not** a UUID — skip it (do not attempt a lookup; it is never displayed). For `client|project|study|location`, `hex` is a 32-char hyphen-stripped UUID → **reinsert dashes** (`8-4-4-4-12`) to reconstruct `uuid.UUID`. Guard against malformed segments (wrong length, non-hex) → treat as unresolvable (fallback), never raise.
-  - [ ] **Batch-resolve, one query per level** — mirror [access_service.py:201-222](../../../velara-api/app/services/access_service.py#L201-L222) exactly: group ids by node_type, then `select(Model.id, Model.name).where(Model.id.in_(ids))` per table using the `_MODELS = {"client": Client, "project": Project, "study": Study, "location": Location}` dict, building an `{id: name}` map. **Do NOT** do an N+1 per-segment `get_*` call (there can be up to `per_page`×4 segments; the access_service pattern exists specifically to avoid that storm — comment at [access_service.py:172-177](../../../velara-api/app/services/access_service.py#L172-L177)).
-  - [ ] For each segment, produce `{ node_type: "client|project|study|location", name: <resolved name or None> }`. A `None` name means "unresolvable" → the FE renders the `(deleted <type>)` fallback (AC2). **Do not** substitute the raw UUID.
-  - [ ] Define the segment shape as a small Pydantic model in [app/schemas/audit.py](../../../velara-api/app/schemas/audit.py) — e.g. `class HierarchySegmentName(BaseModel): node_type: str; name: str | None`. (Keep it in the audit schema module since that is where it is consumed; do not create a new file.)
+- [x] **Task 1 — Add a batched path→names resolver in `hierarchy_service` (AC1, AC2, AC5)**
+  - [x] Add a new function to [hierarchy_service.py](../../../velara-api/app/services/hierarchy_service.py) — e.g. `async def resolve_hierarchy_names(session: AsyncSession, hierarchy_paths: list[str]) -> dict[str, list[HierarchySegmentName]]`. It takes the **distinct** set of raw ltree paths across the whole page and returns, per path, an ordered list of resolved segment names.
+  - [x] **Parse each path** by splitting on `.`; for each segment, split on the **first** `_` into `(prefix, hex)`. Prefixes are exactly `org | client | project | study | location` (see Dev Notes §Segment format). The `org_...` root is **not** a UUID — skip it (do not attempt a lookup; it is never displayed). For `client|project|study|location`, `hex` is a 32-char hyphen-stripped UUID → **reinsert dashes** (`8-4-4-4-12`) to reconstruct `uuid.UUID`. Guard against malformed segments (wrong length, non-hex) → treat as unresolvable (fallback), never raise.
+  - [x] **Batch-resolve, one query per level** — mirror [access_service.py:201-222](../../../velara-api/app/services/access_service.py#L201-L222) exactly: group ids by node_type, then `select(Model.id, Model.name).where(Model.id.in_(ids))` per table using the `_MODELS = {"client": Client, "project": Project, "study": Study, "location": Location}` dict, building an `{id: name}` map. **Do NOT** do an N+1 per-segment `get_*` call (there can be up to `per_page`×4 segments; the access_service pattern exists specifically to avoid that storm — comment at [access_service.py:172-177](../../../velara-api/app/services/access_service.py#L172-L177)).
+  - [x] For each segment, produce `{ node_type: "client|project|study|location", name: <resolved name or None> }`. A `None` name means "unresolvable" → the FE renders the `(deleted <type>)` fallback (AC2). **Do not** substitute the raw UUID.
+  - [x] Define the segment shape as a small Pydantic model in [app/schemas/audit.py](../../../velara-api/app/schemas/audit.py) — e.g. `class HierarchySegmentName(BaseModel): node_type: str; name: str | None`. (Keep it in the audit schema module since that is where it is consumed; do not create a new file.)
 
-- [ ] **Task 2 — Add the resolved field to `AuditRead` (AC1, AC5)**
-  - [ ] In [audit.py schema](../../../velara-api/app/schemas/audit.py#L13-L47), add a field alongside `hierarchy_path` and `skill_name`: `context_names: list[HierarchySegmentName] = Field(default_factory=list)`. **Additive only** — do **not** remove or rename `hierarchy_path` (the raw path stays; AC1/AC3 keep it as a tooltip). Default empty list so org-global/admin rows serialize cleanly (AC5).
-  - [ ] Field name is `context_names` (snake_case JSON key, no alias — matches the house convention; the FE reads the JSON key verbatim). [Source: architecture/implementation-patterns-consistency-rules.md — JSON fields snake_case]
+- [x] **Task 2 — Add the resolved field to `AuditRead` (AC1, AC5)**
+  - [x] In [audit.py schema](../../../velara-api/app/schemas/audit.py#L13-L47), add a field alongside `hierarchy_path` and `skill_name`: `context_names: list[HierarchySegmentName] = Field(default_factory=list)`. **Additive only** — do **not** remove or rename `hierarchy_path` (the raw path stays; AC1/AC3 keep it as a tooltip). Default empty list so org-global/admin rows serialize cleanly (AC5).
+  - [x] Field name is `context_names` (snake_case JSON key, no alias — matches the house convention; the FE reads the JSON key verbatim). [Source: architecture/implementation-patterns-consistency-rules.md — JSON fields snake_case]
 
-- [ ] **Task 3 — Enrich the response in the router (AC1)**
-  - [ ] In [audit.py router](../../../velara-api/app/api/v1/audit.py#L143-L149), extend the existing `model_copy(update=...)` assembly. **Collect the distinct `hierarchy_path`s from `rows` once**, call `resolve_hierarchy_names(session, distinct_paths)` a **single** time (one batched resolution for the whole page — not per row), then patch each item: `.model_copy(update={"skill_name": skill_name, "context_names": names_by_path.get(str(entry.hierarchy_path), [])})`. This keeps resolution in one place feeding list, detail, and fan-out children (all three consume `AuditRead`). Do **not** push resolution into `list_entries`' query — the batched post-step is simpler and mirrors how `skill_name` is already patched.
-  - [ ] The `session` is already in scope in the handler (it is a `DbSession` dep). Pass it to the resolver.
+- [x] **Task 3 — Enrich the response in the router (AC1)**
+  - [x] In [audit.py router](../../../velara-api/app/api/v1/audit.py#L143-L149), extend the existing `model_copy(update=...)` assembly. **Collect the distinct `hierarchy_path`s from `rows` once**, call `resolve_hierarchy_names(session, distinct_paths)` a **single** time (one batched resolution for the whole page — not per row), then patch each item: `.model_copy(update={"skill_name": skill_name, "context_names": names_by_path.get(str(entry.hierarchy_path), [])})`. This keeps resolution in one place feeding list, detail, and fan-out children (all three consume `AuditRead`). Do **not** push resolution into `list_entries`' query — the batched post-step is simpler and mirrors how `skill_name` is already patched.
+  - [x] The `session` is already in scope in the handler (it is a `DbSession` dep). Pass it to the resolver.
 
-- [ ] **Task 4 — Backend tests (AC1, AC2, AC5)**
-  - [ ] In [test_audit_service.py](../../../velara-api/tests/integration/services/test_audit_service.py) (the 9.2 GET-route block, ~lines 598-1194): add a test that seeds a real client→project→study (or reuse `_create_client_node`) node, records an invocation entry on that path, and asserts the response item's `context_names` is an ordered list of `{node_type, name}` with the **real names** (not UUIDs), and that the raw `hierarchy_path` is still present (AC1). Assert response-shape block near [lines 1083-1113](../../../velara-api/tests/integration/services/test_audit_service.py#L1083-L1113) style.
-  - [ ] Add an AC2 test: an entry whose path references a **deleted** entity id (seed a path segment for an id not in the table, or delete the node after) → the matching segment's `name` is `None` (FE renders `(deleted ...)`); no 500.
-  - [ ] Add an AC5 test: an **admin** event (path `"org"`) and an org-global invocation → `context_names == []`, no error. (Mirror the existing admin-null-skill_name test at [lines 1116-1133](../../../velara-api/tests/integration/services/test_audit_service.py#L1116-L1133).)
-  - [ ] Respect the Postgres guard: these live under the module's `pytest.mark.skipif(not _PG_AVAILABLE)` ([test_audit_service.py:45-69](../../../velara-api/tests/integration/services/test_audit_service.py#L45-L69)). Run with a reachable test Postgres (see Testing standards).
+- [x] **Task 4 — Backend tests (AC1, AC2, AC5)**
+  - [x] In [test_audit_service.py](../../../velara-api/tests/integration/services/test_audit_service.py) (the 9.2 GET-route block, ~lines 598-1194): add a test that seeds a real client→project→study (or reuse `_create_client_node`) node, records an invocation entry on that path, and asserts the response item's `context_names` is an ordered list of `{node_type, name}` with the **real names** (not UUIDs), and that the raw `hierarchy_path` is still present (AC1). Assert response-shape block near [lines 1083-1113](../../../velara-api/tests/integration/services/test_audit_service.py#L1083-L1113) style.
+  - [x] Add an AC2 test: an entry whose path references a **deleted** entity id (seed a path segment for an id not in the table, or delete the node after) → the matching segment's `name` is `None` (FE renders `(deleted ...)`); no 500.
+  - [x] Add an AC5 test: an **admin** event (path `"org"`) and an org-global invocation → `context_names == []`, no error. (Mirror the existing admin-null-skill_name test at [lines 1116-1133](../../../velara-api/tests/integration/services/test_audit_service.py#L1116-L1133).)
+  - [x] Respect the Postgres guard: these live under the module's `pytest.mark.skipif(not _PG_AVAILABLE)` ([test_audit_service.py:45-69](../../../velara-api/tests/integration/services/test_audit_service.py#L45-L69)). Run with a reachable test Postgres (see Testing standards).
 
-- [ ] **Task 5 — Regenerate the OpenAPI spec (AC5)**
-  - [ ] Run `python scripts/export_openapi.py` from `velara-api/` → rewrites [docs/api-spec.json](../../../velara-api/docs/api-spec.json) (deterministic, sorted). Commit the diff. **The `openapi` CI job `git diff --exit-code`s this file — a stale spec fails the build** ([scripts/export_openapi.py:8-10](../../../velara-api/scripts/export_openapi.py#L8-L10)). No Postgres/Redis needed to run it.
+- [x] **Task 5 — Regenerate the OpenAPI spec (AC5)**
+  - [x] Run `python scripts/export_openapi.py` from `velara-api/` → rewrites [docs/api-spec.json](../../../velara-api/docs/api-spec.json) (deterministic, sorted). Commit the diff. **The `openapi` CI job `git diff --exit-code`s this file — a stale spec fails the build** ([scripts/export_openapi.py:8-10](../../../velara-api/scripts/export_openapi.py#L8-L10)). No Postgres/Redis needed to run it.
 
 ### Frontend — `velara-web` (render names on 4 surfaces)
 
-- [ ] **Task 6 — Add `context_names` to the audit wire type (AC1, AC3)**
-  - [ ] In [src/api/audit.ts](../../../velara-web/src/api/audit.ts#L15-L33), add to `AuditEntry`: `context_names: HierarchySegmentName[]` where `interface HierarchySegmentName { node_type: string; name: string | null }`. Field name matches the backend JSON key verbatim (`context_names`). Do **not** remove `hierarchy_path` — keep it for the tooltip.
+- [x] **Task 6 — Add `context_names` to the audit wire type (AC1, AC3)**
+  - [x] In [src/api/audit.ts](../../../velara-web/src/api/audit.ts#L15-L33), add to `AuditEntry`: `context_names: HierarchySegmentName[]` where `interface HierarchySegmentName { node_type: string; name: string | null }`. Field name matches the backend JSON key verbatim (`context_names`). Do **not** remove `hierarchy_path` — keep it for the tooltip.
 
-- [ ] **Task 7 — Render names in the three audit surfaces (AC2, AC3)**
-  - [ ] Add a small display helper — e.g. `formatContextNames(segments)` in [auditFormat.ts](../../../velara-web/src/features/audit/auditFormat.ts) — that maps each segment to its `name`, applying the `(deleted <node_type>)` fallback when `name` is `null` (mirror the analytics `?? '(deleted skill)'` pattern at [OverviewTab.tsx:93](../../../velara-web/src/features/analytics/components/OverviewTab.tsx#L93)), and joins with ` › `. Return `''`/`—` for an empty list (org-global rows). **`prettifyPath` is now superseded for display** — you may keep it or route through the new helper; do not leave two competing formatters wired to the same surface.
-  - [ ] **Surface A — list row** [AuditLog.tsx:151-156](../../../velara-web/src/features/audit/components/AuditLog.tsx#L151-L156): render `formatContextNames(entry.context_names)` instead of `prettifyPath(entry.hierarchy_path)`. Keep the raw path as the `title` tooltip (`title={entry.hierarchy_path}`). Keep the `<Icon name="layers" .../>`.
-  - [ ] **Surface B — detail panel "Hierarchy path" field** [AuditDetailPanel.tsx:60-65](../../../velara-web/src/features/audit/components/AuditDetailPanel.tsx#L60-L65): render the name chain; keep raw path as tooltip. Consider relabeling "Hierarchy path" → "Context" for humans (optional — confirm with the mock; not required by an AC).
-  - [ ] **Surface C — fan-out children** [AuditDetailPanel.tsx:126-135](../../../velara-web/src/features/audit/components/AuditDetailPanel.tsx#L126-L135): render each `child`'s resolved names (the child rows carry their own `context_names` — they are full `AuditEntry` rows from `useAuditChildren`). Each child's leaf is its Location, so the name chain naturally ends in the location name.
-  - [ ] **Optional reuse:** the existing [Breadcrumb / Crumb](../../../velara-web/src/features/engagements/components/Breadcrumb.tsx) component renders a `Client › Project › Study` trail with chevrons and never shows the org root — reuse it for a richer chip trail if it fits the audit row density, or keep the plain ` › ` string join. Either is acceptable; do not build a third path component.
+- [x] **Task 7 — Render names in the three audit surfaces (AC2, AC3)**
+  - [x] Add a small display helper — e.g. `formatContextNames(segments)` in [auditFormat.ts](../../../velara-web/src/features/audit/auditFormat.ts) — that maps each segment to its `name`, applying the `(deleted <node_type>)` fallback when `name` is `null` (mirror the analytics `?? '(deleted skill)'` pattern at [OverviewTab.tsx:93](../../../velara-web/src/features/analytics/components/OverviewTab.tsx#L93)), and joins with ` › `. Return `''`/`—` for an empty list (org-global rows). **`prettifyPath` is now superseded for display** — removed it (no remaining callers) rather than leave two competing formatters wired to the same surface.
+  - [x] **Surface A — list row** [AuditLog.tsx:151-156](../../../velara-web/src/features/audit/components/AuditLog.tsx#L151-L156): render `formatContextNames(entry.context_names)` instead of `prettifyPath(entry.hierarchy_path)`. Keep the raw path as the `title` tooltip (`title={entry.hierarchy_path}`). Keep the `<Icon name="layers" .../>`.
+  - [x] **Surface B — detail panel "Hierarchy path" field** [AuditDetailPanel.tsx:60-65](../../../velara-web/src/features/audit/components/AuditDetailPanel.tsx#L60-L65): render the name chain; keep raw path as tooltip. Relabeled "Hierarchy path" → "Context" for humans.
+  - [x] **Surface C — fan-out children** [AuditDetailPanel.tsx:126-135](../../../velara-web/src/features/audit/components/AuditDetailPanel.tsx#L126-L135): render each `child`'s resolved names (the child rows carry their own `context_names` — they are full `AuditEntry` rows from `useAuditChildren`). Each child's leaf is its Location, so the name chain naturally ends in the location name.
+  - [x] **Optional reuse:** kept the plain ` › ` string join (matches row density better than the chip-style Breadcrumb component); did not build a third path component.
 
-- [ ] **Task 8 — Fix the Run Console context line (AC4)**
-  - [ ] In [RunConsole.tsx:885-890](../../../velara-web/src/features/run/components/RunConsole.tsx#L885-L890), the "Context" line does `job.hierarchy_path.replace(/\./g, ' › ')` on raw UUIDs. RunConsole **already** has resolved names in scope: `clientName`/`projectName`/`studyName` from `useProjectContext`/`useStudyContext` ([RunConsole.tsx:339-350](../../../velara-web/src/features/run/components/RunConsole.tsx#L339-L350)) and already renders them in `LockedContextPanel` ([RunConsole.tsx:66-114](../../../velara-web/src/features/run/components/RunConsole.tsx#L66-L114)).
-  - [ ] Replace the raw-path line with a name chain built from those already-loaded names (`[clientName, projectName, studyName].filter(Boolean).join(' › ')`), OR remove the redundant line entirely if `LockedContextPanel` already conveys the same context in that view. **Do not** add a backend dependency here — this is the `job` (a `JobReadWithResult`), not an audit entry; it does not carry `context_names`. Keep the `!== 'org'` guard so org-global runs show nothing.
+- [x] **Task 8 — Fix the Run Console context line (AC4)**
+  - [x] In [RunConsole.tsx:885-890](../../../velara-web/src/features/run/components/RunConsole.tsx#L885-L890), the "Context" line does `job.hierarchy_path.replace(/\./g, ' › ')` on raw UUIDs. RunConsole **already** has resolved names in scope: `clientName`/`projectName`/`studyName` from `useProjectContext`/`useStudyContext` ([RunConsole.tsx:339-350](../../../velara-web/src/features/run/components/RunConsole.tsx#L339-L350)) and already renders them in `LockedContextPanel` ([RunConsole.tsx:66-114](../../../velara-web/src/features/run/components/RunConsole.tsx#L66-L114)).
+  - [x] Replace the raw-path line with a name chain built from those already-loaded names (`[clientName, projectName, studyName].filter(Boolean).join(' › ')`), OR remove the redundant line entirely if `LockedContextPanel` already conveys the same context in that view. **Do not** add a backend dependency here — this is the `job` (a `JobReadWithResult`), not an audit entry; it does not carry `context_names`. Keep the `!== 'org'` guard so org-global runs show nothing. (`JobStatusPanel` had no prop passthrough from `RunConsoleInner`/`RunConsoleSkillFirstInner` — threaded `clientName`/`projectName`/`studyName` through `RunShell` → `JobStatusPanel` since it renders as a sibling to the locked context panel, not a child with implicit scope.)
 
-- [ ] **Task 9 — Frontend tests (AC2, AC3, AC5)**
-  - [ ] Update the fan-out children assertions in [AuditLog.test.tsx:229-241](../../../velara-web/src/features/audit/components/AuditLog.test.tsx#L229-L241): they currently `getByText('org_org_vitalief.client_abc.loc_1')` on the **raw** child path. Add `context_names` to the child fixtures and assert the rendered **names** instead. **This is the one existing assertion that breaks** — the list row (Surface A) and detail core field (Surface B) have no raw-path string assertion today.
-  - [ ] Add fixtures with `context_names` to `makeEntry` in both [audit.test.ts](../../../velara-web/src/api/audit.test.ts#L13-L34) and [AuditLog.test.tsx](../../../velara-web/src/features/audit/components/AuditLog.test.tsx#L68-L89) so the new field is present (empty list is a valid default for org rows).
-  - [ ] Add an AC2 test: a segment with `name: null` renders `(deleted <node_type>)`.
-  - [ ] RunConsole (AC4): the RunConsole test asserts `LockedContextPanel` names, **not** the raw `.replace(...)` line ([RunConsole.test.tsx](../../../velara-web/src/features/run/components/RunConsole.test.tsx) — grep-confirmed no assertion on the raw line), so removing/replacing that line has no existing test to update; optionally add a positive assertion that the context line shows a name.
+- [x] **Task 9 — Frontend tests (AC2, AC3, AC5)**
+  - [x] Update the fan-out children assertions in [AuditLog.test.tsx:229-241](../../../velara-web/src/features/audit/components/AuditLog.test.tsx#L229-L241): they currently `getByText('org_org_vitalief.client_abc.loc_1')` on the **raw** child path. Add `context_names` to the child fixtures and assert the rendered **names** instead. **This is the one existing assertion that breaks** — the list row (Surface A) and detail core field (Surface B) have no raw-path string assertion today.
+  - [x] Add fixtures with `context_names` to `makeEntry` in both [audit.test.ts](../../../velara-web/src/api/audit.test.ts#L13-L34) and [AuditLog.test.tsx](../../../velara-web/src/features/audit/components/AuditLog.test.tsx#L68-L89) so the new field is present (empty list is a valid default for org rows).
+  - [x] Add an AC2 test: a segment with `name: null` renders `(deleted <node_type>)`. (New `auditFormat.test.ts` covers `formatContextNames` directly, plus the AuditLog fan-out test asserts the rendered fallback in context.)
+  - [x] RunConsole (AC4): the RunConsole test asserts `LockedContextPanel` names, **not** the raw `.replace(...)` line ([RunConsole.test.tsx](../../../velara-web/src/features/run/components/RunConsole.test.tsx) — grep-confirmed no assertion on the raw line), so removing/replacing that line has no existing test to update; added a positive assertion (`Story 12.2 AC4`) that the context line shows resolved names and never the raw path.
 
-- [ ] **Task 10 — Gates**
-  - [ ] **Backend:** `ruff check .` clean; `pytest tests/integration/services/test_audit_service.py` (+ full suite) green against a reachable test Postgres; `python scripts/export_openapi.py` produces a committed, in-sync `docs/api-spec.json`.
-  - [ ] **Frontend:** `tsc --noEmit` → 0 errors; `eslint src --ext .ts,.tsx` clean (the single pre-existing `Icon.tsx` react-refresh warning is the known baseline — not introduced here); `vitest run` → all pass (only the `AuditLog.test.tsx` child-path assertions change).
+- [x] **Task 10 — Gates**
+  - [x] **Backend:** `ruff check .` clean; `pytest tests/integration/services/test_audit_service.py` (+ full suite) green against a reachable test Postgres; `python scripts/export_openapi.py` produces a committed, in-sync `docs/api-spec.json`.
+  - [x] **Frontend:** `tsc --noEmit` → 0 errors; `eslint src --ext .ts,.tsx` clean (the single pre-existing `Icon.tsx` react-refresh warning is the known baseline — not introduced here); `vitest run` → all pass (only the `AuditLog.test.tsx` child-path assertions change).
 
 ## Dev Notes
 
@@ -208,10 +208,45 @@ Analytics already renders `{s.name ?? '(deleted skill)'}` ([OverviewTab.tsx:93](
 
 ### Agent Model Used
 
-<!-- to be filled by dev agent -->
+claude-sonnet-5 (Claude Code)
 
 ### Debug Log References
 
+- `docker compose exec api pytest tests/integration/services/test_audit_service.py` (40 passed) — required `-e AUTH_BACKEND=dev` override since the running container's `.env` has `AUTH_BACKEND=cognito`; and required `docker compose build api` first since the image bakes source (no live bind mount).
+- Full backend suite: `docker compose exec -e AUTH_BACKEND=dev api pytest` → 1053 passed, 3 pre-existing failures in `test_ingest.py` (documented `localhost≠minio`-in-container false positives, unrelated to this story — confirmed via `git status` showing no ingest files touched).
+- `docs/api-spec.json` regeneration required copying the file out of the container (`docker cp`) since the image has no bind mount to the host.
+- Frontend: `npm run typecheck` (0 errors), `npm run lint` (1 pre-existing `Icon.tsx` warning), `npm test` (51 files / 511 passed).
+
 ### Completion Notes List
 
+- Implemented `hierarchy_service.resolve_hierarchy_names` — batched per-node-type resolver (one query per level regardless of page size), mirroring `access_service.py`'s `_MODELS` batched-lookup pattern. Parses ltree segments by splitting on the first `_`, reinserts UUID dashes, skips the org-root segment, and returns `None` for any segment that fails to parse or resolve (malformed or deleted) — never raises.
+- Added `HierarchySegmentName` schema + additive `AuditRead.context_names` field (default empty list); router now does one batched `resolve_hierarchy_names` call per page and patches it onto each item via the existing `model_copy` step alongside `skill_name` — resolution lives in exactly one place feeding list, detail, and fan-out children (AC1).
+- Backend tests: real client→project→study chain resolves to real names with raw `hierarchy_path` preserved (AC1); a deleted project's segment resolves to `name: null` (AC2); an admin org-global entry returns `context_names: []` (AC5). All verified against live Postgres in the docker-compose stack.
+- Regenerated `docs/api-spec.json` — diff is purely additive (`context_names` field + `HierarchySegmentName` schema).
+- Frontend: added `context_names` to the `AuditEntry` wire type; added `formatContextNames` helper (mirrors the analytics `?? '(deleted skill)'` fallback pattern) and removed the now-fully-superseded `prettifyPath` (no remaining callers) rather than leave two competing formatters. Wired the helper into all three audit render surfaces (list row, detail panel — relabeled "Hierarchy path" → "Context", fan-out children), keeping the raw path as a `title` tooltip on each.
+- Run Console (AC4): `JobStatusPanel` had no prop passthrough for the already-resolved `clientName`/`projectName`/`studyName` (it's a layout sibling of `LockedContextPanel` inside `RunShell`, not a child scoped to `RunConsoleInner`/`RunConsoleSkillFirstInner`) — threaded those three optional props through `RunShell` → `JobStatusPanel` from both call sites, and replaced the raw `job.hierarchy_path.replace(/\./g, ' › ')` line with the joined name chain, keeping the `!== 'org'` guard.
+- No migration, no Terraform, no backend contract changes beyond the additive field — org fence untouched (still fences on the `org_id` column per Dev Notes).
+
 ### File List
+
+**velara-api:**
+- `app/services/hierarchy_service.py` — added `resolve_hierarchy_names`, `_parse_segment`, `_NAME_MODELS`
+- `app/schemas/audit.py` — added `HierarchySegmentName`, `AuditRead.context_names`
+- `app/api/v1/audit.py` — router enrichment (batched resolve + `model_copy` patch)
+- `tests/integration/services/test_audit_service.py` — 3 new tests (AC1 real names, AC2 deleted fallback, AC5 admin empty list)
+- `docs/api-spec.json` — regenerated (additive: `context_names`, `HierarchySegmentName`)
+
+**velara-web:**
+- `src/api/audit.ts` — added `HierarchySegmentName` interface, `AuditEntry.context_names`
+- `src/api/audit.test.ts` — `makeEntry` fixture includes `context_names`
+- `src/features/audit/auditFormat.ts` — added `formatContextNames`, removed superseded `prettifyPath`
+- `src/features/audit/auditFormat.test.ts` — new; unit tests for `formatContextNames` (join, deleted fallback, empty list)
+- `src/features/audit/components/AuditLog.tsx` — Surface A renders `formatContextNames`
+- `src/features/audit/components/AuditLog.test.tsx` — `makeEntry` fixture + fan-out test updated to assert rendered names
+- `src/features/audit/components/AuditDetailPanel.tsx` — Surface B ("Context" field) + Surface C (fan-out children) render `formatContextNames`
+- `src/features/run/components/RunConsole.tsx` — threaded `clientName`/`projectName`/`studyName` through `RunShell` → `JobStatusPanel`; context line renders names instead of raw path
+- `src/features/run/components/RunConsole.test.tsx` — new AC4 test asserting resolved names render and the raw path does not
+
+## Change Log
+
+- 2026-07-06 — Implemented Story 12.2 (Audit Log Context Names, backend-enriched): batched `resolve_hierarchy_names` resolver + additive `AuditRead.context_names` + router enrichment (BE); `formatContextNames` wired into 3 audit surfaces + Run Console context line, `prettifyPath` removed (FE). All 10 tasks complete; gates green (BE 1053/1056 pass, 3 pre-existing unrelated failures; FE 511/511 pass, tsc 0, eslint 1 pre-existing warning). Status → review.
