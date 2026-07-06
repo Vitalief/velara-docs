@@ -4,7 +4,7 @@ baseline_commit: f1b863c21b0f1f7e1c38aa3d1f94824f548f0191
 
 # Story 12.1: Location-Dependent Authoring Control
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -64,6 +64,14 @@ so that I can mark a skill site-specific without making a direct API call.
   - [x] `tsc --noEmit` → 0 errors (watch the `set()` union-type change from Task 2).
   - [x] `eslint` → clean (a single pre-existing `Icon.tsx` react-refresh warning is the known baseline — not introduced here).
   - [x] `vitest` → all pass, including the `selects.length === 3` assertion **unchanged**.
+
+### Review Findings
+
+- [x] [Review][Patch] Checkbox label missing `font-medium` — renders lighter than every other field label in the form [SkillForm.tsx:370] — fixed: label now uses shared `labelCls`
+- [x] [Review][Patch] Checkbox styling classes hardcoded ad hoc instead of matching the form's input-token conventions (size/border/focus-ring not aligned with `inputCls`) [SkillForm.tsx:375] — fixed: paired `border border-line bg-surface` and `focus:outline-none focus:ring-2 focus:ring-brand-700` to match `inputCls`'s composition
+- [x] [Review][Defer] `set()` helper widened to `string | Scope | boolean` with no per-key type discrimination — a future call could pass a mismatched key/value pair without a compiler error [SkillForm.tsx:217] — deferred, pre-existing pattern in this helper, not a regression from this story
+
+**Follow-up post-review (2026-07-06, user-requested):** the label/border patch above still didn't read as visually distinct enough — user asked for "a custom toggle with velara colors" instead of a checkbox. This **reverses the story's original Dev Notes decision** ("No reusable Toggle/Switch component exists — build a plain checkbox, do not add a new shared component for one control") on explicit user direction to build the reusable version instead. Built `src/shared/components/Toggle.tsx` — a `role="switch"` pill toggle (teal `brand-700` track + white knob when on, `line-2`/`surface-sunk` when off, `brand-700` focus ring), replacing the checkbox in `SkillForm.tsx`. Updated `SkillForm.test.tsx` to query `getByRole('switch', ...)` instead of `getByRole('checkbox', ...)` (assertions/behavior unchanged — `toBeChecked()` supports `aria-checked`). Visually verified both on/off states via a temporary preview route + Playwright CLI screenshot (route removed after verification; no auth/backend touched). Gates re-run: tsc 0, eslint clean, vitest 507/507.
 
 ## Dev Notes
 
@@ -168,12 +176,14 @@ None — no failures encountered. tsc, eslint, and vitest all passed on first ru
 ### File List
 
 - `velara-web/src/features/skills/types.ts` — modified (added `location_dependent?: boolean` to `SkillCreateInput`; added `'location_dependent'` to `SkillUpdateInput` Pick)
-- `velara-web/src/features/skills/components/SkillForm.tsx` — modified (`FormFields.location_dependent`, state init, `set()` union widen, checkbox render both modes, `isEditDirty` term)
+- `velara-web/src/features/skills/components/SkillForm.tsx` — modified (`FormFields.location_dependent`, state init, `set()` union widen, `Toggle` render both modes, `isEditDirty` term)
 - `velara-web/src/features/skills/components/SkillEdit.tsx` — modified (`buildPatchBody` sends `location_dependent` only when changed)
 - `velara-web/src/features/skills/components/SkillCreate.tsx` — modified (`handleSubmit` populates `location_dependent` in `SkillCreateInput`)
-- `velara-web/src/features/skills/components/SkillForm.test.tsx` — modified (new create-mode + edit-mode `location_dependent` assertions)
+- `velara-web/src/features/skills/components/SkillForm.test.tsx` — modified (new create-mode + edit-mode `location_dependent` assertions; queries `role="switch"`)
 - `velara-web/src/features/skills/components/SkillCreate.test.tsx` — modified (locked in `location_dependent: false` default in the submit-payload assertion)
+- `velara-web/src/shared/components/Toggle.tsx` — **new** (reusable teal pill toggle switch; added post-review per user request, reversing the story's original "no shared Toggle component" Dev Notes decision)
 
 ## Change Log
 
 - 2026-07-06 — Implemented Story 12.1 (Location-Dependent Authoring Control): added the `location_dependent` toggle to the skill create/edit form, threading it through FE input contracts, form state, dirty-tracking, and both submit paths. No backend/migration/Terraform changes (field already fully wired server-side and consumed by the Run Console — AC3 verified via existing behavior, not new code). Gates: tsc 0, eslint 1 pre-existing warning, vitest 507/507 (50 files, +2 net-new tests).
+- 2026-07-06 — Post-review UI polish: replaced the plain checkbox with a new reusable `Toggle` component (`src/shared/components/Toggle.tsx`) styled with Velara brand colors (teal `brand-700` on-state), per user feedback that the checkbox looked out of place. Visually verified on/off states in-browser via a temporary preview route (removed after verification). Gates: tsc 0, eslint clean, vitest 507/507.

@@ -358,3 +358,7 @@ Items deferred during reviews — real but not actionable in their originating s
 - **`useProjects` loading not surfaced on the grant step.** Immediately after picking a client the Project select is enabled showing only "Whole client" while the projects query is in flight — an admin intending a narrower project grant can submit an over-broad whole-client grant in that window. Same mirroring rationale as above. [velara-web/src/features/admin/components/AddUserOverlay.tsx:73,306-320]
 
 - **Focus drops to `<body>` on AddUserOverlay step transitions.** Advancing 0→1 (create success) or 1→2 (grant/skip) unmounts the focused button with no focus management for the new step; keyboard users re-tab from the top and screen readers announce nothing. Pre-existing pattern from the 2-step 10.2 overlay. [velara-web/src/features/admin/components/AddUserOverlay.tsx:113-116,140-144]
+
+## Deferred from: code review of story-12.1 (2026-07-06)
+
+- **`set()` helper widened to `string | Scope | boolean` with no per-key type discrimination.** `SkillForm.tsx:217` — `function set(key: keyof FormFields, value: string | Scope | boolean)` accepts any value type for any key; TypeScript will not catch a call like `set('name', true)` or `set('location_dependent', 'x')`. No such mismatched call exists today. Deferred — fixing requires per-key overloads (a bigger structural change than this story's scope); revisit if `FormFields` grows more non-string field types. [velara-web/src/features/skills/components/SkillForm.tsx:217]
