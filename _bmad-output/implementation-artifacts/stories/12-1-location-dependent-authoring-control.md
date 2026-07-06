@@ -1,6 +1,10 @@
+---
+baseline_commit: f1b863c21b0f1f7e1c38aa3d1f94824f548f0191
+---
+
 # Story 12.1: Location-Dependent Authoring Control
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
