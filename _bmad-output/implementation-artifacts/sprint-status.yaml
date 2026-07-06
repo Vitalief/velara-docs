@@ -216,7 +216,7 @@ development_status:
   #   Independent of Epic 11 — can start immediately. Order: 12-1 → 12-2 → 12-3 → 12-4.
   # ─────────────────────────────────────────────────────────
   epic-12: in-progress   # first story (12-1) created 2026-07-06 → epic backlog→in-progress
-  12-1-location-dependent-authoring-control: in-progress   # FE-only; backend location_dependent field already wired
+  12-1-location-dependent-authoring-control: review   # FE-only; backend location_dependent field already wired
   12-2-audit-log-context-names: backlog   # backend-enriched UUID→name resolution
   12-3-distinct-audit-event-icons: backlog   # fill 2 unmapped event types + verify render
   12-4-duplicate-run-cost-warning: backlog   # advisory; hook in queue_invocation before create_job

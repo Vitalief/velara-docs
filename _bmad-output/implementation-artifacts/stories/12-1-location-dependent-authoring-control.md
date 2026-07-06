@@ -4,7 +4,7 @@ baseline_commit: f1b863c21b0f1f7e1c38aa3d1f94824f548f0191
 
 # Story 12.1: Location-Dependent Authoring Control
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -33,37 +33,37 @@ so that I can mark a skill site-specific without making a direct API call.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Add `location_dependent` to the FE input contracts (AC1, AC2)**
-  - [ ] In [types.ts](../../../velara-web/src/features/skills/types.ts#L3-L16), add `location_dependent?: boolean` to `SkillCreateInput`.
-  - [ ] In [types.ts](../../../velara-web/src/features/skills/types.ts#L18-L30), add `'location_dependent'` to the `Pick<>` list in `SkillUpdateInput`. **Do NOT redefine `Skill`** — it already has `location_dependent: boolean` at [types.ts:47](../../../velara-web/src/features/skills/types.ts#L47).
-  - [ ] Do **not** touch [api/skills.ts](../../../velara-web/src/api/skills.ts) — `createSkill`/`updateSkillMetadata` POST/PATCH the input object verbatim (`apiClient.post('/api/v1/skills', input)`), so the new field reaches the backend once the input types include it and the components populate it.
+- [x] **Task 1 — Add `location_dependent` to the FE input contracts (AC1, AC2)**
+  - [x] In [types.ts](../../../velara-web/src/features/skills/types.ts#L3-L16), add `location_dependent?: boolean` to `SkillCreateInput`.
+  - [x] In [types.ts](../../../velara-web/src/features/skills/types.ts#L18-L30), add `'location_dependent'` to the `Pick<>` list in `SkillUpdateInput`. **Do NOT redefine `Skill`** — it already has `location_dependent: boolean` at [types.ts:47](../../../velara-web/src/features/skills/types.ts#L47).
+  - [x] Do **not** touch [api/skills.ts](../../../velara-web/src/api/skills.ts) — `createSkill`/`updateSkillMetadata` POST/PATCH the input object verbatim (`apiClient.post('/api/v1/skills', input)`), so the new field reaches the backend once the input types include it and the components populate it.
 
-- [ ] **Task 2 — Render the toggle in `SkillForm` and wire form state (AC1, AC2)**
-  - [ ] In [SkillForm.tsx](../../../velara-web/src/features/skills/components/SkillForm.tsx), add `location_dependent: boolean` to the `FormFields` interface ([lines 75-88](../../../velara-web/src/features/skills/components/SkillForm.tsx#L75-L88)).
-  - [ ] Initialize it in the `useState<FormFields>` default ([lines 185-198](../../../velara-web/src/features/skills/components/SkillForm.tsx#L185-L198)): `location_dependent: initial?.location_dependent ?? false`.
-  - [ ] Render a checkbox control (a labelled `<input type="checkbox">`) in **both** create and edit modes. It is a boolean, not an enum — do **not** use the `<select>` pattern. Place it near Scope (it is conceptually a runtime-behavior flag). Include a short helper line: *"Site-specific: must be run with a location or fan-out across a study."*
-  - [ ] The `set(key, value)` helper is typed `string | Scope` ([line 215](../../../velara-web/src/features/skills/components/SkillForm.tsx#L215)); a checkbox produces a `boolean`. Either widen `set`'s value type to include `boolean`, or update `location_dependent` with a small dedicated `setFields` call (`setFields(prev => ({ ...prev, location_dependent: e.target.checked }))`). Prefer widening `set` so all fields stay uniform. **Verify tsc after this change** — the union type is the one tsc trap in this story.
+- [x] **Task 2 — Render the toggle in `SkillForm` and wire form state (AC1, AC2)**
+  - [x] In [SkillForm.tsx](../../../velara-web/src/features/skills/components/SkillForm.tsx), add `location_dependent: boolean` to the `FormFields` interface ([lines 75-88](../../../velara-web/src/features/skills/components/SkillForm.tsx#L75-L88)).
+  - [x] Initialize it in the `useState<FormFields>` default ([lines 185-198](../../../velara-web/src/features/skills/components/SkillForm.tsx#L185-L198)): `location_dependent: initial?.location_dependent ?? false`.
+  - [x] Render a checkbox control (a labelled `<input type="checkbox">`) in **both** create and edit modes. It is a boolean, not an enum — do **not** use the `<select>` pattern. Place it near Scope (it is conceptually a runtime-behavior flag). Include a short helper line: *"Site-specific: must be run with a location or fan-out across a study."*
+  - [x] The `set(key, value)` helper is typed `string | Scope` ([line 215](../../../velara-web/src/features/skills/components/SkillForm.tsx#L215)); a checkbox produces a `boolean`. Either widen `set`'s value type to include `boolean`, or update `location_dependent` with a small dedicated `setFields` call (`setFields(prev => ({ ...prev, location_dependent: e.target.checked }))`). Prefer widening `set` so all fields stay uniform. **Verify tsc after this change** — the union type is the one tsc trap in this story.
 
-- [ ] **Task 3 — Include the toggle in edit-mode dirty tracking + PATCH body (AC2)**
-  - [ ] Add `location_dependent` to `isEditDirty` in [SkillForm.tsx](../../../velara-web/src/features/skills/components/SkillForm.tsx#L234-L243): `|| fields.location_dependent !== (initial?.location_dependent ?? false)`. Without this, a toggle-only change leaves Save disabled and AC2 fails.
-  - [ ] In [SkillEdit.tsx `buildPatchBody`](../../../velara-web/src/features/skills/components/SkillEdit.tsx#L106-L152), add: `if (values.location_dependent !== skill!.location_dependent) patch.location_dependent = values.location_dependent`. It is a plain boolean — no clear-guard needed (unlike scope/schemas). **Never send `null`** for it: the PATCH schema rejects explicit `null` (see Dev Notes §Backend guard), and the empty-body guard at [SkillEdit.tsx:158-163](../../../velara-web/src/features/skills/components/SkillEdit.tsx#L158) already protects against a no-op PATCH.
+- [x] **Task 3 — Include the toggle in edit-mode dirty tracking + PATCH body (AC2)**
+  - [x] Add `location_dependent` to `isEditDirty` in [SkillForm.tsx](../../../velara-web/src/features/skills/components/SkillForm.tsx#L234-L243): `|| fields.location_dependent !== (initial?.location_dependent ?? false)`. Without this, a toggle-only change leaves Save disabled and AC2 fails.
+  - [x] In [SkillEdit.tsx `buildPatchBody`](../../../velara-web/src/features/skills/components/SkillEdit.tsx#L106-L152), add: `if (values.location_dependent !== skill!.location_dependent) patch.location_dependent = values.location_dependent`. It is a plain boolean — no clear-guard needed (unlike scope/schemas). **Never send `null`** for it: the PATCH schema rejects explicit `null` (see Dev Notes §Backend guard), and the empty-body guard at [SkillEdit.tsx:158-163](../../../velara-web/src/features/skills/components/SkillEdit.tsx#L158) already protects against a no-op PATCH.
 
-- [ ] **Task 4 — Populate `location_dependent` in the create submit path (AC1)**
-  - [ ] In [SkillCreate.tsx `handleSubmit`](../../../velara-web/src/features/skills/components/SkillCreate.tsx#L34-L48), add `location_dependent: values.location_dependent` to the `SkillCreateInput` object. (Omitting it is technically safe — backend defaults to `false` — but send it explicitly so the toggle is honored when set.)
+- [x] **Task 4 — Populate `location_dependent` in the create submit path (AC1)**
+  - [x] In [SkillCreate.tsx `handleSubmit`](../../../velara-web/src/features/skills/components/SkillCreate.tsx#L34-L48), add `location_dependent: values.location_dependent` to the `SkillCreateInput` object. (Omitting it is technically safe — backend defaults to `false` — but send it explicitly so the toggle is honored when set.)
 
-- [ ] **Task 5 — Tests (AC1, AC2)**
-  - [ ] In [SkillForm.test.tsx](../../../velara-web/src/features/skills/components/SkillForm.test.tsx): add a create-mode assertion that the toggle renders and, when checked, `onSubmit` is called with `expect.objectContaining({ location_dependent: true })` (mirror the existing `output_format: 'pdf'` submit test at [lines 50-80](../../../velara-web/src/features/skills/components/SkillForm.test.tsx#L50-L80)).
-  - [ ] Add an edit-mode assertion: mount with a `location_dependent: true` skill, confirm the checkbox is checked; toggle it off and confirm Save becomes enabled (mirror the "enables Save when a field is changed" test at [lines 173-181](../../../velara-web/src/features/skills/components/SkillForm.test.tsx#L173-L181)).
-  - [ ] **REGRESSION TRAP:** the edit-mode test at [SkillForm.test.tsx:133-135](../../../velara-web/src/features/skills/components/SkillForm.test.tsx#L133-L135) asserts `selects.length === 3`. A checkbox is **not** a `combobox`, so this count stays 3 and must **not** be changed. If you (wrongly) implement the toggle as a `<select>`, this assertion breaks — that is the signal you used the wrong control.
-  - [ ] [SkillCreate.test.tsx](../../../velara-web/src/features/skills/components/SkillCreate.test.tsx#L89) already asserts the submit payload with `toHaveBeenCalledWith(expect.objectContaining({…}))` (partial match) — adding `location_dependent` to the payload will **not** break it, and the mocked `createSkill` return already carries `location_dependent: false`. So **no edit is required here**; optionally add `location_dependent: false` to that `objectContaining` to lock in the default-when-unchecked path.
+- [x] **Task 5 — Tests (AC1, AC2)**
+  - [x] In [SkillForm.test.tsx](../../../velara-web/src/features/skills/components/SkillForm.test.tsx): add a create-mode assertion that the toggle renders and, when checked, `onSubmit` is called with `expect.objectContaining({ location_dependent: true })` (mirror the existing `output_format: 'pdf'` submit test at [lines 50-80](../../../velara-web/src/features/skills/components/SkillForm.test.tsx#L50-L80)).
+  - [x] Add an edit-mode assertion: mount with a `location_dependent: true` skill, confirm the checkbox is checked; toggle it off and confirm Save becomes enabled (mirror the "enables Save when a field is changed" test at [lines 173-181](../../../velara-web/src/features/skills/components/SkillForm.test.tsx#L173-L181)).
+  - [x] **REGRESSION TRAP:** the edit-mode test at [SkillForm.test.tsx:133-135](../../../velara-web/src/features/skills/components/SkillForm.test.tsx#L133-L135) asserts `selects.length === 3`. A checkbox is **not** a `combobox`, so this count stays 3 and must **not** be changed. If you (wrongly) implement the toggle as a `<select>`, this assertion breaks — that is the signal you used the wrong control.
+  - [x] [SkillCreate.test.tsx](../../../velara-web/src/features/skills/components/SkillCreate.test.tsx#L89) already asserts the submit payload with `toHaveBeenCalledWith(expect.objectContaining({…}))` (partial match) — adding `location_dependent` to the payload will **not** break it, and the mocked `createSkill` return already carries `location_dependent: false`. So **no edit is required here**; optionally add `location_dependent: false` to that `objectContaining` to lock in the default-when-unchecked path.
 
-- [ ] **Task 6 — Verify AC3 end-to-end (no code; verification only)**
-  - [ ] Confirm the Run Console already consumes the flag: the "Location-dependent" pin chip at [RunConsole.tsx:134](../../../velara-web/src/features/run/components/RunConsole.tsx#L134), and the location-selector / fan-out gating at [RunConsole.tsx:377](../../../velara-web/src/features/run/components/RunConsole.tsx#L377), [:396](../../../velara-web/src/features/run/components/RunConsole.tsx#L396), [:603](../../../velara-web/src/features/run/components/RunConsole.tsx#L603). No change needed here — this is the AC3 proof surface. Document in Completion Notes that AC3 is satisfied by existing behavior.
+- [x] **Task 6 — Verify AC3 end-to-end (no code; verification only)**
+  - [x] Confirm the Run Console already consumes the flag: the "Location-dependent" pin chip at [RunConsole.tsx:134](../../../velara-web/src/features/run/components/RunConsole.tsx#L134), and the location-selector / fan-out gating at [RunConsole.tsx:377](../../../velara-web/src/features/run/components/RunConsole.tsx#L377), [:396](../../../velara-web/src/features/run/components/RunConsole.tsx#L396), [:603](../../../velara-web/src/features/run/components/RunConsole.tsx#L603). No change needed here — this is the AC3 proof surface. Document in Completion Notes that AC3 is satisfied by existing behavior.
 
-- [ ] **Task 7 — Gates**
-  - [ ] `tsc --noEmit` → 0 errors (watch the `set()` union-type change from Task 2).
-  - [ ] `eslint` → clean (a single pre-existing `Icon.tsx` react-refresh warning is the known baseline — not introduced here).
-  - [ ] `vitest` → all pass, including the `selects.length === 3` assertion **unchanged**.
+- [x] **Task 7 — Gates**
+  - [x] `tsc --noEmit` → 0 errors (watch the `set()` union-type change from Task 2).
+  - [x] `eslint` → clean (a single pre-existing `Icon.tsx` react-refresh warning is the known baseline — not introduced here).
+  - [x] `vitest` → all pass, including the `selects.length === 3` assertion **unchanged**.
 
 ## Dev Notes
 
@@ -149,10 +149,31 @@ This is the exact same shape of change made when `output_format` and `visibility
 
 ### Agent Model Used
 
-_(to be filled by dev agent)_
+claude-sonnet-5 (Sonnet 5)
 
 ### Debug Log References
 
+None — no failures encountered. tsc, eslint, and vitest all passed on first run after implementation.
+
 ### Completion Notes List
 
+- Implemented exactly per spec, following the 2026-07-02 `output_format`/`visibility` editable-field precedent line-for-line: `location_dependent` added to `SkillCreateInput` + `SkillUpdateInput` Pick (types.ts), `FormFields` + state init + checkbox render (both modes, near Scope) + `isEditDirty` term (SkillForm.tsx), create submit population (SkillCreate.tsx), and `buildPatchBody` only-when-changed (SkillEdit.tsx).
+- `set()` helper widened from `string | Scope` to `string | Scope | boolean` (Task 2's flagged tsc trap) — `tsc --noEmit` is clean, so the widening didn't leak an unexpected `boolean` into any string-typed call site.
+- Checkbox rendered as a plain accessible `<label><input type="checkbox"/>…</label>` (not forced through the `Field` wrapper, per Dev Notes UI guidance) with the "Site-specific: must be run with a location or fan-out across a study." helper line beneath it. No emoji/icon used (house rule) — plain checkbox needs none.
+- AC3 verified, not built: confirmed `RunConsole.tsx:134` (pin chip), `:377` (`showLocationSelector`), `:396` (`locationDependentNoStudy`), `:603` (`isLocationDependent`) all key on `skill.location_dependent`, unchanged by this story — marking a skill location-dependent via the new toggle immediately activates existing Run Console behavior.
+- Tests: added 1 create-mode submit assertion (`objectContaining({ location_dependent: true })`) and 1 edit-mode assertion (reflects `true` on load, toggling alone flips to `false` and enables Save) to `SkillForm.test.tsx`; the regression-trap `selects.length === 3` assertion at lines 133-135 is untouched and still passes (checkbox is not a `combobox`). Added `location_dependent: false` to the existing `SkillCreate.test.tsx` `objectContaining` per the optional suggestion, locking in the default-when-unchecked path.
+- No backend, migration, Terraform, or `api/skills.ts` changes — confirmed not needed; the backend contract was pre-verified in Dev Notes.
+- Gates: `tsc --noEmit` 0 errors; `eslint` 1 pre-existing `Icon.tsx` react-refresh warning (baseline, not introduced here); `vitest` 507/507 passed across 50 files (505 baseline + 2 net-new).
+
 ### File List
+
+- `velara-web/src/features/skills/types.ts` — modified (added `location_dependent?: boolean` to `SkillCreateInput`; added `'location_dependent'` to `SkillUpdateInput` Pick)
+- `velara-web/src/features/skills/components/SkillForm.tsx` — modified (`FormFields.location_dependent`, state init, `set()` union widen, checkbox render both modes, `isEditDirty` term)
+- `velara-web/src/features/skills/components/SkillEdit.tsx` — modified (`buildPatchBody` sends `location_dependent` only when changed)
+- `velara-web/src/features/skills/components/SkillCreate.tsx` — modified (`handleSubmit` populates `location_dependent` in `SkillCreateInput`)
+- `velara-web/src/features/skills/components/SkillForm.test.tsx` — modified (new create-mode + edit-mode `location_dependent` assertions)
+- `velara-web/src/features/skills/components/SkillCreate.test.tsx` — modified (locked in `location_dependent: false` default in the submit-payload assertion)
+
+## Change Log
+
+- 2026-07-06 — Implemented Story 12.1 (Location-Dependent Authoring Control): added the `location_dependent` toggle to the skill create/edit form, threading it through FE input contracts, form state, dirty-tracking, and both submit paths. No backend/migration/Terraform changes (field already fully wired server-side and consumed by the Run Console — AC3 verified via existing behavior, not new code). Gates: tsc 0, eslint 1 pre-existing warning, vitest 507/507 (50 files, +2 net-new tests).
