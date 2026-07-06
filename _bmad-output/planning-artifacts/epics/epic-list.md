@@ -9,6 +9,8 @@
 > **Added 2026-06-18** (see `sprint-change-proposal-2026-06-18.md`): the client delivered the first real foundation skill (`velara-protocol-extractor`), a **code-driven hybrid** the current hybrid runtime cannot host. **New Epic 5.5** (positioned right after Epic 5) widens the hybrid runtime for code-driven trusted skills (multi-file bundle, deps, egress, injected secrets, raw-file input) and adds a schema-versioned canonical output contract + `blocked` QA job state. **Epics 2 & 3 stay `done`** (forward FR amendments only, no reopen). Phase-1 isolation = per-skill venv; container isolation deferred to an Epic 7 story. Headline gate = the client skill running **end-to-end** on the platform. _(Renumbered 2026-06-25: created as Epic 10, moved to **5.5** to sit where it belongs by dependency; Epics 6–9 keep their numbers.)_
 >
 > **Added 2026-07-01** (see `sprint-change-proposal-2026-07-01.md`): access-control admin surfaces gap found near Epic 8 close. Epic 8's stories delivered RBAC enforcement (8.1), the IP client surface (8.2), and the client portal (8.3/8.4) but never the internal admin UI, and the skill-attachment model was a documented deferral. **Epic 8 gains Story 8.5** (Access Control screen — admin grant management UI over the 8.1 API) and **Story 8.6** (Skill Attachment Model & Assignment UI — real join table + assignment, replacing the scope-heuristic mock; **sequenced before 8.4** so client discovery consumes real attachments). **New Epic 10: Client User Provisioning** (Cognito `AdminCreateUser` + invites + user-management screens — a distinct identity-lifecycle concern, `USR-*` FRs, net-new vs SEC-06's pre-existing-user assumption). New FRs ACL-08/ACL-09/USR-01..03; ACL-09 supersedes the INV-07 "no attachment filtering" Phase-1 stance for the client portal; requires architecture ADRs (attachment model + Cognito provisioning).
+>
+> **Added 2026-07-06** (see `sprint-change-proposal-2026-07-06.md`): forward scope addition after Epic 10 close — the skill on-boarding path is too rigid. **New Epic 11: AI-Assisted Skill Integration, Versioning & Environment Promotion** — real multi-file ZIP bundle upload, a standardized code-driven entrypoint contract enforced at registration (absorbs the Epic 5.5 retro Action Item 1), an AI integration assistant that **proposes** a standardized adapter + manifest for human approval (adapter-only, core files byte-for-byte unchanged, re-certified before `client_ready`), UI-authored new versions (draft-mutable-in-place + immutable-on-publish; new-ZIP for hybrid), running an older version to compare (admin/ma_tech), and environment promotion (export/import Phase 1, in-app promote Phase-2 target). New `SKL-01..SKL-08` FRs; amends REG-01/REG-02; requires 3 architecture ADRs. **New Epic 12: Skill & Audit Lifecycle Polish** — four independent quick-fixes decoupled to ship on their own cadence: location-dependent authoring toggle (REG-10), backend-enriched audit context names (USE-07), distinct audit event icons (USE-08), duplicate-run cost warning (INV-10).
 
 ## Epic 1: Platform Foundation & Local Dev Environment
 Developers can run the full platform locally — FastAPI + Celery + Redis + PostgreSQL + local object storage (MinIO/LocalStack) — behind provider abstractions (storage, secrets, auth) that make the eventual AWS swap a configuration change. A dev-auth shim issues the same JWT claims contract (`user_id`, `org_id`, role) Cognito will later provide. HIPAA controls (PHI sanitizer, S3-key-reference pattern, append-only audit, structured logging) ship from the first commit. **AWS provisioning, CI/CD, Cognito, and cloud observability move to Epic 7** — removing the AWS-account dependency from the critical path.
@@ -106,5 +108,40 @@ Vitalief admins can create client login identities and invite them, so a client 
 - 10.3 Provisioning ↔ grant handoff (create user → immediately grant engagement access in one flow)
 
 **FRs covered:** FR-USR-01, FR-USR-02, FR-USR-03 _(new; USR-01/02 supersede the SEC-06 assumption that users pre-exist)_
+
+---
+
+## Epic 11: AI-Assisted Skill Integration, Versioning & Environment Promotion
+
+<!-- Added 2026-07-06 via correct-course (see planning-artifacts/sprint-change-proposal-2026-07-06.md). Authoritative story-able version: epics/epic-11-ai-assisted-skill-integration-and-promotion.md. -->
+
+Vitalief can on-board a client-provided skill with AI assistance — the platform **proposes** a standardized adapter + manifest so the skill fits the runtime contract *without changing what it does* (adapter-only; core files byte-for-byte unchanged; re-certified before `client_ready`) — register true multi-file ZIP bundles, author new versions from the UI, run an older version to compare, and promote certified skills to higher environments (export/import Phase 1; in-app promote Phase-2 target). Replaces the per-skill hand-written adapter shim (Epic 5.5) with a standardized contract + an AI integration assistant. Epics 2/3/5.5 stay `done` (forward FR amendments only). **Architecture-gated** — 3 Winston ADRs (AI-integration seam; promotion/bundle portability; draft-mutable versioning).
+
+**Stories (to be detailed via create-story):**
+- 11.1 Multi-file ZIP bundle upload & extraction
+- 11.2 Standardized entrypoint contract + registration-time validation _(absorbs Epic 5.5 retro Action Item 1)_
+- 11.3 AI skill integration assistant (propose → human-approve, adapter-only, re-cert)
+- 11.4 Export / import portable skill bundles
+- 11.5 In-app environment promotion (Phase-2 design + stub)
+- 11.6 Author new skill versions from the UI (draft-edit + version-on-publish; new-ZIP for hybrid)
+- 11.7 Run an older skill version to compare (admin / ma_tech)
+
+**FRs covered:** SKL-01..SKL-08 _(new)_; REG-01 _(amended — ZIP bundle built)_; REG-02 _(amended — draft-mutable versioning; published versions still immutable)_; EXE-03 _(adjacent — code-driven entrypoint contract standardized)_
+
+---
+
+## Epic 12: Skill & Audit Lifecycle Polish
+
+<!-- Added 2026-07-06 via correct-course (see planning-artifacts/sprint-change-proposal-2026-07-06.md). Authoritative story-able version: epics/epic-12-skill-and-audit-lifecycle-polish.md. -->
+
+Four independent, high-value fixes to skill authoring and the audit surface, **decoupled from Epic 11** so they ship on their own cadence (none depend on Epic 11 architecture): a location-dependent authoring toggle (a pure FE form gap — backend already wired), backend-enriched audit context names (resolve ltree UUID segments → entity names server-side), distinct per-event audit icons (fill the two unmapped event types + verify render), and an advisory duplicate-run cost warning (hook in `queue_invocation` before `create_job`). Suggested order 12.1 → 12.2 → 12.3 → 12.4.
+
+**Stories (to be detailed via create-story):**
+- 12.1 Location-dependent authoring control _(FE-only; backend field already wired)_
+- 12.2 Audit log context names (backend-enriched)
+- 12.3 Distinct audit event icons
+- 12.4 Duplicate-run cost warning (advisory)
+
+**FRs covered:** REG-10, USE-07, USE-08 _(P2)_, INV-10 _(P2)_ _(new)_
 
 ---

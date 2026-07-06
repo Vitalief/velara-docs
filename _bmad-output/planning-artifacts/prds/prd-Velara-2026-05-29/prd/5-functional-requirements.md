@@ -32,6 +32,28 @@ Requirements are numbered for traceability. BRD IDs are noted in parentheses whe
 | REG-07 | Skill descriptions are treated as first-class artifacts. Descriptions drive discoverability and correct invocation — especially from Claude. A skill with an inadequate description does not pass technical certification. | P1 |
 | REG-08 | Skill versions can be pinned to specific Projects or Engagements, isolating them from later changes until explicitly upgraded. | P2 |
 | REG-09 | Retired skills remain in the registry for audit but cannot be invoked. | P2 |
+| REG-10 | The skill create/edit UI exposes a **location-dependent authoring control** so a skill can be marked site-specific from the UI (LOC-01 is enforced at execution but was previously unsettable from the UI). | P1 (Epic 12) |
+
+> **Amended 2026-07-06** (`sprint-change-proposal-2026-07-06.md`): **REG-01** — the multi-file ZIP bundle is now *built* (Epic 11 Story 11.1), not only architected; the Phase-1 "manifest IS the artifact" deferral is closed. **REG-02** — versioning gains a **draft-mutable** model (Epic 11 Story 11.6): a `draft` skill's content is editable in place, and an **immutable** version is minted on publish; published/certified versions remain immutable (the strict "no UPDATE ever" invariant now has a draft-only exception). REG-08 (version *pinning to engagements*, P2) stays distinct from SKL-08 (selecting a version *to run* for comparison).
+
+---
+
+## 5.2a Skill Integration, Versioning & Promotion
+
+*(Added 2026-07-06 via correct-course — `sprint-change-proposal-2026-07-06.md`. Delivered by the new **Epic 11**. Absorbs the Epic 5.5 retro Action Item 1 — standardize the code-driven entrypoint contract at registration — as SKL-02.)*
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| SKL-01 | Skills can be uploaded as a **multi-file ZIP bundle**; the bundle is extracted and stored as the immutable, content-addressed versioned artifact. | P1 (Epic 11) |
+| SKL-02 | A **standardized code-driven entrypoint contract** (`run(input_path, output_dir, params: dict)`) is enforced at registration (callable-signature check), so conforming skills need no adapter. | P1 (Epic 11) |
+| SKL-03 | The platform can analyze a non-conforming client skill and **propose** a standardized adapter + manifest for human review, **without modifying the skill's core logic** (adapter-only; core files stored byte-for-byte unchanged). | P1 (Epic 11) |
+| SKL-04 | An AI-proposed adapter is applied **only on human approval**, and the adapted skill must **re-pass two-key certification** before `client_ready`. | P1 (Epic 11) |
+| SKL-05 | Skills can be **exported to and imported from a signed, portable bundle file** to move between environments. | P1 (Epic 11) |
+| SKL-06 | Skills can be **promoted to higher environments in-app** (service-to-service), without a file download/upload. | P2 (Epic 11) |
+| SKL-07 | New skill versions can be **authored from the UI** — in-place content editing for prompt/code skills and new-ZIP upload for hybrid skills — with draft content mutable in place and an immutable version minted on publish. | P1 (Epic 11) |
+| SKL-08 | **Admin and MA Tech users can invoke a specific (older) skill version** to compare outputs across versions; other roles run the current version. | P1 (Epic 11) |
+
+> The two safety guarantees for SKL-03/04: **structural** (the AI authors only the adapter/manifest — the skill's core files are byte-for-byte unchanged, checksum-proven) and **governance** (two-key certification re-runs before `client_ready`), plus a **human-approve gate** at registration.
 
 ---
 
@@ -152,6 +174,7 @@ The Run Console is not a top-level navigation destination. It is surfaced contex
 | INV-07 | In skill-first mode, the skill is pre-selected and locked. The context picker shows all Clients, Projects, and Studies without filtering by skill attachment. | P1 |
 | INV-08 | Both run modes provide a back button that returns the user to the originating screen (Engagements entity or skill detail). | P1 |
 | INV-09 | Skills attached at the Project level are visible and runnable from both the Project screen and from within each Study screen under that Project (shown as "available across all studies"). | P1 |
+| INV-10 | Before executing, the platform **warns when a run duplicates a recent completed run** with identical inputs and context, so AI budget is not spent on a duplicate (advisory, non-blocking — the user may proceed or reuse the prior result). | P2 (Epic 12) |
 
 ---
 
@@ -194,6 +217,10 @@ Certification and validation are a single unified workflow surface in the UI. Th
 | USE-04 | Access logs capture every skill invocation, every read of skill internals, and every administrative action. | P1 |
 | USE-05 | Audit logs are retained for a minimum of seven years. | P2 |
 | USE-06 | A value-reporting view summarizes usage data per engagement for renewal conversations with clients. | P2 |
+| USE-07 | Audit log displays resolve hierarchy UUID segments to human-readable Client/Project/Study/Location **names** (server-side enrichment; graceful fallback for deleted entities). | P1 (Epic 12) |
+| USE-08 | Audit log entries render a **distinct icon per event type** (not a single play icon for all rows). | P2 (Epic 12) |
+
+> **Added 2026-07-06** (`sprint-change-proposal-2026-07-06.md`, Epic 12): USE-07/USE-08 polish the audit surface. USE-07 closes the "shows raw UUIDs, always org" readability gap (the write-path context fix already landed 2026-07-02; USE-07 adds the read-side name resolution). Every invocation already records `skill_version` (job + audit) — the *which-version-ran* need is met; SKL-08 adds the ability to *choose* an older version to run.
 
 ---
 
