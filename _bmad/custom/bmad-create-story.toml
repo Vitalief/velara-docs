@@ -1,0 +1,35 @@
+# Team override for bmad-create-story — COMMITTED (client tracks this repo).
+#
+# Purpose: after a story is drafted and sprint-status.yaml is updated,
+# auto commit-and-push the docs so the client watching this repo sees
+# the story land in the sprint live.
+#
+# Merge semantics (see _bmad/scripts/resolve_customization.py):
+#   scalars override • arrays append. This file layers on top of the
+# skill's own customize.toml (which is DO-NOT-EDIT). Do not put anything
+# secret here — this file is committed and pushed to the client.
+
+[workflow]
+
+# Fires at the final step, after the story file is saved and
+# sprint-status.yaml is updated. Commits the BMad docs and pushes.
+on_complete = """
+Publish the newly drafted story to the client-facing docs repo.
+
+1. Stage only the BMad docs surface (never the whole working tree):
+   `git add _bmad-output/`
+2. If `git diff --cached --quiet` reports NO staged changes, skip the
+   rest silently — there is nothing to publish.
+3. Otherwise commit:
+   `git commit -m "docs(sprint): draft story {{story_key}} — {{story_title}}"`
+   (fall back to a generic "docs(sprint): draft next story" message if the
+   story key/title variables are not available in context.)
+4. Push to the branch the client tracks:
+   `git push` (use `git push -u origin HEAD` if no upstream is set).
+5. If push fails (no network / no remote / rejected), report the failure
+   to the user in one line and CONTINUE — do not HALT the workflow and do
+   not retry in a loop. The local commit is preserved either way.
+
+Only ever `git add _bmad-output/`. Never `git add -A` or `git add .` —
+unrelated source changes must not be swept into this docs commit.
+"""

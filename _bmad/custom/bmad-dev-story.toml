@@ -1,0 +1,57 @@
+# Team override for bmad-dev-story — COMMITTED (client tracks this repo).
+#
+# Purpose: give the client a LIVE view of each story's lifecycle by
+# auto committing-and-pushing the BMad docs at BOTH sprint-status
+# transitions this workflow performs:
+#
+#   * Step 4 ("Mark story in-progress")  -> ready-for-dev -> in-progress
+#   * Step 9 ("Story completion")        -> in-progress   -> review
+#
+# on_complete alone is NOT enough here: it fires only once at the very
+# end, so it cannot capture the in-progress transition. The persistent
+# fact below makes the developer commit-and-push at each transition as it
+# happens. on_complete is kept as a final backstop.
+#
+# Merge semantics (see _bmad/scripts/resolve_customization.py):
+#   scalars override • arrays (persistent_facts) APPEND. So the fact below
+# is added to the skill's existing persistent_facts, not replacing them.
+# Layers on the skill's DO-NOT-EDIT customize.toml. Committed + pushed to
+# the client — nothing secret here.
+
+[workflow]
+
+# Appended to the skill's persistent_facts. Standing rule carried for the
+# entire run so it can act at the two mid-run status transitions.
+persistent_facts = [
+  """CLIENT-LIVE-STATUS RULE — publish each sprint-status transition immediately:
+Whenever this workflow updates development_status in sprint-status.yaml —
+specifically Step 4 (status becomes 'in-progress') and Step 9 (status
+becomes 'review') — after the sprint-status.yaml write succeeds, publish
+the docs to the client-facing repo before moving on:
+  1. `git add _bmad-output/`  (ONLY this path — never `git add -A`/`.`;
+     do NOT stage source files the story changed, only the BMad docs).
+  2. If `git diff --cached --quiet` shows no staged changes, skip silently.
+  3. Commit with a message naming the transition:
+       Step 4 -> `git commit -m "docs(sprint): {{story_key}} in-progress"`
+       Step 9 -> `git commit -m "docs(sprint): {{story_key}} ready for review"`
+  4. `git push` (use `git push -u origin HEAD` if no upstream is set).
+  5. If push fails (no network/remote/rejected), report it in ONE line and
+     CONTINUE the workflow — never HALT for this and never retry in a loop;
+     the local commit is preserved. This publish step must never block or
+     fail story implementation.
+This runs TWICE per story (once per transition) and is intentional.""",
+]
+
+# Final backstop. Fires at the last workflow step. Catches any docs still
+# unpushed (e.g. the Step 9 push was skipped/failed) so the client is never
+# left behind. Idempotent: if there is nothing staged, it does nothing.
+on_complete = """
+Ensure the client-facing docs repo reflects the finished story.
+
+1. `git add _bmad-output/`  (ONLY this path).
+2. If `git diff --cached --quiet` shows no staged changes, stop — the
+   per-transition pushes already published everything.
+3. Otherwise `git commit -m "docs(sprint): {{story_key}} status sync"`
+   then `git push` (or `git push -u origin HEAD` if no upstream).
+4. On push failure, report in one line and CONTINUE — do not HALT.
+"""
