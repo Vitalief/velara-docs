@@ -4,7 +4,7 @@ baseline_commit: 6c5eab0
 
 # Story 12.2: Audit Log Context Names (Backend-Enriched)
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
