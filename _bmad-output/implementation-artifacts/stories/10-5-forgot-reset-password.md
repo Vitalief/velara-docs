@@ -4,7 +4,7 @@ baseline_commit: 0f5455dc4edcd377608c423eaa0c7181fc473b5b
 
 # Story 10.5: Forgot Password / Reset Password
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -90,6 +90,16 @@ Then `tsc --noEmit` is clean, `eslint` is clean (the one pre-existing `Icon.tsx`
 - [x] **Task 4 — Gates & story record (AC7).**
   - [x] `cd velara-web && npx tsc --noEmit && npx eslint . && npx vitest run` — all green (492 baseline + net-new).
   - [x] Fill Dev Agent Record. Note honestly whether manual end-to-end verification (a real reset code email → confirm → login) was done or left to the operator — do NOT reconfigure/restart the live `AUTH_BACKEND=cognito` stack to verify (project guidance). The pool config supporting reset is already live (no TF apply owed for 10.5, unlike 10.4).
+
+### Review Findings
+
+_Code review 2026-07-06 — 3-layer adversarial (Blind Hunter / Edge Case Hunter / Acceptance Auditor). Auditor: **all 7 ACs satisfied, 0 violations.** 3 patches, 0 decisions, 0 deferred, 8 dismissed as noise (established-pattern parity, unreachable dead-state, empirically-disproven assumptions)._
+
+- [x] [Review][Patch] `resetSuccess` banner never reset to `false` → the green "Password updated — please sign in." banner persists across a subsequent failed login (rendering contradictorily above the red "Invalid username or password." error) and re-shows if the user re-enters the forgot flow. Empirically confirmed: `handleLogin` sets `error` but never clears `resetSuccess`, and phase stays `credentials`. **APPLIED:** `setResetSuccess(false)` added to `handleLogin` (start of a new sign-in attempt) and `handleForgotPassword` (start of a new reset). [velara-web/src/pages/LoginPage.tsx]
+- [x] [Review][Patch] `resetEmail` never cleared → leaks into the next forgot request (stale/foreign email pre-filled on a shared/kiosk device after another user's reset or an abandoned attempt). **APPLIED:** `setResetEmail('')` added to `handleBackToSignInFromForgot` (exit) and to the `handleConfirmReset` success path (the request→confirm carry stays intact — cleared only on exit paths). [velara-web/src/pages/LoginPage.tsx]
+- [x] [Review][Patch] `requestPasswordReset` swallow guard keyed on `err instanceof Error && err.name === 'UserNotFoundException'`; a non-`Error` rejection carrying `name: 'UserNotFoundException'` would bypass the swallow and re-throw, surfacing an error on the request step for a *known-absent* email while a known email advances silently — a theoretical enumeration oracle. **APPLIED:** guard widened to `(err as { name?: string })?.name === 'UserNotFoundException'` so the enumeration-safe fallback holds regardless of thrown shape. [velara-web/src/shared/utils/auth.ts]
+
+_All patches applied 2026-07-06. Gates re-run green: tsc --noEmit 0 errors, eslint 0 errors (1 pre-existing Icon.tsx warning), vitest 505/505 across 50 files (0 regressions)._
 
 ## Dev Notes
 
