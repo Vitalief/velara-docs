@@ -4,7 +4,7 @@ baseline_commit: 2448de1cc4fc975d095ef5bcfa9f1095c921494f
 
 # Story 12.3: Distinct Audit Event Icons
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
