@@ -215,7 +215,7 @@ development_status:
   11-5-in-app-environment-promotion: backlog   # Phase-2 design + stub; export/import (11-4) is the Phase-1 mechanism
   11-6-author-new-skill-versions-from-ui: backlog   # draft-edit + version-on-publish; new-ZIP for hybrid (depends on 11-1)
   11-7-run-older-skill-version-to-compare: backlog   # admin/ma_tech only; _GRANTOR_ROLES gate already exists
-  11-8-schema-driven-run-inputs-form: in-progress   # story created 2026-07-07; IMPLEMENTS BEFORE 11-1 (number ≠ run order — no 11-0 slot). Schema-driven inputs form so non-tech users get labeled fields not raw JSON; wires the long-dead InvocationPayload.inputs. Client portal uses a sanitized run_fields projection (preserves C5 IP boundary, NOT raw input_schema). FE-only validation (server-side jsonschema deferred).
+  11-8-schema-driven-run-inputs-form: review   # story created 2026-07-07; IMPLEMENTS BEFORE 11-1 (number ≠ run order — no 11-0 slot). Schema-driven inputs form so non-tech users get labeled fields not raw JSON; wires the long-dead InvocationPayload.inputs. Client portal uses a sanitized run_fields projection (preserves C5 IP boundary, NOT raw input_schema). FE-only validation (server-side jsonschema deferred).
   epic-11-retrospective: optional
 
   # ─────────────────────────────────────────────────────────
