@@ -195,12 +195,16 @@ None — no failures encountered during implementation; all tests passed on firs
 - Task 4: All gates green — `tsc --noEmit` 0 errors; `eslint` 1 pre-existing `Icon.tsx` react-refresh warning (baseline, unchanged); `vitest` 537/537 across 52 files (526 prior baseline + 11 new: 14 in `eventTypeIconMeta.test.ts` − 3 already counted differently + 11 in `AuditLog.test.tsx`; net regression-free).
 - No backend, migration, or Terraform changes — purely a frontend data-map + test addition, as scoped.
 
+- Post-implementation follow-up (user-reported): the top-of-screen event-kind filter pills (`All events`/`Success`/`Failures`/`Blocked`/`Grants`/`Certifications`/`Lifecycle`) had no pill for the 2 provisioning event types this story added icons for — a user browsing the log had no one-click way to isolate `admin.user_provisioned`/`admin.user_invite_resent` rows. Added a `Provisioning` pill to `eventKindMeta.ts` (`EventKind` union + `EVENT_KIND_OPTIONS` + `eventKindToParams`), mapped to `event_type: 'admin.user_provisioned'`. Same accepted single-value-filter limitation the pre-existing `Grants` pill already has (backend `event_type` is exact-match only, no OR/prefix support) — documented inline in `eventKindMeta.ts`'s module comment rather than treated as a new gap. Added 1 regression test (`AuditLog.test.tsx`) confirming the pill fires the hook with the right param and renders a dismissible chip. No backend change.
+
 ### File List
 
 - `velara-web/src/features/audit/eventTypeIconMeta.ts` (modified — 2 new map entries)
 - `velara-web/src/features/audit/eventTypeIconMeta.test.ts` (new)
-- `velara-web/src/features/audit/components/AuditLog.test.tsx` (modified — added icon-rendering `it.each` block + `ICONS` import)
+- `velara-web/src/features/audit/components/AuditLog.test.tsx` (modified — added icon-rendering `it.each` block + `ICONS` import; added Provisioning-pill regression test)
+- `velara-web/src/features/audit/eventKindMeta.ts` (modified — added `provisioning` EventKind + pill option + param mapping)
 
 ## Change Log
 
 - 2026-07-07: Implemented Story 12.3 — added `admin.user_provisioned`/`admin.user_invite_resent` icon mappings (AC1); added `eventTypeIconMeta.test.ts` with exact-value + collision-check coverage (AC1/AC2/AC3); extended `AuditLog.test.tsx` with per-event-type icon-rendering assertions (AC2/AC3). Gates: tsc 0, eslint 1 pre-existing warning, vitest 537/537. Status → review.
+- 2026-07-07 (follow-up): Added missing `Provisioning` filter pill (`eventKindMeta.ts`) so the 2 new event types are filterable from the toolbar, not just visually distinct in the list. Gates re-run: tsc 0, eslint 1 pre-existing warning, vitest 538/538.
