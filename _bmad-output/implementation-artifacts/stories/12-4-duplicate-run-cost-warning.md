@@ -18,7 +18,7 @@ so that I don't spend AI budget on a duplicate.
 
 1. **AC1 — Advisory warning on a matching recent completed run.**
    **Given** a run request for `(skill_id, skill_version, resolved hierarchy_path, inputs-hash)`
-   **When** a **completed** job with the exact same `(skill_id, skill_version, hierarchy_path, inputs-hash)` exists and finished within a recent window (config-driven, default 24h)
+   **When** a **completed** job with the exact same `(skill_id, skill_version, hierarchy_path, inputs-hash)` exists and finished within a recent window (config-driven, default 7 days)
    **Then** the platform surfaces an **advisory** warning — naming the prior job and its completion time, with a link/reference to the prior result — **before** spending. The user may proceed anyway (non-blocking) or open/reuse the prior result. The check never blocks the request; it only informs.
 
 2. **AC2 — No match, no warning.**
@@ -43,7 +43,7 @@ so that I don't spend AI budget on a duplicate.
   - [x] Mirrors `list_jobs`' `select(...).where(*conditions).order_by(...).limit(...)` shape.
 
 - [x] **Task 3 — Config: recency window (AC1)**
-  - [x] Added `DUPLICATE_RUN_WINDOW_MINUTES: int = Field(default=1440, gt=0)` to [config.py](../../../velara-api/app/core/config.py), directly beside `MINUTES_SAVED_PER_RUN`/`BLENDED_LABOR_RATE_USD`, same convention.
+  - [x] Added `DUPLICATE_RUN_WINDOW_MINUTES: int = Field(default=10080, gt=0)` to [config.py](../../../velara-api/app/core/config.py), directly beside `MINUTES_SAVED_PER_RUN`/`BLENDED_LABOR_RATE_USD`, same convention. Default raised from the story text's suggested 1440 (24h) to 10080 (7 days) per explicit user feedback after initial implementation — a day was judged too short a window for the advisory to be useful in practice.
 
 - [x] **Task 4 — Wire the check into the duplicate-detection hook point (AC1, AC2, AC3)**
   - [x] **Scope changed by the Task 5 decision (below):** since the user chose response shape (b) — a separate pre-flight endpoint, not the inline 202 response — the duplicate check does **not** run inside `queue_invocation`/`create_job`'s call path at all. Instead it runs entirely inside the new `POST /api/v1/invocations/{skill_id}/check-duplicate` endpoint, called by the FE *before* the user clicks Run. `queue_invocation` itself is unmodified in behavior; it was only refactored (see below) to share hierarchy-resolution logic with the new endpoint, not to call the duplicate check itself.
@@ -200,3 +200,4 @@ None — no blocking failures. One test-authoring mistake was caught and fixed i
 ## Change Log
 
 - 2026-07-07: Implemented Story 12.4 — resolved the response-shape decision via `AskUserQuestion` to shape (b), a separate pre-flight `POST /api/v1/invocations/{skill_id}/check-duplicate` endpoint (not the Dev Notes' recommended inline-202 shape), so the advisory is visible before the Run click. Backend: `job_service.hash_inputs_payload` + `find_recent_duplicate`, `config.DUPLICATE_RUN_WINDOW_MINUTES`, new `DuplicateWarning`/`DuplicateCheckResponse` schemas, new pre-flight endpoint, `_resolve_single_job_hierarchy_path` extracted from `queue_invocation` as a pure refactor shared by both the real endpoint and the pre-flight one. Frontend: `useDuplicateCheck` debounced hook, shared `buildRunPayload()` in both RunConsole modes, `DuplicateWarningBanner` shown before the Run button. 12 new backend integration tests + 7 new unit tests; 7 new frontend tests. Gates: ruff clean, BE 1072/1072 (3 pre-existing unrelated), openapi spec regenerated additively; FE tsc 0, eslint 1 pre-existing warning, vitest 545/545. Final story of Epic 12 (4/4) → status review.
+- 2026-07-07 (follow-up): Raised `DUPLICATE_RUN_WINDOW_MINUTES` default from 1440 (24h) to 10080 (7 days) per explicit user feedback — a day was judged too short a window for the advisory to be practically useful. Config-only change (no code/schema/migration impact); the outside-window test already reads the setting dynamically so no test changes were needed. Gates re-run: ruff clean, BE 87/87 (invocations + job_service modules), openapi spec unchanged (config values aren't part of the spec).
