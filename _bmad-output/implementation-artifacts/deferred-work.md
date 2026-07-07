@@ -2,6 +2,11 @@
 
 Items deferred during reviews — real but not actionable in their originating story.
 
+## Deferred from: code review of 12-4-duplicate-run-cost-warning (2026-07-07)
+
+- **`find_recent_duplicate`'s `LIMIT 20` candidate window is shared across all distinct input variants at a given (org, skill, version, hierarchy_path).** A real duplicate can be pushed out of the top-20-most-recent-completed and silently missed if 20+ completions of *any* input variant occur at that path within the window — not just 20 completions of the *same* input, as the code comment implies. `velara-api/app/services/job_service.py`. Documented tradeoff (advisory-only, not an exhaustive audit); revisit if a high-frequency skill/context combination shows real missed duplicates.
+- **`check_duplicate` re-does a full skill lookup + hierarchy resolution + candidate query + Python hash loop on every debounced call (~every 400ms of active editing), with no server-side rate limit beyond the client-side debounce.** `velara-api/app/api/v1/invocations.py`. Pre-existing since the story's original implementation; revisit if this load becomes a real concern at scale (a user with dev tools open could trivially hammer this endpoint since it's unthrottled server-side).
+
 ## Deferred from: code review of 12-2-audit-log-context-names (2026-07-06)
 
 - **Name resolution is live, not point-in-time.** `resolve_hierarchy_names` (`velara-api/app/services/hierarchy_service.py`) resolves entity names against *current* DB state, not a snapshot at event time — a renamed (not deleted) client/project/study/location will retroactively change how every past audit row displays its context. Deferred: this is the story's stated design intent (a display concern layered on already-scoped rows, not a historical-name capture), not a bug. Revisit only if compliance requirements demand point-in-time name fidelity.
