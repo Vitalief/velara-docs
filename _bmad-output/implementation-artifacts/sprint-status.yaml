@@ -221,5 +221,5 @@ development_status:
   epic-12: in-progress   # first story (12-1) created 2026-07-06 → epic backlog→in-progress
   12-1-location-dependent-authoring-control: done   # FE-only; backend location_dependent field already wired
   12-2-audit-log-context-names: done   # backend-enriched UUID→name resolution — code-reviewed, 1 patch fixed (org-global row orphaned icon), 4 deferred, gates green
-  12-3-distinct-audit-event-icons: in-progress   # fill 2 unmapped event types + verify render
+  12-3-distinct-audit-event-icons: review   # fill 2 unmapped event types + verify render — 2 map entries + eventTypeIconMeta.test.ts + AuditLog.test.tsx icon-rendering tests; gates green (tsc 0, eslint 1 pre-existing, vitest 537/537)
   12-4-duplicate-run-cost-warning: backlog   # advisory; hook in queue_invocation before create_job
