@@ -4,7 +4,7 @@ baseline_commit: 6038613d0b195e3ccc33b147bf00c852077041e2
 
 # Story 11.8: Schema-Driven Run Inputs Form
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
