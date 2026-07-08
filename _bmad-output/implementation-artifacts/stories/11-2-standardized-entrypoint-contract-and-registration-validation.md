@@ -4,7 +4,7 @@ baseline_commit: 007e50d (velara-api)
 
 # Story 11.2: Standardized Entrypoint Contract + Registration-Time Validation
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
