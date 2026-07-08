@@ -4,7 +4,7 @@ baseline_commit: 007e50d (velara-api)
 
 # Story 11.2: Standardized Entrypoint Contract + Registration-Time Validation
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -46,45 +46,45 @@ so that skills stop needing bespoke hand-written adapter shims (Epic 5.5 retro A
 > **(S2)** Executor consumption of bundles IS this story (user decision 2026-07-08, recorded in the 11.1 review + deferred-work.md:388) — not just the registration check.
 > **(S3)** Backend-only. No FE changes: the new 422 renders through the existing `SkillBundleUpload`/`SkillForm` inline-error path shipped in 11.1 (`getErrorMessage` shows the response `detail`). No migration, no new config, no new endpoints.
 
-- [ ] **Task 1 — Bundle-layout resolution helpers (AC1, AC2) — shared, single source of truth**
-  - [ ] In [bundle_extractor.py](../../../velara-api/app/services/bundle_extractor.py): extract `find_manifest_path(paths: list[str]) -> str | None` from the existing `find_manifest` (same convention: top-level `manifest.json`, else exactly one `*/manifest.json`; ambiguous/absent → None) and refactor `find_manifest` to use it. Execution needs the *path* against `artifact_set` (no bytes available); registration keeps using `find_manifest`. Do NOT fork the convention into a second implementation.
-  - [ ] NEW `app/services/entrypoint_contract.py` with `resolve_entrypoint_module(paths: list[str], entrypoint: str) -> tuple[str, str] | None` returning `(package_root, module_file_path)`:
+- [x] **Task 1 — Bundle-layout resolution helpers (AC1, AC2) — shared, single source of truth**
+  - [x] In [bundle_extractor.py](../../../velara-api/app/services/bundle_extractor.py): extract `find_manifest_path(paths: list[str]) -> str | None` from the existing `find_manifest` (same convention: top-level `manifest.json`, else exactly one `*/manifest.json`; ambiguous/absent → None) and refactor `find_manifest` to use it. Execution needs the *path* against `artifact_set` (no bytes available); registration keeps using `find_manifest`. Do NOT fork the convention into a second implementation.
+  - [x] NEW `app/services/entrypoint_contract.py` with `resolve_entrypoint_module(paths: list[str], entrypoint: str) -> tuple[str, str] | None` returning `(package_root, module_file_path)`:
     - Module `a.b` maps to candidate files `a/b.py` then `a/b/__init__.py`.
     - Package roots probed in order: `""` (bundle root), `src/`, `<single-top-level-dir>/`, `<single-top-level-dir>/src/` — where `<single-top-level-dir>` exists only when *every* member shares one first path segment (mirrors `find_manifest`'s single-root-wrap convention). First hit wins; None if no candidate exists.
     - **CRITICAL: the registration validator (Task 2) and the executor (Task 5) MUST both call this helper** — divergent resolution would let registration pass and the run fail (or vice versa). That symmetry is the point of the story.
-- [ ] **Task 2 — Static callable-signature validator (AC1, AC4) — NEW in `entrypoint_contract.py`**
-  - [ ] `def validate_entrypoint_contract(files: list[tuple[str, bytes]], entrypoint: str) -> None` — pure, no code execution (**NEVER import/exec the untrusted module in the API process**; the bundle is adversarial input, same posture as [bundle_extractor.py](../../../velara-api/app/services/bundle_extractor.py)):
+- [x] **Task 2 — Static callable-signature validator (AC1, AC4) — NEW in `entrypoint_contract.py`**
+  - [x] `def validate_entrypoint_contract(files: list[tuple[str, bytes]], entrypoint: str) -> None` — pure, no code execution (**NEVER import/exec the untrusted module in the API process**; the bundle is adversarial input, same posture as [bundle_extractor.py](../../../velara-api/app/services/bundle_extractor.py)):
     - Resolve the module file via Task 1's helper; missing → violation "entrypoint module '<mod>' was not found in the bundle".
     - `ast.parse` the module source; `SyntaxError`/undecodable → violation "entrypoint module could not be parsed" (never echo source — the 5.5.1 IP-discipline: name the location/type, never the content).
     - Locate a **top-level** `ast.FunctionDef` named `<callable>`. An `ast.AsyncFunctionDef` → violation "entrypoint must be a synchronous function" (the runner calls it synchronously; a coroutine return would only fail later as an envelope error). Found only as an import-alias/assignment/class or not at all → violation "entrypoint '<fn>' is not defined as a top-level function in module '<mod>'" (re-exports are NOT followed — first cut; document in the message that the def must live in the declared module).
     - **Signature check = simulated bind, not name pattern-matching:** reconstruct an `inspect.Signature` from the AST's `arguments` (posonly / args / vararg / kwonly / kwarg + defaults; annotations are irrelevant — use `Parameter.empty`) and run `sig.bind(input_path=None, output_dir=None, params={})` in try/except `TypeError`. This is *exactly* the call the runner makes ([code_driven_executor.py:141](../../../velara-api/app/services/code_driven_executor.py#L141)), so it correctly accepts `**kwargs` catch-alls, keyword-only styles, and extra defaulted params, and correctly rejects positional-only collisions, missing params, and extra required params. On `TypeError`, surface a violation naming the failure (e.g. "parameter 'params' cannot be bound" / "required parameter 'model' has no default"). Do not hand-roll binding rules.
     - Decorated defs are accepted on their declared signature (a decorator can rewrap invisibly — static-analysis limitation; note it in the module docstring, not an error).
-  - [ ] NEW `EntrypointContractViolationError(VelaraHTTPException)` — 422, stable code `ENTRYPOINT_CONTRACT_VIOLATION`, mirroring `InvalidBundleError` ([bundle_extractor.py:67-78](../../../velara-api/app/services/bundle_extractor.py#L67)). Keep it distinct from `INVALID_CODE_DRIVEN_MANIFEST` (manifest fields are fine; the *code* doesn't conform) and from `INVALID_BUNDLE` (zip structure is fine). **This code is load-bearing for Story 11.3:** the AI integration assistant triggers on exactly this signal — never rename it, never fold it into an existing code.
-  - [ ] Register `ERROR_CODE_ENTRYPOINT_CONTRACT_VIOLATION = "ENTRYPOINT_CONTRACT_VIOLATION"` in the [execution_tasks.py](../../../velara-api/app/workers/execution_tasks.py) constants block, exactly as `ERROR_CODE_INVALID_BUNDLE` was catalogued there in 11.1 (registration-path codes live alongside for the same reason — see the comment at execution_tasks.py:53).
-- [ ] **Task 3 — Hook validation into bundle registration (AC1, AC3) — `skill_service.py`, one seam**
-  - [ ] In `_process_bundle` ([skill_service.py:371-385](../../../velara-api/app/services/skill_service.py#L371)) — the single choke point both `_create_skill_from_bundle` and the `create_version` bundle branch already flow through — after `parse_code_driven_manifest`, call `validate_entrypoint_contract(files, manifest.entrypoint)`. Extraction and validation both happen **before any S3 write**, so a rejected bundle persists nothing (same guarantee 11.1 established; no new cleanup path needed).
-  - [ ] Do NOT touch the inline paths (`create_skill` inline branch, `create_version` inline branch) — the string-format `_ENTRYPOINT_RE` check inside `CodeDrivenHybridManifest` ([code_driven_hybrid.py:33-35,74-82](../../../velara-api/app/services/code_driven_hybrid.py#L33)) remains their only entrypoint validation (AC3; see "Contract boundary" in Dev Notes).
-- [ ] **Task 4 — Execution: fetch the bundle manifest at run time (AC2) — `execution_service.py`**
-  - [ ] In `_run_hybrid`, before the artifact fetch ([execution_service.py:698-700](../../../velara-api/app/services/execution_service.py#L698)): branch on `current_ver.is_bundle`. For a bundle, the manifest is a *member*, not the artifact: `manifest_path = find_manifest_path([m["path"] for m in current_ver.artifact_set])`, then `storage.get(f"{current_ver.artifact_key}/{manifest_path}")` (artifact_key is the bundle **prefix** for bundle versions — [skill.py:199-204](../../../velara-api/app/models/skill.py#L199)). Registration guarantees a bundle is code-driven, so parse with `parse_code_driven_manifest` directly and dispatch to `_run_code_driven_hybrid`; defensively map an absent/None `manifest_path` or empty `artifact_set` to `CodeDrivenExecutionError` (tampered/legacy row), never an unhandled exception.
-  - [ ] Thread the bundle identity through to the executor: pass `bundle_prefix=current_ver.artifact_key` and `artifact_set=current_ver.artifact_set` (new optional keyword params, default None) from `_run_code_driven_hybrid` into `run_code_driven_hybrid`. The prompt (429) and code (543) fetch sites are untouched — bundles are hybrid-only (11.1 review patch enforced `runtime_type == "hybrid"`).
-- [ ] **Task 5 — Executor: replace the Step-2 no-op with real bundle materialization (AC2, AC4) — `code_driven_executor.py`**
-  - [ ] In `run_code_driven_hybrid` Step 2 ([code_driven_executor.py:198-205](../../../velara-api/app/services/code_driven_executor.py#L198)): when `artifact_set` is provided, for each member: `skill_storage.get(f"{bundle_prefix}/{path}")` via `run_in_threadpool`, **verify `hashlib.sha256(bytes).hexdigest() == member["sha256"]`** (mismatch → `CodeDrivenExecutionError("Bundle artifact integrity check failed.")` — AC4), re-check the path with `_is_path_safe` from bundle_extractor before any filesystem join (defense-in-depth: extraction guaranteed canonical paths at registration, but the DB row is trusted-at-a-distance), then write to `workspace/bundle/{path}` (`os.makedirs(dirname, exist_ok=True)`; reuse `_write_bytes_sync`). Materialize under `workspace/bundle/` — NOT the workspace root, which already holds `runner.py`/`requirements.txt`/`venv/` (a member named `runner.py` must not collide with ours).
-  - [ ] `bundle_dir = os.path.join(workspace, "bundle", package_root)` where `package_root` comes from `resolve_entrypoint_module(paths, manifest.entrypoint)` — the SAME helper registration used (Task 1 symmetry). The entrypoint subprocess already runs with `cwd=bundle_dir` (line 390) — keep that.
-  - [ ] Make the import actually resolve: `python runner.py` puts the *script's* directory (workspace) on `sys.path`, not the cwd — so add ONE line to `_RUNNER_SCRIPT`: `sys.path.insert(0, os.getcwd())` (plus the `os` import). Harmless for the legacy inline path (cwd was already the workspace). Note `_RUNNER_SCRIPT` is an f-string — any literal braces need doubling (none required for this line).
-  - [ ] When `artifact_set` is None (legacy inline manifest skill): behavior byte-for-byte identical to today — `bundle_dir = workspace`, requirements-lockfile install mechanism unchanged (AC3). Steps 3-10 (venv, pip install of `manifest.requirements`, secrets, inputs, runner, envelope, persist, cleanup) are all unchanged for both paths — a bundle's pinned deps still install from the lockfile; the bundle's own code is now imported from `bundle_dir` instead of needing to be pip-installable.
-  - [ ] Log per 11.1 discipline: member count + total bytes materialized + duration; never member bytes; member *paths* are acceptable in error messages (11.1 precedent: `InvalidBundleError` names paths).
-- [ ] **Task 6 — Tests (AC: all)**
-  - [ ] **Unit `tests/unit/services/test_entrypoint_contract.py` (NEW)** — pure Python, no DB/S3:
+  - [x] NEW `EntrypointContractViolationError(VelaraHTTPException)` — 422, stable code `ENTRYPOINT_CONTRACT_VIOLATION`, mirroring `InvalidBundleError` ([bundle_extractor.py:67-78](../../../velara-api/app/services/bundle_extractor.py#L67)). Keep it distinct from `INVALID_CODE_DRIVEN_MANIFEST` (manifest fields are fine; the *code* doesn't conform) and from `INVALID_BUNDLE` (zip structure is fine). **This code is load-bearing for Story 11.3:** the AI integration assistant triggers on exactly this signal — never rename it, never fold it into an existing code.
+  - [x] Register `ERROR_CODE_ENTRYPOINT_CONTRACT_VIOLATION = "ENTRYPOINT_CONTRACT_VIOLATION"` in the [execution_tasks.py](../../../velara-api/app/workers/execution_tasks.py) constants block, exactly as `ERROR_CODE_INVALID_BUNDLE` was catalogued there in 11.1 (registration-path codes live alongside for the same reason — see the comment at execution_tasks.py:53).
+- [x] **Task 3 — Hook validation into bundle registration (AC1, AC3) — `skill_service.py`, one seam**
+  - [x] In `_process_bundle` ([skill_service.py:371-385](../../../velara-api/app/services/skill_service.py#L371)) — the single choke point both `_create_skill_from_bundle` and the `create_version` bundle branch already flow through — after `parse_code_driven_manifest`, call `validate_entrypoint_contract(files, manifest.entrypoint)`. Extraction and validation both happen **before any S3 write**, so a rejected bundle persists nothing (same guarantee 11.1 established; no new cleanup path needed).
+  - [x] Do NOT touch the inline paths (`create_skill` inline branch, `create_version` inline branch) — the string-format `_ENTRYPOINT_RE` check inside `CodeDrivenHybridManifest` ([code_driven_hybrid.py:33-35,74-82](../../../velara-api/app/services/code_driven_hybrid.py#L33)) remains their only entrypoint validation (AC3; see "Contract boundary" in Dev Notes).
+- [x] **Task 4 — Execution: fetch the bundle manifest at run time (AC2) — `execution_service.py`**
+  - [x] In `_run_hybrid`, before the artifact fetch ([execution_service.py:698-700](../../../velara-api/app/services/execution_service.py#L698)): branch on `current_ver.is_bundle`. For a bundle, the manifest is a *member*, not the artifact: `manifest_path = find_manifest_path([m["path"] for m in current_ver.artifact_set])`, then `storage.get(f"{current_ver.artifact_key}/{manifest_path}")` (artifact_key is the bundle **prefix** for bundle versions — [skill.py:199-204](../../../velara-api/app/models/skill.py#L199)). Registration guarantees a bundle is code-driven, so parse with `parse_code_driven_manifest` directly and dispatch to `_run_code_driven_hybrid`; defensively map an absent/None `manifest_path` or empty `artifact_set` to `CodeDrivenExecutionError` (tampered/legacy row), never an unhandled exception.
+  - [x] Thread the bundle identity through to the executor: pass `bundle_prefix=current_ver.artifact_key` and `artifact_set=current_ver.artifact_set` (new optional keyword params, default None) from `_run_code_driven_hybrid` into `run_code_driven_hybrid`. The prompt (429) and code (543) fetch sites are untouched — bundles are hybrid-only (11.1 review patch enforced `runtime_type == "hybrid"`).
+- [x] **Task 5 — Executor: replace the Step-2 no-op with real bundle materialization (AC2, AC4) — `code_driven_executor.py`**
+  - [x] In `run_code_driven_hybrid` Step 2 ([code_driven_executor.py:198-205](../../../velara-api/app/services/code_driven_executor.py#L198)): when `artifact_set` is provided, for each member: `skill_storage.get(f"{bundle_prefix}/{path}")` via `run_in_threadpool`, **verify `hashlib.sha256(bytes).hexdigest() == member["sha256"]`** (mismatch → `CodeDrivenExecutionError("Bundle artifact integrity check failed.")` — AC4), re-check the path with `_is_path_safe` from bundle_extractor before any filesystem join (defense-in-depth: extraction guaranteed canonical paths at registration, but the DB row is trusted-at-a-distance), then write to `workspace/bundle/{path}` (`os.makedirs(dirname, exist_ok=True)`; reuse `_write_bytes_sync`). Materialize under `workspace/bundle/` — NOT the workspace root, which already holds `runner.py`/`requirements.txt`/`venv/` (a member named `runner.py` must not collide with ours).
+  - [x] `bundle_dir = os.path.join(workspace, "bundle", package_root)` where `package_root` comes from `resolve_entrypoint_module(paths, manifest.entrypoint)` — the SAME helper registration used (Task 1 symmetry). The entrypoint subprocess already runs with `cwd=bundle_dir` (line 390) — keep that.
+  - [x] Make the import actually resolve: `python runner.py` puts the *script's* directory (workspace) on `sys.path`, not the cwd — so add ONE line to `_RUNNER_SCRIPT`: `sys.path.insert(0, os.getcwd())` (plus the `os` import). Harmless for the legacy inline path (cwd was already the workspace). Note `_RUNNER_SCRIPT` is an f-string — any literal braces need doubling (none required for this line).
+  - [x] When `artifact_set` is None (legacy inline manifest skill): behavior byte-for-byte identical to today — `bundle_dir = workspace`, requirements-lockfile install mechanism unchanged (AC3). Steps 3-10 (venv, pip install of `manifest.requirements`, secrets, inputs, runner, envelope, persist, cleanup) are all unchanged for both paths — a bundle's pinned deps still install from the lockfile; the bundle's own code is now imported from `bundle_dir` instead of needing to be pip-installable.
+  - [x] Log per 11.1 discipline: member count + total bytes materialized + duration; never member bytes; member *paths* are acceptable in error messages (11.1 precedent: `InvalidBundleError` names paths).
+- [x] **Task 6 — Tests (AC: all)**
+  - [x] **Unit `tests/unit/services/test_entrypoint_contract.py` (NEW)** — pure Python, no DB/S3:
     - Conforming: exact three params; extra params with defaults; keyword-only forms (`*, params={}` variants); `**kwargs` catch-all; decorated def; `params` without annotation (annotations must NOT matter).
     - Non-conforming (each asserting the specific message + `ENTRYPOINT_CONTRACT_VIOLATION`): missing one of the three params; positional-only `input_path`; extra required param; `async def`; entrypoint not found; found-as-import-alias (`from .impl import run`); found-as-class; module file absent from bundle; unparseable module.
     - `resolve_entrypoint_module`: bundle-root `a/b.py`; package `a/b/__init__.py`; `src/` layout; single-top-dir wrap; single-top-dir + `src/`; not-found → None. `find_manifest_path`: parity cases with the existing `find_manifest` tests.
-  - [ ] **Unit `tests/unit/services/test_code_driven_executor.py` (EXTEND)** — mock storage: materialization writes every member under `workspace/bundle/` preserving relative dirs; sha256 mismatch → `CodeDrivenExecutionError`; unsafe recorded path (e.g. `../x` planted in artifact_set) rejected; `artifact_set=None` leaves Step 2 as the no-op (`bundle_dir == workspace`).
-  - [ ] **Integration `tests/integration/api/test_skills.py` (EXTEND)** — reuse 11.1's bundle-test helpers (`_auth_headers("ma_tech")`, staged-key flow, in-memory zip builders): conforming bundle → 201; signature-mismatch bundle (named-kwargs entrypoint à la the real extractor) → 422 `ENTRYPOINT_CONTRACT_VIOLATION`, nothing persisted; entrypoint-module-absent bundle → 422; inline code-driven create/version still 201 with **no** signature check (AC3); LLM-driven hybrid + prompt/code registration untouched (existing tests must pass unmodified).
-  - [ ] **Integration `tests/integration/api/test_code_driven_execution.py` (EXTEND)** — the deferred-work.md:388 closure test: register a skill from a real ZIP bundle whose entrypoint module lives IN the bundle (not pip-installed), invoke it, assert the job succeeds with a valid envelope. Manifest `requirements` can be `"# no external deps\n"` — non-empty (passes manifest validation) and `pip install -r` of a comment-only file succeeds, so no editable-install scaffolding is needed for the bundle path. Follow the existing file's venv-based E2E template + Docker skip guard.
-- [ ] **Task 7 — Gates**
-  - [ ] `ruff check .` clean. Rebuild the api image (`docker compose build api` — it bakes source) then full suite in-container: `docker compose run --rm -e AUTH_BACKEND=dev api python -m pytest` — baseline 1138 passed; only the 3 known pre-existing `test_ingest.py` MinIO-in-container failures are acceptable.
-  - [ ] `AUTH_BACKEND=dev .venv/bin/python scripts/export_openapi.py` on the host — expect **no diff** in `docs/api-spec.json` (no new endpoints/schemas; if a diff appears, something widened scope — investigate before committing).
-  - [ ] No migration (no schema change), no FE changes, no new config — if you are adding any of these, re-read the scope locks.
+  - [x] **Unit `tests/unit/services/test_code_driven_executor.py` (EXTEND)** — mock storage: materialization writes every member under `workspace/bundle/` preserving relative dirs; sha256 mismatch → `CodeDrivenExecutionError`; unsafe recorded path (e.g. `../x` planted in artifact_set) rejected; `artifact_set=None` leaves Step 2 as the no-op (`bundle_dir == workspace`).
+  - [x] **Integration `tests/integration/api/test_skills.py` (EXTEND)** — reuse 11.1's bundle-test helpers (`_auth_headers("ma_tech")`, staged-key flow, in-memory zip builders): conforming bundle → 201; signature-mismatch bundle (named-kwargs entrypoint à la the real extractor) → 422 `ENTRYPOINT_CONTRACT_VIOLATION`, nothing persisted; entrypoint-module-absent bundle → 422; inline code-driven create/version still 201 with **no** signature check (AC3); LLM-driven hybrid + prompt/code registration untouched (existing tests must pass unmodified).
+  - [x] **Integration `tests/integration/api/test_code_driven_execution.py` (EXTEND)** — the deferred-work.md:388 closure test: register a skill from a real ZIP bundle whose entrypoint module lives IN the bundle (not pip-installed), invoke it, assert the job succeeds with a valid envelope. Manifest `requirements` can be `"# no external deps\n"` — non-empty (passes manifest validation) and `pip install -r` of a comment-only file succeeds, so no editable-install scaffolding is needed for the bundle path. Follow the existing file's venv-based E2E template + Docker skip guard.
+- [x] **Task 7 — Gates**
+  - [x] `ruff check .` clean. Rebuild the api image (`docker compose build api` — it bakes source) then full suite in-container: `docker compose run --rm -e AUTH_BACKEND=dev api python -m pytest` — baseline 1138 passed; only the 3 known pre-existing `test_ingest.py` MinIO-in-container failures are acceptable.
+  - [x] `AUTH_BACKEND=dev .venv/bin/python scripts/export_openapi.py` on the host — expect **no diff** in `docs/api-spec.json` (no new endpoints/schemas; if a diff appears, something widened scope — investigate before committing).
+  - [x] No migration (no schema change), no FE changes, no new config — if you are adding any of these, re-read the scope locks.
 
 ## Dev Notes
 
@@ -187,8 +187,66 @@ velara-api HEAD is `007e50d` ("fix(skills): Story 11.1 code review — bundle_ke
 
 ### Agent Model Used
 
+claude-sonnet-5
+
 ### Debug Log References
+
+- One iteration bug during test authoring: the initial materialization unit test asserted
+  `os.path.isfile(bundle_dir/...)` *after* `run_code_driven_hybrid` returned — but the executor's
+  `finally` block already `shutil.rmtree`'s the workspace by then, so the assertion always failed
+  on an already-deleted path. Fixed by snapshotting the bundle_dir file listing from inside the
+  fake `_run_subprocess_capture` (before teardown), not after the call returns.
+- One pre-existing-test regression bug: `_make_skill()` in `test_execution_service.py` builds
+  `ver = MagicMock()` for the skill's current version; an unset `MagicMock` attribute is truthy,
+  so the new `if current_ver.is_bundle:` branch in `_run_hybrid` was incorrectly taken for every
+  existing hybrid-runtime test. Fixed by pinning `ver.is_bundle = False` on the shared fixture.
 
 ### Completion Notes List
 
+- Implemented both mandatory halves in one story: (1) AC1/AC3/AC4 — static
+  callable-signature validation of a ZIP bundle's declared entrypoint against
+  the canonical `run(input_path, output_dir, params)` contract, enforced at
+  registration only (never at the inline manifest-only path); (2) AC2 — the
+  code_driven_executor Step-2 no-op is replaced with real bundle materialization
+  (sha256-verified, `_is_path_safe` re-checked, written under `workspace/bundle/`),
+  closing the 11.1-review deferral so a bundle skill now runs E2E instead of
+  dying with botocore NoSuchKey.
+- `resolve_entrypoint_module` is the single shared package-root resolver used by
+  both the registration validator (Task 2/3) and the executor (Task 5) —
+  registration/run symmetry is structurally guaranteed by construction, not by
+  convention alone.
+- `ENTRYPOINT_CONTRACT_VIOLATION` registered as a new stable 422 error code,
+  kept fully distinct from `INVALID_BUNDLE` and `INVALID_CODE_DRIVEN_MANIFEST`
+  per the story's load-bearing requirement for Story 11.3.
+- Existing `_BUNDLE_MEMBERS` integration-test fixture in `test_skills.py` used a
+  `def run(params)` entrypoint that is non-conforming under the new contract;
+  updated it to the canonical `run(input_path, output_dir, params)` shape so the
+  ~10 pre-existing bundle tests unrelated to entrypoint-contract behavior
+  continue to exercise their own concerns (INVALID_BUNDLE, HYBRID_SHAPE_MISMATCH,
+  etc.) without incidentally tripping the new AC1 check.
+- `bundle_dir` is normalized with `os.path.normpath` after joining
+  `bundle_root + package_root` — `resolve_entrypoint_module` can return a root
+  with a trailing slash (e.g. `"myskill/"`), which without normalization would
+  leave a trailing-slash cwd; harmless for `subprocess.run(cwd=...)` but
+  normalized for cleanliness and stable test assertions.
+- Gates: `ruff check .` clean repo-wide; full in-container suite 1178 passed / 3
+  failed (the 3 pre-existing `test_ingest.py` MinIO-in-container failures —
+  unchanged from the documented baseline, unrelated to this story); host
+  `export_openapi.py` produced **zero diff** in `docs/api-spec.json` (confirms
+  no endpoint/schema surface changed, as scoped). No migration, no FE changes,
+  no new config were introduced.
+
 ### File List
+
+- `velara-api/app/services/entrypoint_contract.py` (NEW)
+- `velara-api/app/services/bundle_extractor.py` (MODIFIED — extracted `find_manifest_path`)
+- `velara-api/app/services/skill_service.py` (MODIFIED — `_process_bundle` hook)
+- `velara-api/app/services/execution_service.py` (MODIFIED — `_run_hybrid` bundle branch + `_run_code_driven_hybrid` pass-through)
+- `velara-api/app/services/code_driven_executor.py` (MODIFIED — Step-2 materialization + `_RUNNER_SCRIPT` sys.path line)
+- `velara-api/app/workers/execution_tasks.py` (MODIFIED — new error-code constant)
+- `velara-api/tests/unit/services/test_entrypoint_contract.py` (NEW)
+- `velara-api/tests/unit/services/test_bundle_extractor.py` (MODIFIED — `find_manifest_path` parity tests)
+- `velara-api/tests/unit/services/test_code_driven_executor.py` (MODIFIED — bundle materialization tests)
+- `velara-api/tests/unit/services/test_execution_service.py` (MODIFIED — pinned `ver.is_bundle = False` on the shared skill fixture)
+- `velara-api/tests/integration/api/test_skills.py` (MODIFIED — entrypoint-contract integration tests + conforming `_BUNDLE_MEMBERS` fixture)
+- `velara-api/tests/integration/api/test_code_driven_execution.py` (MODIFIED — bundle-skill E2E closure test)
