@@ -1,11 +1,13 @@
 # Epic 12: Skill & Audit Lifecycle Polish
 
 > **Created 2026-07-06** via correct-course (see `planning-artifacts/sprint-change-proposal-2026-07-06.md`). A batch of independent, high-value fixes to skill authoring and the audit surface, **decoupled from Epic 11** so they ship on their own cadence. Every item is grounded in a source audit of both repos (`velara-api`, `velara-web`) — the reality (exists vs. net-new) is noted per story so scope is honest. None depend on Epic 11's architecture; this epic can run in parallel with or ahead of it. Suggested order: 12.1 (trivial) → 12.2 → 12.3 → 12.4.
+>
+> **Reopened 2026-07-09** via correct-course (see `planning-artifacts/sprint-change-proposal-2026-07-09.md`) to add **Story 12.5** — audit coverage for skill-authoring & ingest mutations. A **live compliance gap in deployed dev** (a created skill wrote no audit event) that is thematically at home here, in the audit-lifecycle epic, rather than in Epic 11 (AI integration). 12.5 has no dependency on 12.1–12.4 and can be picked up on its own.
 
-A batch of independent fixes: a location-dependent authoring control, human-readable audit context names, distinct audit event icons, and a duplicate-run cost warning.
+A batch of independent fixes: a location-dependent authoring control, human-readable audit context names, distinct audit event icons, a duplicate-run cost warning, and audit coverage for the previously-unaudited skill-authoring & ingest mutations.
 
-**FRs covered:** REG-10, USE-07, USE-08 (P2), INV-10 (P2) (new — `sprint-change-proposal-2026-07-06.md`).
-**Sequencing:** Independent of Epic 11 — can start immediately. Suggested order 12.1 → 12.2 → 12.3 → 12.4.
+**FRs covered:** REG-10, USE-07, USE-08 (P2), INV-10 (P2) (new — `sprint-change-proposal-2026-07-06.md`); audit-coverage remediation (new — `sprint-change-proposal-2026-07-09.md`).
+**Sequencing:** Independent of Epic 11 — can start immediately. Suggested order 12.1 → 12.2 → 12.3 → 12.4 → 12.5. **12.5 is a compliance-gap remediation** — prioritize it ahead of remaining Epic 11 *feature* work if audit completeness is a release gate (user to confirm at pickup).
 
 ---
 
@@ -102,3 +104,44 @@ So that I don't spend AI budget on a duplicate.
 **Given** the hook point
 **When** the check runs
 **Then** it is evaluated in `queue_invocation` before `create_job` (or a pre-flight endpoint the Run Console calls), hashing the already-available inputs payload — advisory only, never blocking a deliberate re-run
+
+---
+
+## Story 12.5: Audit Coverage for Skill-Authoring & Ingest Mutations
+
+> **Added 2026-07-09** via correct-course (see `planning-artifacts/sprint-change-proposal-2026-07-09.md`). **Reopens Epic 12** (all 12.1–12.4 done). Discovered live in **deployed dev**: creating a skill produced **no audit event** — only its later *execution* was logged. Belongs here (the "Audit Lifecycle" epic), not Epic 11 — this is an observability/compliance concern, orthogonal to AI-assisted integration.
+
+As a compliance reviewer (and any admin/ma_tech operator),
+I want every skill-authoring and document-ingest mutation to write an audit event, the same way execution, grants, certification, lifecycle, and provisioning already do,
+So that "who created/changed/derived this skill, and who uploaded this document, and when" is answerable from the audit log — not a blind spot.
+
+> **Reality (source-audited 2026-07-09, `velara-api`):** the audit layer was built **execution-first** (Epic 9) and admin-mutation coverage was added **piecemeal, per-story**, only where a story called for it — grants (Epic 8), lifecycle + certification (Epic 9), provisioning (Epic 10), adapter-propose (11.3). **Skill authoring and ingest were never on any story's audit checklist** and fell through the seam between epics. Confirmed **unaudited** mutations, with severity:
+> - `create_skill` ([skill_service.py:617](../../../velara-api/app/services/skill_service.py#L617)) — **HIGH**: a new skill (incl. client-facing) enters the system with zero audit trail.
+> - `create_version` ([skill_service.py:951](../../../velara-api/app/services/skill_service.py#L951)) — **HIGH**: a new immutable version is a content change with no who/when.
+> - `update_skill_metadata` ([skill_service.py:1174](../../../velara-api/app/services/skill_service.py#L1174)) — **MEDIUM**: `visibility`/`output_format` are editable; flipping `visibility` to `client_facing` is an access-surface change, unlogged.
+> - `derive_skill` ([skill_service.py:1226](../../../velara-api/app/services/skill_service.py#L1226)) — **MEDIUM**: creates a paired client-facing skill — IP-boundary-relevant — unlogged.
+> - document ingest ([ingest_service.py](../../../velara-api/app/services/ingest_service.py) / [api/v1/ingest.py](../../../velara-api/app/api/v1/ingest.py)) — **MEDIUM–HIGH**: client protocol documents (potential PHI) are uploaded with no audit record of the upload.
+>
+> **Already audited (working, for contrast — do not touch):** `invocation.success/.failure/.cancelled/.blocked/.fan_out`; `admin.grant_created/.grant_reaffirmed/.grant_revoked`; `admin.lifecycle_transition`; `admin.certification`; `admin.user_provisioned/.user_invite_resent`; `admin.skill_adapter_proposed`. **Thin BE, additive, no migration** — the `audit_log` table + `org_id` column (migration 0020) already carry everything; new event types reuse the existing `record_admin_action` seam. **No FE work** — the 9.3 audit viewer renders any event type generically, so new events surface automatically (icon coverage is the only FE follow-on, and it rides Story 12.3's existing `eventTypeIconMeta.ts` map).
+
+**Acceptance Criteria:**
+
+**Given** an admin/ma_tech operator creates a skill (`create_skill`) or a new version (`create_version`)
+**When** the mutation commits
+**Then** a new `admin.skill_created` / `admin.skill_version_created` audit event is written **best-effort** (mirrors the existing try/except + `logger.warning` pattern at [skill_service.py:923-946](../../../velara-api/app/services/skill_service.py#L923) — an audit-write failure must **never** roll back the successful mutation), carrying at minimum `skill_id`, `version`, `runtime_type`, `visibility`, and the acting `user_id`/`org_id`
+
+**Given** a skill-metadata edit (`update_skill_metadata`) or a client-skill derivation (`derive_skill`)
+**When** it commits
+**Then** a corresponding new `admin.skill_updated` / `admin.skill_derived` event is written best-effort, capturing what changed (e.g. old→new `visibility`) for the edit, and the parent/derived skill IDs for the derivation
+
+**Given** a document is ingested (client protocol upload)
+**When** the upload/confirm completes
+**Then** an `admin.document_ingested` event is written best-effort, recording the acting user, org, and a document reference — **never the document bytes or filename content beyond an ID/reference** (IP/PHI discipline: name the location, never the content, per the existing audit-write invariants)
+
+**Given** the full set of admin/mutation service functions
+**When** the test suite runs
+**Then** a **guard/regression test fails CI if any admin-mutation entry point lacks an audit write** — so this class of gap cannot silently reopen (the anti-regression mechanism is the point of the story, not just backfilling today's five holes)
+
+**Given** any of the new events
+**When** it is written
+**Then** it reuses the **existing** `audit_service.record_admin_action` seam with `hierarchy_path="org"` (skills are org-global, not hierarchy-scoped — mirrors every existing admin event); **no new migration, no new DB column, no new audit-write mechanism** is introduced
