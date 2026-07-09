@@ -4,7 +4,7 @@ baseline_commit: 1fdf2d6 (velara-api) / 179251d (velara-web)
 
 # Story 11.9: AI-Assisted Manifest Generation for Unmanifested Client Bundles
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
