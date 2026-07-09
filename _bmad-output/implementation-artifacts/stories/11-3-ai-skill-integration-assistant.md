@@ -4,7 +4,7 @@ baseline_commit: 058bd69 (velara-api)
 
 # Story 11.3: AI Skill Integration Assistant (Propose → Human-Approve, Adapter-Only)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -101,6 +101,19 @@ so that I don't hand-write a shim — and I stay in control of what registers.
   - [x] `AUTH_BACKEND=dev .venv/bin/python scripts/export_openapi.py` on the host — expect a diff this time (unlike 11.2): ONE new endpoint (`POST /api/v1/skills/integration-assistant/propose`) + its response schema. No OTHER endpoint/schema changes — if the diff shows anything beyond that, investigate before committing.
   - [x] FE: `npm run typecheck` / `npm run lint` / `npm run test` (vitest) clean — baseline after 11.2 (backend-only) is unchanged from 11.1's FE baseline: typecheck 0, lint 1 pre-existing `Icon.tsx` warning, vitest 595 + new tests from this story.
   - [x] No migration expected (manifest's `ai_adapted` field lives in the existing JSON manifest blob stored as part of the bundle artifact, not a new DB column — confirm no schema change is introduced; if a migration seems necessary, stop and re-read the ADR's "changes no prior decision" framing before adding one).
+
+### Review Findings
+
+- [x] [Review][Patch] `_extract_entrypoint_module` doesn't catch `SyntaxError`/`UnicodeDecodeError`/`ValueError`/`RecursionError` from `ast.parse`/`.decode("utf-8-sig")` [app/services/skill_integration_assistant.py:222-224] — unlike its sibling `validate_entrypoint_contract` ([app/services/entrypoint_contract.py:155-168](../../../velara-api/app/services/entrypoint_contract.py#L155)), which explicitly maps these to a clean 422. Fixed by mirroring the identical try/except pattern (same decode + parse guards, same fail-closed `_violation()` call).
+- [x] [Review][Patch] Raw Anthropic SDK exceptions (timeout/429/`APIError`) from `llm_provider.complete()` propagate uncaught through `propose_adapter` and the endpoint [app/services/skill_integration_assistant.py:317], [app/api/v1/skills.py:195-201]. Fixed: new `AdapterProposalLlmError` (502, `ADAPTER_PROPOSAL_LLM_ERROR`) wraps the call, catching `anthropic.APIError` (the SDK's common base for timeouts/rate-limits/connection/status errors).
+- [x] [Review][Patch] FE `AIAdapterReview.tsx`'s `approve()` silently skips ZIP members listed in `proposal.core_files_unchanged` but missing from the re-read `bundleFile` [src/features/skills/components/AIAdapterReview.tsx:1789-1792]. Fixed: missing member now throws a clear error surfaced via the existing error phase, instead of silently proceeding with an incomplete bundle.
+- [x] [Review][Patch] FE stuck-state when `readBundleEntrypoint` returns `null` (unparseable ZIP / manifest lacks a string `entrypoint`) [src/features/skills/components/SkillForm.tsx:1659,1674]. Fixed: `bundleEntrypoint` is now tri-state (`undefined` = still resolving, `null` = resolved but failed, `string` = ready) — a resolved-null result now renders an explicit error message instead of a dead, clickable button; still-resolving disables the button rather than leaving it silently inert.
+- [x] [Review][Patch] FE `approve()` hardcodes the literal key `'manifest.json'` as the write path [src/features/skills/components/AIAdapterReview.tsx:1794], ignoring the backend's correctly-resolved `manifest_path`. Fixed per user-selected resolution: `manifest_path` is now a required field on `AdapterProposalResponse`/`AdapterProposal` (backend schema + endpoint construction) and the FE writes to `proposal.manifest_path` instead of the hardcoded literal.
+- [x] [Review][Defer] `_extract_entrypoint_module`'s "last top-level `FunctionDef` wins" walk is narrower than `validate_entrypoint_contract`'s broader last-binding walk (also considers `ClassDef`/`Assign`/`ImportFrom` reassignment of the same name) [app/services/skill_integration_assistant.py:226-229] vs [app/services/entrypoint_contract.py:174-189] — deferred, pre-existing asymmetry; only affects proposal quality (which signature the LLM is prompted with), never registration safety since the final bundle is always independently re-validated.
+- [x] [Review][Defer] `updated_manifest` returned to the FE for review is never validated against `CodeDrivenHybridManifest`/`parse_code_driven_manifest` before being shown [app/services/skill_integration_assistant.py:277] — deferred; a malformed AI-proposed manifest field only surfaces at registration-time, an awkward but non-blocking UX gap since registration re-validates regardless.
+- [x] [Review][Defer] `max_tokens` is a hardcoded local default (4096) rather than sourced from `settings.ANTHROPIC_MAX_TOKENS` [app/services/skill_integration_assistant.py:292] — deferred; within Task 1's literal guidance ("generous, e.g. 4096"), but diverges from the Dev Notes' "exact call shape to reuse" precedent. A config-consistency nice-to-have, not a bug.
+
+**Post-patch gate re-run (2026-07-09):** all 4 patches applied and verified. BE: `docker compose build api` (rebuilt with patches) + full in-container suite `1210 passed` (3 known pre-existing `test_ingest.py` MinIO failures only — baseline unchanged); `ruff check .` clean; `export_openapi.py` diff is exactly the new `manifest_path` field on `AdapterProposalResponse` (no other schema/endpoint changes). FE: `npm run typecheck` 0 errors; `npm run lint` 1 pre-existing `Icon.tsx` warning (baseline unchanged); `npm run test` 605/605 passed (baseline unchanged — `AIAdapterReview.test.tsx` fixture updated with the new required `manifest_path` field).
 
 ## Dev Notes
 
