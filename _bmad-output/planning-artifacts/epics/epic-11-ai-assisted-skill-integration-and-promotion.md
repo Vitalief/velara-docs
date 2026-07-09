@@ -5,7 +5,7 @@
 Vitalief can on-board a client-provided skill onto the platform with AI assistance — the platform proposes a standardized adapter + manifest so the skill fits the runtime contract **without changing what the skill does** — register true multi-file ZIP bundles, author new versions from the UI, run an older version to compare outputs, and promote certified skills to higher environments (export/import in Phase 1; in-app promote as the Phase-2 target). Replaces the per-skill hand-written adapter shim (Epic 5.5) with a standardized contract + an AI integration assistant.
 
 **FRs covered:** SKL-01, SKL-02, SKL-03, SKL-04, SKL-05, SKL-06 (P2), SKL-07, SKL-08 (new — `sprint-change-proposal-2026-07-06.md`), REG-01 (amended — multi-file ZIP bundle now built), REG-02 (amended — draft-mutable versioning; published versions still immutable), EXE-03 (adjacent — code-driven entrypoint contract standardized).
-**Sequencing:** After Epic 10. **Architecture-gated** — Winston authors three ADR blocks (AI-integration seam; promotion/bundle portability; draft-mutable versioning) before the dependent stories are detailed. Recommended order: 11.1 → 11.2 → 11.6 → 11.3 → 11.4 → 11.7 → 11.5.
+**Sequencing:** After Epic 10. **Architecture-gated** — Winston authors three ADR blocks (AI-integration seam; promotion/bundle portability; draft-mutable versioning) before the dependent stories are detailed. Recommended order: 11.1 → 11.2 → 11.6 → 11.3 → 11.9 → 11.4 → 11.7 → 11.5.
 
 **Two safety guarantees make the AI centerpiece trustworthy (baked into the ACs, not aspirational):**
 1. **Structural** — the AI authors *only* the adapter shim + manifest; the skill's core logic files are stored **byte-for-byte unchanged** (content-addressed checksums prove it). "Without changing what it does" is a mechanical invariant.
@@ -85,6 +85,42 @@ So that I don't hand-write a shim — and I stay in control of what registers.
 **Given** the `velara-protocol-extractor` reference case
 **When** the assistant is run against it
 **Then** it can reproduce the `params`-dict → named-kwargs adapter that was hand-written in Epic 5.5 (the worked acceptance anchor)
+
+---
+
+## Story 11.9: AI-Assisted Manifest Generation for Unmanifested Client Bundles
+
+As an MA Tech developer on-boarding a client-provided skill that ships with **no Velara-shaped manifest at all** (or a non-conforming one),
+I want the platform to detect the missing manifest and PROPOSE a schema-valid `manifest.json` — alongside the adapter, in the same review — so I can upload the client's bundle as-is,
+So that on-boarding a raw client deliverable does not require a developer to hand-author manifest JSON before the AI-assist flow (Story 11.3) can even engage.
+
+> **Scope note (locked at story creation — do not re-litigate):** This story CLOSES the gap between Epic-11 AC1's promise ("generates a proposed adapter shim **+ manifest**") and Story 11.3's narrower delivery (which only *patched an existing* manifest's `entrypoint`). It is the completion of the AI-assist capability 11.3 started — the two are a pair. **Inference depth is deliberately minimal (locked):** the AI infers ONLY the `entrypoint` (detected from bundle code via the existing `resolve_entrypoint_module` static analysis) and `requirements` (the bundle's lockfile verbatim); `output_schema` is emitted as a clearly-labeled **human-fill stub** and `schema_version` as a default. The AI does NOT author the output contract — that stays a human responsibility, preserving 11.3's minimal-trust / IP-discipline boundary (the assistant does not perform whole-bundle return-type analysis). This mechanically mirrors the interim `scripts/scaffold_manifest.py` tool, promoted into the in-app propose flow.
+
+**Acceptance Criteria:**
+
+**Given** a bundle that contains skill code but no `manifest.json` at any recognized location (bundle-root or single-root-wrapped `*/manifest.json`, per `bundle_extractor.find_manifest`)
+**When** I attempt to register it
+**Then** registration fails with a **distinct, stable error code** for the missing-manifest case (separate from `INVALID_CODE_DRIVEN_MANIFEST`, which means a manifest is present but malformed) — this new code is the trigger signal for this story's FE affordance, the same way `ENTRYPOINT_CONTRACT_VIOLATION` is 11.3's
+
+**Given** that missing-manifest registration failure
+**When** the FE surfaces it
+**Then** the SAME AI-adapt review panel introduced in Story 11.3 is offered (one review surface, two entry points) — no second, parallel review UI
+
+**Given** I request AI assistance on an unmanifested bundle
+**When** the propose call runs
+**Then** the assistant detects the entrypoint via the existing `resolve_entrypoint_module` static analysis (never importing/executing the untrusted bundle), reads the lockfile for `requirements`, and proposes a **schema-valid `manifest.json`** — with `output_schema` as an explicitly-labeled human-fill stub and a default `schema_version` — AND, if that detected entrypoint is itself non-conforming to the Story 11.2 contract, proposes the adapter in the SAME pass; the review shows the proposed manifest + (optional) adapter together
+
+**Given** the proposed manifest + adapter
+**When** I review them
+**Then** the same "adapter-only, core files byte-for-byte unchanged, checksum-proven" guarantee from Story 11.3 holds — the AI has authored ONLY the manifest and (if needed) the adapter; every other bundle member is unchanged and shown as such; nothing else is AI-modifiable
+
+**Given** I approve (optionally after editing the proposed manifest / adapter)
+**When** I confirm
+**Then** the assembled bundle (unchanged core files + proposed manifest + optional adapter) flows through the EXISTING, unmodified Story 11.1/11.2 bundle-registration path — including the registration-time `validate_entrypoint_contract` re-check — with no forked "AI register" branch; if I reject, nothing registers
+
+**Given** the raw, unmodified `velara-protocol-extractor` client deliverable (which ships no Velara-shaped manifest)
+**When** I upload it as-is and run the assistant
+**Then** the flow produces a schema-valid manifest pointing at `velara_extractor.plugin:run` AND the `params`-dict → named-kwargs adapter (the reference case now works end-to-end from the raw client bundle, not just from a pre-manifested one) — the worked acceptance anchor for this story
 
 ---
 
@@ -184,11 +220,12 @@ So that I can compare its output against the current version.
 | **11.2** Standardized entrypoint contract | Epic 5.5 executor (done) | The register-time signature check the AI assistant targets |
 | **11.6** UI new-version authoring | 11.1 (hybrid ZIP path) | Draft-mutable path + content editor; ZIP-new-version rides on 11.1 |
 | **11.3** AI integration assistant | 11.1, 11.2 | Analyzes bundles against the standardized contract; proposes the adapter |
+| **11.9** AI-assisted manifest generation | 11.1, 11.2, 11.3 | Completes Epic-11 AC1's "adapter shim **+ manifest**" promise 11.3 under-delivered; lets a raw, unmanifested client bundle upload as-is. Extends 11.3's propose flow + review UI |
 | **11.4** Export/import bundles | 11.1 | Serializes the multi-file bundle |
 | **11.7** Run older version to compare | Epic 5 invocation loop (done) | Independent — can slot anywhere after 11.1; needs versions to exist |
 | **11.5** In-app promote (Phase-2 design) | 11.4 | Export/import is the Phase-1 mechanism it supersedes later |
 
-**Recommended order:** 11.1 → 11.2 → 11.6 → 11.3 → 11.4 → 11.7 → 11.5. Per `create-story` discipline, each story is expanded to full implementation detail one at a time when picked up — these epic-level ACs are the contract, not the implementation plan.
+**Recommended order:** 11.1 → 11.2 → 11.6 → 11.3 → 11.9 → 11.4 → 11.7 → 11.5. Per `create-story` discipline, each story is expanded to full implementation detail one at a time when picked up — these epic-level ACs are the contract, not the implementation plan. **11.9 is a deliberate insert (2026-07-09):** discovered during real client-bundle on-boarding (the `velara-protocol-extractor` deliverable ships no Velara-shaped manifest) that 11.3's AI-assist only engages *after* a valid manifest exists — closing that gap is 11.9, scheduled immediately after 11.3 as the completion of the same capability.
 
 ## Architecture ADRs required before dev (Winston)
 
