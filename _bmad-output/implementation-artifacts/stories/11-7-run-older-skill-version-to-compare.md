@@ -4,7 +4,7 @@ baseline_commit: 5d61b11 (velara-api) / 90b628a (velara-web)
 
 # Story 11.7: Run an Older Skill Version to Compare (admin / ma_tech)
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
