@@ -204,7 +204,7 @@ development_status:
   11-3-ai-skill-integration-assistant: done
   11-9-ai-assisted-manifest-generation: done
   11-4-export-import-portable-skill-bundles: done
-  11-5-in-app-environment-promotion: backlog
+  11-5-in-app-environment-promotion: ready-for-dev
   11-6-author-new-skill-versions-from-ui: done
   11-7-run-older-skill-version-to-compare: done
   11-8-schema-driven-run-inputs-form: done
