@@ -145,3 +145,25 @@ Four independent, high-value fixes to skill authoring and the audit surface, **d
 **FRs covered:** REG-10, USE-07, USE-08 _(P2)_, INV-10 _(P2)_ _(new)_
 
 ---
+
+## Epic 13: Compliance — Audit Coverage, Access Lifecycle & Detective Controls
+
+<!-- Added 2026-07-13 from a HIPAA / SOC 2 gap analysis run against deployed code at HEAD cddc082. Authoritative story-able version: epics/epic-13-compliance-audit-and-access-controls.md. -->
+
+Closes the HIPAA / SOC 2 gaps a code-verified compliance gap analysis surfaced. **The one-line finding: the audit log is a write-path log — it records who *ran* a skill and who *granted* access, but never who *read* anything and never who *logged in* (or failed to).** Under HIPAA §164.312(b)/§164.528 and SOC 2 CC6, the read side is the half that matters most, and it is at zero. Separately, the platform has **no way to deprovision a user at all** (`AuthProvider` has no `disable_user`; `/users` has no DELETE) — not "unaudited," *absent* — and there is **no CloudTrail** (zero detective controls across all 15 `.tf` files).
+
+**Root cause (planning):** FR-SEC-08 names HIPAA and 21 CFR Part 11 as co-equal frameworks, but only Part 11 was ever decomposed into FRs (SEC-09/10/11/12 are all Part 11 clauses). HIPAA's Security Rule audit/accountability obligations were never turned into requirements, so no story carried them. Epic 13 adds the missing FRs.
+
+**Does NOT supersede Epic 12 / Story 12.5** (skill-authoring + ingest audit coverage + the anti-regression guard test) — 12.5 ships on its own cadence and its guard-test registry is the entry point several Epic 13 stories plug into.
+
+**Stories (to be detailed via create-story):**
+- 13.1 User deprovisioning (disable / revoke access) _(HIGH — no compensating control; first thing an auditor tests)_
+- 13.2 Audit the read path — PHI access & disclosure _(HIGH — §164.528 currently unanswerable)_
+- 13.3 Authentication & authorization event auditing _(HIGH — failed logins recorded nowhere)_
+- 13.4 Cloud detective controls (CloudTrail, access logging, Config) _(HIGH — Terraform; plan only, operator applies)_
+- 13.5 Close the remaining unaudited-mutation surface _(hierarchy CRUD, attachments, audit-log reads, sandbox probes)_
+- 13.6 HIPAA & SOC 2 control mapping documents _(finalize last — must describe what actually shipped)_
+
+**FRs covered:** FR-SEC-13, FR-SEC-14, FR-SEC-15, FR-SEC-16, FR-SEC-17 _(all new)_; strengthens FR-SEC-08 (the HIPAA half, previously undecomposed) and FR-SEC-09 (audit completeness)
+
+---
