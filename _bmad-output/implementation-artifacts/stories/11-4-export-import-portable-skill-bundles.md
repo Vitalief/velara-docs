@@ -4,7 +4,7 @@ baseline_commit: bfcf591 (velara-api) / 869d5d5 (velara-web)
 
 # Story 11.4: Export / Import Portable Skill Bundles
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
