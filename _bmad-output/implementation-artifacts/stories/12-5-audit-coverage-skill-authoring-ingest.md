@@ -4,7 +4,7 @@ baseline_commit: cddc082e9e9d5386073665ad52416a96201c8ccf
 
 # Story 12.5: Audit Coverage for Skill-Authoring & Ingest Mutations
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
