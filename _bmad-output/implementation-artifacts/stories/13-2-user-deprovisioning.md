@@ -4,7 +4,7 @@ baseline_commit: e7d7a8b
 
 # Story 13.2: User Deprovisioning (Disable / Revoke Access)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -306,6 +306,70 @@ Claude Sonnet 5 (claude-sonnet-5)
 
 **No migration. No new DB table or column.**
 
+## Review Findings (2026-07-14)
+
+Three adversarial layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor). **All 7 ACs judged MET.**
+**AC2 — the session kill — is genuinely implemented and genuinely tested, not faked.** `get_current_user` is the only
+`validate_token` call site in the app (no bypass seam), and the headline test mints a real unexpired token, proves it
+works, deprovisions, then re-sends the *same* token and asserts 401. All three Dev-Notes traps were handled.
+
+### Patches applied during review (4)
+
+1. **[HIGH] Blocking Cognito call stalled the event loop on every cache miss** — `app/core/dependencies.py:117`.
+   `is_user_enabled` is a synchronous boto3 `AdminGetUser`, called inline from an `async def` with no
+   `run_in_threadpool` — violating this module's own async-safety contract. Single-process uvicorn means every cache
+   miss froze the *entire* API for a Cognito round-trip, on the auth seam of every route. The dev shim is a pure set
+   lookup, so no test could ever catch it. **Fixed:** offloaded via `run_in_threadpool`. Flagged independently by all
+   three layers.
+
+2. **[HIGH] An admin could permanently lock themselves out via `PATCH /users/role`** — `app/api/v1/users.py`.
+   The route had **no self-target guard** (deprovision had one). An admin could set their own role to `client`;
+   their current token still says `admin` so nothing looks broken, but on next login `RejectClient` 404s them out of
+   this very router — including the endpoint needed to undo it. Recovery required the AWS console. **Fixed:** extracted
+   a shared `_reject_self_target` helper, now applied to *both* deprovision and role-change (409
+   `SELF_ROLE_CHANGE_NOT_ALLOWED`). Same "embarrassing support ticket" the spec demanded a guard for, left open on the
+   sibling route.
+
+3. **[HIGH] Compromised accounts could not be deprovisioned from the UI** — `UsersScreen.tsx`.
+   The Deprovision button was allowlisted to `active`/`invited`. But Cognito's `RESET_REQUIRED`, `COMPROMISED`, and
+   `ARCHIVED` all normalize to `unknown` (`_normalize_user_status`) — so the accounts *most urgently* needing revocation
+   rendered with no Deprovision button at all. Backend accepted them fine; pure FE gating omission. **Fixed:** gate on
+   `status !== 'disabled'` instead of an allowlist. Regression test added.
+
+4. **[MED] Self-target guard leaked a 500, and `Enabled` failed open** — `users.py` / `auth.py:1074`.
+   `list_users()` ran outside the route's try/except, so a directory failure escaped as an opaque 500 instead of the
+   502 every sibling path returns. Separately, `resp.get("Enabled", True)` defaulted a *missing* key to **enabled** — the
+   fail-open direction on the one call whose entire purpose is to fail closed. **Fixed:** both.
+
+### Deferred — needs your decision (2)
+
+- **[MED] A role change does not kill the target's session.** AC4's *letter* (audit old→new) is met; its *intent*
+  (CC6.3 covers **modification** of access) is not. A consultant demoted to `client` keeps `unrestricted=True`
+  org-global access for the token's remaining **8 hours** — the exact window AC2 exists to close, left open on the
+  modification path. Fix would be an `AdminUserGlobalSignOut` on role change. Deferred because it changes behavior
+  beyond the AC's letter.
+- **[LOW] The cache-bust comment overstates the guarantee.** `_enabled_cache` is per-process. Today this is harmless —
+  uvicorn runs single-process and `api_desired_count = 1` — so the bust *is* effective and AC2 holds. But the comment
+  claims deprovision is "effective immediately," which becomes **false** the moment anyone scales to 2 tasks or during
+  any rolling deploy (two tasks run concurrently). The real production guarantee is the **60s TTL**. An auditor asking
+  "how long is the window?" would get the wrong answer from the code. Recommend correcting the comment now, and
+  revisiting a shared store (Redis is already in the stack) before scaling out.
+
+### Dismissed
+Layer claims of a platform-wide forced-logout on a Cognito blip were **overstated** — the FE 401 interceptor attempts a
+silent Amplify token refresh before redirecting (`client.ts:37-47`). The cold-cache fail-closed path does still
+*amplify* load onto a degraded Cognito (401 → forced refresh → re-auth), but it does not instantly log everyone out.
+
+### Gates (re-verified independently, post-patch)
+`ruff` clean · unit **728 passed** · integration **666 passed, 3 skipped** (+3 new tests) · FE typecheck 0 ·
+FE **699 passed** (+1 new test) · lint: only the pre-existing `Icon.tsx` baseline warning · `api-spec.json` regenerated
+via `docker cp` (the 13.1 trap avoided).
+
+⚠️ **Environment note:** an initial integration run showed 396 failures — this was **Docker VM disk exhaustion**
+(`postmaster.pid: No space left on device`), not the code. Reclaimed ~56GB and re-ran clean. The Dev Agent Record's
+claimed gate results were accurate.
+
 ## Change Log
 
 - 2026-07-14: Story implemented — user deprovisioning (disable/revoke access), re-enable, and role change, with the AC2 session-kill cached enabled-check at the auth seam. All 9 tasks complete; all ACs met. Status → review.
+- 2026-07-14: Code review complete — all 7 ACs met, AC2 verified genuine. 4 patches applied (event-loop-blocking Cognito call; self-lockout guard on role change; unknown-status deprovision gating; 500→502 + fail-closed `Enabled`). 2 findings deferred for decision (role-change session kill; per-process cache comment). Status → done.

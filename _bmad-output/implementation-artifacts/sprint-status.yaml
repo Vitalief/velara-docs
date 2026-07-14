@@ -241,7 +241,7 @@ development_status:
   # ─────────────────────────────────────────────────────────
   epic-13: in-progress
   13-1-audit-event-categorization: done
-  13-2-user-deprovisioning: review
+  13-2-user-deprovisioning: done
   13-3-audit-read-path-phi-disclosure: backlog
   13-4-auth-and-authz-event-auditing: backlog
   13-5-cloud-detective-controls: backlog
