@@ -4,7 +4,7 @@ baseline_commit: 8b91b230c0f81f50c82a80a0c0f243ad5ab67e5e
 
 # Story 13.1: Audit Event Categorization
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -202,6 +202,51 @@ claude-sonnet-5 (Claude Code, bmad-dev-story workflow)
 - `velara-web/src/features/audit/components/AuditLog.test.tsx` — MODIFIED (updated for split category/outcome filters)
 - `velara-web/src/api/audit.ts` — MODIFIED (`ListAuditParams` gains `category?: string`)
 
+## Review Findings
+
+Three-layer adversarial review (Blind Hunter / Edge Case Hunter / Acceptance Auditor), 2026-07-14. AC1/AC2/AC5/AC6/AC7 verified clean: all 22 live `EVENT_*` constants discovered and mapped, every category assignment matches the epic's authoritative taxonomy table, `eventTypeIconMeta.ts` untouched, alembic head unchanged (`0022_skill_version_bundle`). 11 findings actioned; 9 patched.
+
+### ⭐ HEADLINE — the orthogonal outcome filter was a dead end for 4 of the 7 categories
+
+`record_admin_action` writes `outcome=None` ([audit_service.py:304](../../../velara-api/app/services/audit_service.py#L304)); the column is explicitly *"NULL for admin events"* ([audit.py:167](../../../velara-api/app/models/audit.py#L167)). `list_entries` filters with `AuditLogEntry.outcome == outcome`, and **`NULL = 'success'` is never true in SQL**. Only **Skill Execution** carries a non-NULL outcome — Skill Maintenance (10 types), Access Control (5), and Compliance & Disclosure (2) are all admin events.
+
+So **"Access Control" + "Success"** — precisely the combination AC4 was written to enable — returned **zero rows, always**, with two healthy-looking filter chips and the message "No events in this range." On a compliance surface, an unsatisfiable query that renders as a clean audit trail is the exact hazard the codebase already 422s inverted date windows to prevent ([audit.py:137-142](../../../velara-api/app/api/v1/audit.py#L137)).
+
+**This was introduced by this story.** The old `EventKind` was a single mutually-exclusive union (`'success'` XOR `'grants'`), so the broken combination was structurally *unrepresentable*. AC4's orthogonality refactor made it representable and meaningless. **Both existing tests picked the one working cell** (`skill_execution`) — BE `test_audit_route_category_and_outcome_combine_with_and_semantics` and FE `'category and outcome combine'` — so the matrix's 6 broken cells were never probed.
+
+**Fix (Project Lead decision):** make the impossible combination unrepresentable again. New `OUTCOME_BEARING_CATEGORIES` in `audit_categories.py`, mirrored FE-side as `categoryHasOutcomes()`; the outcome `<select>` is disabled (with an explanatory `title`) and a stale outcome is reset to `'all'` whenever a non-outcome-bearing category is selected. Pinned by a new BE integration test asserting every admin-category × outcome pair returns 0 while `skill_execution` + `success` returns 1 — it flips red (with an actionable message) if a future story ever gives admin events a real outcome.
+
+**LESSON:** when a refactor makes two filters *orthogonal*, the new cells of the product matrix are new code paths. Test the cells the old design made unreachable — that's where the regression hides. A test that exercises only the one cell that works certifies the feature as green.
+
+### Other patches (8)
+
+- **Contradictory `category` + `event_type` now 422s** (Project Lead decision). Categories are disjoint, so the pair is either redundant or provably empty; it silently 200'd with an empty page, and an integration test *codified* that. Now rejected, matching the inverted-date-window precedent.
+- **The "proves the guard isn't theater" test WAS theater.** `test_guard_actually_catches_an_unmapped_constant` re-implemented the set-difference inline and asserted Python's `-` operator works. It never called `_live_event_types()` against a mutated module and would have passed identically if discovery were broken to return an empty set — the precise failure it existed to rule out. Rewritten to `monkeypatch` a real `EVENT_*` constant onto `app.models.audit` and assert the **real** guard raises and names it.
+- **Guard was blind to duplicate constant *values*.** Discovery collected values into a `set`, so two constants sharing a literal (a plausible copy-paste when 13.2 adds three siblings at once) would collapse — the new one inheriting the old one's category with no mapping of its own. Discovery is now name-keyed, plus `test_no_duplicate_event_type_values`.
+- **Expansion logic was duplicated in the router and re-implemented a third time in its own unit test** (testing a copy, not the code). Extracted to `audit_categories.event_types_for()` (precomputed reverse index); router and test both call it.
+- **The 3 unpopulated pills (Organization/Authentication/Security) looked identical to working ones.** An auditor clicking **Security**, seeing "No events in this range", records "no security events" — when the truth is "not built yet". Now dashed/dimmed with a `title`, and the empty state names the real cause.
+- **`category` was bare `str` in the OpenAPI spec** — no enum, so consumers got no contract. Now publishes all 7 values via `json_schema_extra` while keeping the house 422 envelope.
+- **Empty-category expansion short-circuits** in `list_entries` (`return [], 0`) rather than relying on SQLAlchemy's implicit `IN () → 1 != 1`; documents intent and skips two pointless round-trips.
+- **Page-stranding fix:** the out-of-range page recovery was guarded by `total > 0`, but the pagination block *also* renders only when `total > 0` — a filter dropping total to exactly 0 on page 2 left no Prev button and no way back. Guard dropped.
+
+### ⚠️ TRAP for future stories — `export_openapi.py` writes INSIDE the container
+
+`scripts/export_openapi.py` resolves its output as `Path(__file__).parent.parent / "docs"` → **`/app/docs/api-spec.json` inside the container**, which is baked into the image, *not* bind-mounted. Running `docker compose exec api python -m scripts.export_openapi` regenerates the spec **in the container and never touches the host file** — it prints a reassuring "Wrote OpenAPI spec to /app/docs/api-spec.json" either way. The host spec here was stale-but-accidentally-correct (the pre-enum output happened to match). CI re-runs this script and `git diff --exit-code`s it, so this silently ships a stale spec. **Always `docker cp "$(docker compose ps -q api):/app/docs/api-spec.json" docs/api-spec.json` after regenerating**, or run the script on the host.
+
+### Deferred (1)
+
+- **FE `Category` union is a hand-copied duplicate of the BE's `ALL_CATEGORIES`** with no cross-repo guard — the same drift class this story exists to eliminate on the backend. Mitigated for now: the spec's new `enum` makes it generatable. Worth a follow-up that asserts the FE union against `docs/api-spec.json`.
+
+### Dismissed (4)
+
+Untracked new files "won't import" (expected pre-commit state — they *are* the deliverable); filter state not URL-persisted (pre-existing, never was); `category_for()` unused (deliberate API surface, now joined by `event_types_for()` which *is* wired); loss of per-`event_type` UI narrowing (intended coarsening per AC4).
+
+### Post-review gates
+
+BE: `ruff` clean · unit **728** passed · integration **632** passed, 3 skipped (pre-existing) · alembic head unchanged · api-spec in sync with the live app (verified against the CI diff gate).
+FE: `tsc --noEmit` 0 errors · lint 0 errors (1 pre-existing `Icon.tsx` warning) · vitest **688** passed.
+
 ## Change Log
 
+- 2026-07-14: Code review complete. Fixed the headline outcome-filter dead end (admin categories carry `outcome=NULL`, making every admin-category × outcome combination unsatisfiable — introduced by AC4's orthogonality refactor and missed because both tests probed only the one working cell); contradictory `category`+`event_type` now 422s; replaced the guard's self-proof theater with a real monkeypatched exercise; closed the duplicate-constant-value blind spot; de-duplicated the expansion logic into `event_types_for()`; marked the 3 unpopulated categories in the UI; published the `category` enum in the OpenAPI spec; fixed page-stranding on a zero-result filter. Status → done.
 - 2026-07-14: Story implemented end-to-end (Tasks 1-6). Backend: additive `audit_categories.py` taxonomy module + programmatic guard test (AC1/AC2) mirroring 12.5's route-guard pattern; `category` query param on `GET /api/v1/audit` expanding server-side into the service's `event_types` filter, combining with `event_type`/`outcome` (AC3); no migration (AC7). Frontend: `eventKindMeta.ts` replaced by `eventCategoryMeta.ts`; `AuditLog.tsx` now has independent category and outcome filters, each with its own dismissible chip (AC4); `eventTypeIconMeta.ts` untouched (AC5). All gates green: BE ruff/unit(727)/integration(631)/api-spec regen/alembic-unchanged; FE typecheck/lint/vitest(681).
