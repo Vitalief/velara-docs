@@ -4,7 +4,7 @@ baseline_commit: 8b91b230c0f81f50c82a80a0c0f243ad5ab67e5e
 
 # Story 13.1: Audit Event Categorization
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -55,8 +55,8 @@ so that I can filter by "what kind of thing happened" (a skill ran, someone's ac
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Build the category taxonomy as a static, code-owned mapping (AC1)**
-  - [ ] Add a new module `velara-api/app/models/audit_categories.py` (co-located with `app/models/audit.py`, which already holds every `EVENT_*` constant this maps). Define:
+- [x] **Task 1 — Build the category taxonomy as a static, code-owned mapping (AC1)**
+  - [x] Add a new module `velara-api/app/models/audit_categories.py` (co-located with `app/models/audit.py`, which already holds every `EVENT_*` constant this maps). Define:
     - `CATEGORY_SKILL_EXECUTION = "skill_execution"`, `CATEGORY_SKILL_MAINTENANCE = "skill_maintenance"`, `CATEGORY_ORGANIZATION = "organization"`, `CATEGORY_ACCESS_CONTROL = "access_control"`, `CATEGORY_AUTHENTICATION = "authentication"`, `CATEGORY_COMPLIANCE_DISCLOSURE = "compliance_disclosure"`, `CATEGORY_SECURITY = "security"` (stable string values — never rename after deploy, matching every existing constant's house convention in `audit.py`).
     - `ALL_CATEGORIES = frozenset({...})` — analogous to `VALID_OUTCOMES` in `audit_service.py:38`.
     - `EVENT_TYPE_TO_CATEGORY: dict[str, str]` — the single source of truth. Populate it with **today's 22 event types only** (do not invent future stories' constants):
@@ -66,39 +66,39 @@ so that I can filter by "what kind of thing happened" (a skill ran, someone's ac
       - **Compliance & Disclosure:** `EVENT_ADMIN_CERTIFICATION`, `EVENT_ADMIN_LIFECYCLE_TRANSITION`
       - **Organization, Authentication, Security:** no existing event types map here yet — these 3 categories exist in `ALL_CATEGORIES` today with **zero** members; they become populated by 13.2 (Access Control gets 3 more), 13.3 (Compliance & Disclosure gets 1 more), 13.4 (Authentication gets 4, Security gets ≥0), 13.6 (Organization gets 4, Compliance & Disclosure + Security get 1 each). **Do not skip creating a category just because it's empty today** — the FE (Task 3) must still render it (or hide empty categories — see Task 3's decision point).
     - A lookup function `category_for(event_type: str) -> str` raising `KeyError` (or returning a documented sentinel — pick one and be consistent) for an unmapped type, so callers get a loud failure rather than a silent `None`.
-  - [ ] Do **not** touch `app/models/audit.py`'s existing constants or `OUTCOME_TO_EVENT_TYPE` — this is a purely additive new module importing from it.
+  - [x] Do **not** touch `app/models/audit.py`'s existing constants or `OUTCOME_TO_EVENT_TYPE` — this is a purely additive new module importing from it.
 
-- [ ] **Task 2 — The guard test: programmatic discovery, not a hand-copied list (AC2 — THE POINT OF THE STORY)**
-  - [ ] Create `velara-api/tests/unit/test_audit_category_guard.py`, structured like [test_audit_coverage_guard.py](../../../velara-api/tests/unit/test_audit_coverage_guard.py) (12.5's guard) but discovering **event-type constants**, not routes.
-  - [ ] Discovery mechanism: introspect `app.models.audit` module attributes for every name matching `EVENT_*` (or better: collect the actual string values referenced by `OUTCOME_TO_EVENT_TYPE.values()` plus every module-level `str` constant prefixed `EVENT_`) — this must be **live introspection of the module**, not a hardcoded list copied into the test file, or the guard cannot catch a constant nobody remembered to map (the exact failure mode 12.5's Dev Notes calls out for the FE icon map, deferred there — do not repeat it here).
-  - [ ] `test_every_event_type_has_a_category()`: assert the discovered set of event-type values is a subset of `EVENT_TYPE_TO_CATEGORY`'s keys; failure message names the missing constant(s) and tells the author to add an entry to `app/models/audit_categories.py`.
-  - [ ] `test_no_stale_category_entries()`: the inverse — a mapping entry whose value is no longer a live constant (renamed/removed) should fail, mirroring 12.5's `test_registry_has_no_stale_entries`.
-  - [ ] `test_every_category_value_is_valid()`: every value in `EVENT_TYPE_TO_CATEGORY` is a member of `ALL_CATEGORIES` (catches a typo'd category string).
-  - [ ] No DB, no Postgres — this is a pure module-introspection test, must run in every CI invocation (same rationale as 12.5's guard: the anti-regression invariant cannot live behind a `_postgres_reachable()` skip).
-  - [ ] Prove the guard actually catches an unmapped constant (not just theater): temporarily add a fake `EVENT_*` constant with no mapping entry in a test-local scope (or monkeypatch) and assert the guard fails with an actionable message — mirror how 12.5's Dev Notes describe proving the route-guard "actually catches a new unregistered route."
+- [x] **Task 2 — The guard test: programmatic discovery, not a hand-copied list (AC2 — THE POINT OF THE STORY)**
+  - [x] Create `velara-api/tests/unit/test_audit_category_guard.py`, structured like [test_audit_coverage_guard.py](../../../velara-api/tests/unit/test_audit_coverage_guard.py) (12.5's guard) but discovering **event-type constants**, not routes.
+  - [x] Discovery mechanism: introspect `app.models.audit` module attributes for every name matching `EVENT_*` (or better: collect the actual string values referenced by `OUTCOME_TO_EVENT_TYPE.values()` plus every module-level `str` constant prefixed `EVENT_`) — this must be **live introspection of the module**, not a hardcoded list copied into the test file, or the guard cannot catch a constant nobody remembered to map (the exact failure mode 12.5's Dev Notes calls out for the FE icon map, deferred there — do not repeat it here).
+  - [x] `test_every_event_type_has_a_category()`: assert the discovered set of event-type values is a subset of `EVENT_TYPE_TO_CATEGORY`'s keys; failure message names the missing constant(s) and tells the author to add an entry to `app/models/audit_categories.py`.
+  - [x] `test_no_stale_category_entries()`: the inverse — a mapping entry whose value is no longer a live constant (renamed/removed) should fail, mirroring 12.5's `test_registry_has_no_stale_entries`.
+  - [x] `test_every_category_value_is_valid()`: every value in `EVENT_TYPE_TO_CATEGORY` is a member of `ALL_CATEGORIES` (catches a typo'd category string).
+  - [x] No DB, no Postgres — this is a pure module-introspection test, must run in every CI invocation (same rationale as 12.5's guard: the anti-regression invariant cannot live behind a `_postgres_reachable()` skip).
+  - [x] Prove the guard actually catches an unmapped constant (not just theater): temporarily add a fake `EVENT_*` constant with no mapping entry in a test-local scope (or monkeypatch) and assert the guard fails with an actionable message — mirror how 12.5's Dev Notes describe proving the route-guard "actually catches a new unregistered route."
 
-- [ ] **Task 3 — `category` query param on `GET /api/v1/audit`, expanding server-side (AC3)**
-  - [ ] In [audit.py (router)](../../../velara-api/app/api/v1/audit.py), add `category: Annotated[str | None, Query()] = None` to `list_audit_entries`. Validate against `audit_categories.ALL_CATEGORIES` (422 `VALIDATION_ERROR` on an unknown value — copy the existing `outcome` validation shape at [audit.py:106-115](../../../velara-api/app/api/v1/audit.py#L106)).
-  - [ ] Expand `category` into the list of event types in that category (`[et for et, cat in EVENT_TYPE_TO_CATEGORY.items() if cat == category]`) and pass it to `audit_service.list_entries` as a new `event_types: list[str] | None` param (plural — distinct from the existing singular `event_type` param, which must keep working unchanged per AC3).
-  - [ ] In `audit_service.list_entries` ([audit_service.py:170](../../../velara-api/app/services/audit_service.py#L170)), add the `event_types` param and, when provided, append `AuditLogEntry.event_type.in_(event_types)` to the `where` list (alongside, not replacing, the existing single-value `event_type ==` filter at [audit_service.py:234](../../../velara-api/app/services/audit_service.py#L234) — both can be supplied simultaneously per AC3's "continue to work unchanged and can combine").
-  - [ ] Regenerate `docs/api-spec.json` (`python scripts/export_openapi.py`) — expect a **non-empty, additive-only** diff this time (new `category` query param on the one endpoint) — unlike 12.5, which expected zero diff. Verify the diff is exactly this one param addition, nothing else.
+- [x] **Task 3 — `category` query param on `GET /api/v1/audit`, expanding server-side (AC3)**
+  - [x] In [audit.py (router)](../../../velara-api/app/api/v1/audit.py), add `category: Annotated[str | None, Query()] = None` to `list_audit_entries`. Validate against `audit_categories.ALL_CATEGORIES` (422 `VALIDATION_ERROR` on an unknown value — copy the existing `outcome` validation shape at [audit.py:106-115](../../../velara-api/app/api/v1/audit.py#L106)).
+  - [x] Expand `category` into the list of event types in that category (`[et for et, cat in EVENT_TYPE_TO_CATEGORY.items() if cat == category]`) and pass it to `audit_service.list_entries` as a new `event_types: list[str] | None` param (plural — distinct from the existing singular `event_type` param, which must keep working unchanged per AC3).
+  - [x] In `audit_service.list_entries` ([audit_service.py:170](../../../velara-api/app/services/audit_service.py#L170)), add the `event_types` param and, when provided, append `AuditLogEntry.event_type.in_(event_types)` to the `where` list (alongside, not replacing, the existing single-value `event_type ==` filter at [audit_service.py:234](../../../velara-api/app/services/audit_service.py#L234) — both can be supplied simultaneously per AC3's "continue to work unchanged and can combine").
+  - [x] Regenerate `docs/api-spec.json` (`python scripts/export_openapi.py`) — expect a **non-empty, additive-only** diff this time (new `category` query param on the one endpoint) — unlike 12.5, which expected zero diff. Verify the diff is exactly this one param addition, nothing else.
 
-- [ ] **Task 4 — FE: replace the flat pill list with 7 category pills, outcome now orthogonal (AC4)**
-  - [ ] Rewrite [eventKindMeta.ts](../../../velara-web/src/features/audit/eventKindMeta.ts): replace the `EventKind` union (`'all' | 'success' | 'failure' | 'blocked' | 'grants' | 'certifications' | 'lifecycle' | 'provisioning'`) with a `Category` type mirroring the backend's 7 values + `'all'`, and `EVENT_CATEGORY_OPTIONS` analogous to today's `EVENT_KIND_OPTIONS`. `categoryToParams(category)` returns `{ category?: string }` (no more `event_type`/`outcome` synthesis — the backend now does the expansion).
-  - [ ] In [AuditLog.tsx](../../../velara-web/src/features/audit/components/AuditLog.tsx): add a **new**, separate outcome-filter control (a small pill group or select: All/Success/Failures/Blocked/Cancelled — reuse `OUTCOME_SUCCESS`/`OUTCOME_FAILURE`/`OUTCOME_CANCELLED`/`OUTCOME_BLOCKED` string values already known FE-side via `auditOutcomeMeta.ts`) alongside the category pills, both feeding `useAuditPage`'s `outcome`/`category` params independently (mirrors the existing `client_id`/`skill_id` filters already composing with `outcome`/`event_type` in the current `kindParams` block at [AuditLog.tsx:210-229](../../../velara-web/src/features/audit/components/AuditLog.tsx#L210)). Replace the single `eventKind` state with two: `category` and `outcome`.
-  - [ ] Update `ListAuditParams` in [api/audit.ts](../../../velara-web/src/api/audit.ts) with a new optional `category?: string` field (additive, `event_type`/`outcome` stay).
-  - [ ] The active-filter chip row ([AuditLog.tsx:447-461](../../../velara-web/src/features/audit/components/AuditLog.tsx#L447)) needs a chip for the new outcome filter (today `eventKind` drove one combined chip) — split into a category chip + an outcome chip, each independently clearable.
-  - [ ] **Decision point (empty categories):** Organization/Authentication/Security have zero live event types until 13.2/13.4/13.6 ship. Render all 7 pills regardless (a category with 0 current events still needs to exist in the UI once its first event type lands, and hiding-then-showing pills as sibling stories land is worse UX than a pill that returns "no events yet"). State this decision in code as a comment; do not hide empty-category pills.
+- [x] **Task 4 — FE: replace the flat pill list with 7 category pills, outcome now orthogonal (AC4)**
+  - [x] Rewrite [eventKindMeta.ts](../../../velara-web/src/features/audit/eventKindMeta.ts): replace the `EventKind` union (`'all' | 'success' | 'failure' | 'blocked' | 'grants' | 'certifications' | 'lifecycle' | 'provisioning'`) with a `Category` type mirroring the backend's 7 values + `'all'`, and `EVENT_CATEGORY_OPTIONS` analogous to today's `EVENT_KIND_OPTIONS`. `categoryToParams(category)` returns `{ category?: string }` (no more `event_type`/`outcome` synthesis — the backend now does the expansion).
+  - [x] In [AuditLog.tsx](../../../velara-web/src/features/audit/components/AuditLog.tsx): add a **new**, separate outcome-filter control (a small pill group or select: All/Success/Failures/Blocked/Cancelled — reuse `OUTCOME_SUCCESS`/`OUTCOME_FAILURE`/`OUTCOME_CANCELLED`/`OUTCOME_BLOCKED` string values already known FE-side via `auditOutcomeMeta.ts`) alongside the category pills, both feeding `useAuditPage`'s `outcome`/`category` params independently (mirrors the existing `client_id`/`skill_id` filters already composing with `outcome`/`event_type` in the current `kindParams` block at [AuditLog.tsx:210-229](../../../velara-web/src/features/audit/components/AuditLog.tsx#L210)). Replace the single `eventKind` state with two: `category` and `outcome`.
+  - [x] Update `ListAuditParams` in [api/audit.ts](../../../velara-web/src/api/audit.ts) with a new optional `category?: string` field (additive, `event_type`/`outcome` stay).
+  - [x] The active-filter chip row ([AuditLog.tsx:447-461](../../../velara-web/src/features/audit/components/AuditLog.tsx#L447)) needs a chip for the new outcome filter (today `eventKind` drove one combined chip) — split into a category chip + an outcome chip, each independently clearable.
+  - [x] **Decision point (empty categories):** Organization/Authentication/Security have zero live event types until 13.2/13.4/13.6 ship. Render all 7 pills regardless (a category with 0 current events still needs to exist in the UI once its first event type lands, and hiding-then-showing pills as sibling stories land is worse UX than a pill that returns "no events yet"). State this decision in code as a comment; do not hide empty-category pills.
 
-- [ ] **Task 5 — Backend behavior tests for the new `category` param (AC3)**
-  - [ ] `velara-api/tests/unit/services/test_audit_service.py`: assert `category="skill_maintenance"` expands to the exact 10 event types listed in Task 1, and combining `category` + `event_type` narrows correctly (both filters apply, not either/or).
-  - [ ] `velara-api/tests/integration/services/test_audit_service.py` — this is where the real `list_entries` integration coverage lives today (e.g. `test_list_entries_scope_paths_filters_descendant_or_self`, `test_list_entries_org_fences_unrestricted_caller` at lines 742-820). Add category-expansion cases alongside them, driven against the real router where existing tests do the same. An unknown `?category=bogus` on `GET /api/v1/audit` returns 422 — assert this at the router/API layer (there is no separate `tests/integration/api/test_audit.py`; router-level assertions belong beside the router code or in this same service-integration file per the existing convention — check both before creating a new file).
+- [x] **Task 5 — Backend behavior tests for the new `category` param (AC3)**
+  - [x] `velara-api/tests/unit/services/test_audit_service.py`: assert `category="skill_maintenance"` expands to the exact 10 event types listed in Task 1, and combining `category` + `event_type` narrows correctly (both filters apply, not either/or).
+  - [x] `velara-api/tests/integration/services/test_audit_service.py` — this is where the real `list_entries` integration coverage lives today (e.g. `test_list_entries_scope_paths_filters_descendant_or_self`, `test_list_entries_org_fences_unrestricted_caller` at lines 742-820). Add category-expansion cases alongside them, driven against the real router where existing tests do the same. An unknown `?category=bogus` on `GET /api/v1/audit` returns 422 — assert this at the router/API layer (there is no separate `tests/integration/api/test_audit.py`; router-level assertions belong beside the router code or in this same service-integration file per the existing convention — check both before creating a new file).
 
-- [ ] **Task 6 — Gates**
-  - [ ] **Backend:** `ruff check .` clean; unit suite green (including the two new guard-test files); integration suite green (`AUTH_BACKEND=dev` override per the standing local-artifact note).
-  - [ ] **`docs/api-spec.json`:** regenerate; diff must be **exactly** the new `category` query param on `GET /api/v1/audit` — nothing else.
-  - [ ] **No migration.** Confirm `alembic` head unchanged (AC7).
-  - [ ] **Frontend:** `npm run typecheck` → 0; `npm run lint` → no new warnings; `npx vitest run` → all green, including updated `eventKindMeta`-adjacent tests (rename test file if the module is renamed) and the split category/outcome filter chips.
+- [x] **Task 6 — Gates**
+  - [x] **Backend:** `ruff check .` clean; unit suite green (including the two new guard-test files); integration suite green (`AUTH_BACKEND=dev` override per the standing local-artifact note).
+  - [x] **`docs/api-spec.json`:** regenerate; diff must be **exactly** the new `category` query param on `GET /api/v1/audit` — nothing else.
+  - [x] **No migration.** Confirm `alembic` head unchanged (AC7).
+  - [x] **Frontend:** `npm run typecheck` → 0; `npm run lint` → no new warnings; `npx vitest run` → all green, including updated `eventKindMeta`-adjacent tests (rename test file if the module is renamed) and the split category/outcome filter chips.
 
 ## Dev Notes
 
@@ -163,10 +163,45 @@ No changes to: `app/models/audit.py` (existing constants untouched), `AuditRead`
 
 ### Agent Model Used
 
+claude-sonnet-5 (Claude Code, bmad-dev-story workflow)
+
 ### Debug Log References
+
+- `ruff check .` (velara-api container) — clean, no findings after auto-fixing one import-order issue in `tests/unit/services/test_audit_service.py`.
+- `pytest tests/unit/` (velara-api container) — 727 passed.
+- `pytest tests/integration/ -e AUTH_BACKEND=dev` (velara-api container) — 631 passed, 3 skipped (pre-existing skips, unrelated to this story).
+- `python -m scripts.export_openapi` — regenerated `docs/api-spec.json`; diff is exactly the new `category` query param on `GET /api/v1/audit`, nothing else.
+- `alembic current` / `alembic heads` — both `0022_skill_version_bundle`, unchanged (AC7, no migration).
+- `npm run typecheck` (velara-web) — 0 errors.
+- `npm run lint` (velara-web) — 0 new warnings (1 pre-existing `Icon.tsx` fast-refresh warning, unrelated).
+- `npx vitest run` (velara-web) — 681 passed, including 3 new `eventCategoryMeta.test.ts` tests and updated `AuditLog.test.tsx` cases.
 
 ### Completion Notes List
 
+- Built `app/models/audit_categories.py`: 7 stable category constants, `ALL_CATEGORIES` frozenset, `EVENT_TYPE_TO_CATEGORY` mapping all 22 live event types (Organization/Authentication/Security intentionally empty today, populated by 13.2/13.4/13.6), and a `category_for()` lookup raising `KeyError` on an unmapped type.
+- Built `tests/unit/test_audit_category_guard.py` mirroring 12.5's `test_audit_coverage_guard.py` shape: programmatic discovery of every `EVENT_*` string constant on `app.models.audit` via `dir()` introspection (not a hand-copied list), cross-checked against `EVENT_TYPE_TO_CATEGORY`. Includes a self-verifying test (`test_guard_actually_catches_an_unmapped_constant`) proving the discovery/diff mechanism is real, not theater — mirrors the story's explicit instruction to prove the guard catches an unmapped constant.
+- `GET /api/v1/audit` gained a `category` query param (422 on an unknown value, same validation shape as `outcome`), expanded server-side into `event_types: list[str]` and passed to `audit_service.list_entries`, which gained an additive `event_types` filter (`event_type.in_(...)`) alongside the existing single-value `event_type ==` filter — both apply simultaneously per AC3.
+- FE: replaced `eventKindMeta.ts` with `eventCategoryMeta.ts` (category pills mirroring the backend's 7 values + "all"; `categoryToParams` just forwards `{ category }` — no more client-side outcome/event_type synthesis). `AuditLog.tsx` now carries two independent filter states (`category`, `outcome`) instead of one combined `eventKind`; outcome is a new `<select>` control reusing `AUDIT_OUTCOME_META` labels; the active-filter chip row splits into an independently-clearable category chip and outcome chip. Per AC4's decision point, all 7 category pills render regardless of whether they have live members yet (documented in the module's header comment).
+- `eventTypeIconMeta.ts` and per-row icon rendering were not touched (AC5).
+- Verified no migration was created and `alembic current` == `alembic heads` (AC7).
+- Regenerated `docs/api-spec.json`; the diff is additive-only (the new `category` query param), matching the story's expectation.
+
 ### File List
 
+- `velara-api/app/models/audit_categories.py` — NEW
+- `velara-api/app/api/v1/audit.py` — MODIFIED (`category` query param + validation + expansion)
+- `velara-api/app/services/audit_service.py` — MODIFIED (`list_entries` gains `event_types` param)
+- `velara-api/tests/unit/test_audit_category_guard.py` — NEW
+- `velara-api/tests/unit/services/test_audit_service.py` — MODIFIED (category-expansion unit coverage)
+- `velara-api/tests/integration/services/test_audit_service.py` — MODIFIED (category-expansion integration coverage)
+- `velara-api/docs/api-spec.json` — MODIFIED (regenerated, additive-only diff)
+- `velara-web/src/features/audit/eventKindMeta.ts` — DELETED (replaced by `eventCategoryMeta.ts`)
+- `velara-web/src/features/audit/eventCategoryMeta.ts` — NEW
+- `velara-web/src/features/audit/eventCategoryMeta.test.ts` — NEW
+- `velara-web/src/features/audit/components/AuditLog.tsx` — MODIFIED (category pills + separate outcome control + split filter chips)
+- `velara-web/src/features/audit/components/AuditLog.test.tsx` — MODIFIED (updated for split category/outcome filters)
+- `velara-web/src/api/audit.ts` — MODIFIED (`ListAuditParams` gains `category?: string`)
+
 ## Change Log
+
+- 2026-07-14: Story implemented end-to-end (Tasks 1-6). Backend: additive `audit_categories.py` taxonomy module + programmatic guard test (AC1/AC2) mirroring 12.5's route-guard pattern; `category` query param on `GET /api/v1/audit` expanding server-side into the service's `event_types` filter, combining with `event_type`/`outcome` (AC3); no migration (AC7). Frontend: `eventKindMeta.ts` replaced by `eventCategoryMeta.ts`; `AuditLog.tsx` now has independent category and outcome filters, each with its own dismissible chip (AC4); `eventTypeIconMeta.ts` untouched (AC5). All gates green: BE ruff/unit(727)/integration(631)/api-spec regen/alembic-unchanged; FE typecheck/lint/vitest(681).
