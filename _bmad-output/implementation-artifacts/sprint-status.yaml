@@ -54,6 +54,8 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-14
+
+# 2026-07-14: 13-1-audit-event-categorization moved to in-progress (dev-story).
 project: Velara
 project_key: NOKEY
 tracking_system: file-system
@@ -237,7 +239,7 @@ development_status:
   #   Order: 13-1 (categorization, runs first) → 13-2 → 13-3 → 13-4 → 13-5 → 13-6 → 13-7 (docs finalize LAST — must describe what shipped).
   # ─────────────────────────────────────────────────────────
   epic-13: in-progress
-  13-1-audit-event-categorization: ready-for-dev
+  13-1-audit-event-categorization: in-progress
   13-2-user-deprovisioning: backlog
   13-3-audit-read-path-phi-disclosure: backlog
   13-4-auth-and-authz-event-auditing: backlog
