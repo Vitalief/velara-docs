@@ -53,7 +53,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-02
-last_updated: 2026-07-13
+last_updated: 2026-07-14
 project: Velara
 project_key: NOKEY
 tracking_system: file-system
@@ -204,7 +204,7 @@ development_status:
   11-3-ai-skill-integration-assistant: done
   11-9-ai-assisted-manifest-generation: done
   11-4-export-import-portable-skill-bundles: done
-  11-5-in-app-environment-promotion: ready-for-dev   # code-review 2026-07-13: implementation REVERTED at the Project Lead's request (uncommitted work stashed, not committed) — back to ready-for-dev for a fresh implementation pass.
+  11-5-in-app-environment-promotion: ready-for-dev   # RE-DRAFTED 2026-07-14 (create-story) after the 2026-07-13 revert. Scope changed: ADR amendment already committed (do NOT rewrite); NO promote UI (backend seam only); NEW ma_tech-only export/import (admin loses it). Do NOT pop velara-api git stash@{0}.
   11-6-author-new-skill-versions-from-ui: done
   11-7-run-older-skill-version-to-compare: done
   11-8-schema-driven-run-inputs-form: done
