@@ -1,5 +1,6 @@
 velara-api/
 velara-web/
+exported-skills/
 .DS_Store
 .agents/
 .claude/
