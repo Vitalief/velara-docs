@@ -157,12 +157,13 @@ Closes the HIPAA / SOC 2 gaps a code-verified compliance gap analysis surfaced. 
 **Does NOT supersede Epic 12 / Story 12.5** (skill-authoring + ingest audit coverage + the anti-regression guard test) — 12.5 ships on its own cadence and its guard-test registry is the entry point several Epic 13 stories plug into.
 
 **Stories (to be detailed via create-story):**
-- 13.1 User deprovisioning (disable / revoke access) _(HIGH — no compensating control; first thing an auditor tests)_
-- 13.2 Audit the read path — PHI access & disclosure _(HIGH — §164.528 currently unanswerable)_
-- 13.3 Authentication & authorization event auditing _(HIGH — failed logins recorded nowhere)_
-- 13.4 Cloud detective controls (CloudTrail, access logging, Config) _(HIGH — Terraform; plan only, operator applies)_
-- 13.5 Close the remaining unaudited-mutation surface _(hierarchy CRUD, attachments, audit-log reads, sandbox probes)_
-- 13.6 HIPAA & SOC 2 control mapping documents _(finalize last — must describe what actually shipped)_
+- 13.1 Audit event categorization _(NEW 2026-07-14 — runs first; builds the category taxonomy/mapping the rest of this epic's new event types plug into)_
+- 13.2 User deprovisioning (disable / revoke access) _(HIGH — no compensating control; first thing an auditor tests)_
+- 13.3 Audit the read path — PHI access & disclosure _(HIGH — §164.528 currently unanswerable)_
+- 13.4 Authentication & authorization event auditing _(HIGH — failed logins recorded nowhere)_
+- 13.5 Cloud detective controls (CloudTrail, access logging, Config) _(HIGH — Terraform; plan only, operator applies)_
+- 13.6 Close the remaining unaudited-mutation surface _(hierarchy CRUD, attachments, audit-log reads, sandbox probes)_
+- 13.7 HIPAA & SOC 2 control mapping documents _(finalize last — must describe what actually shipped)_
 
 **FRs covered:** FR-SEC-13, FR-SEC-14, FR-SEC-15, FR-SEC-16, FR-SEC-17 _(all new)_; strengthens FR-SEC-08 (the HIPAA half, previously undecomposed) and FR-SEC-09 (audit completeness)
 

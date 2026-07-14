@@ -25,19 +25,71 @@ The result is a predictable shape: Part 11 cares about *records and signatures* 
 
 ## Sequencing
 
-**13.1 → 13.2 are the two that a real auditor tests first and that no compensating control rescues. Do them first.** 13.3–13.5 are the durable/structural remainder. 13.6 (docs) can be authored in parallel with any of them but should be *finalized last*, since it must describe what actually shipped.
+> **Renumbered 2026-07-14 via correct-course** (see `sprint-change-proposal-2026-07-14.md`) to insert the new categorization story as **13.1**, running first. The original 13.1→13.6 shifted to 13.2→13.7 — no scope changed, only story numbers. `sprint-log.md`'s historical `13-1`..`13-6` section headers describe the 2026-07-13 planning session and were **not** renumbered; read them as referring to the pre-renumber IDs.
 
-Suggested order: **13.1 (deprovisioning) → 13.2 (read/disclosure auditing) → 13.3 (auth events) → 13.4 (detective controls, Terraform) → 13.5 (denials + audit-log-read + hierarchy/attachment coverage) → 13.6 (mapping docs, finalize)**.
+**13.1 (categorization) runs first** — it builds the category taxonomy/mapping mechanism up front so every event type Stories 13.2–13.6 introduce is assigned a category at the point it's added, instead of a retrofit pass at the end. **13.2 → 13.3 are the two that a real auditor tests first and that no compensating control rescues.** 13.4–13.6 are the durable/structural remainder. 13.7 (docs) can be authored in parallel with any of them but should be *finalized last*, since it must describe what actually shipped.
 
-⚠️ **13.4 is Terraform against live AWS.** Per standing project rule, **do not `terraform apply` without explicit operator sign-off** — author + plan only, and hand the apply to the operator. The 9.3 lesson (reconfiguring a live service broke the user's Cognito session) applies with full force here: CloudTrail and Cognito threat-protection changes touch the auth path.
+Suggested order: **13.1 (audit event categorization) → 13.2 (deprovisioning) → 13.3 (read/disclosure auditing) → 13.4 (auth events) → 13.5 (detective controls, Terraform) → 13.6 (denials + audit-log-read + hierarchy/attachment coverage) → 13.7 (mapping docs, finalize)**.
+
+⚠️ **13.5 is Terraform against live AWS.** Per standing project rule, **do not `terraform apply` without explicit operator sign-off** — author + plan only, and hand the apply to the operator. The 9.3 lesson (reconfiguring a live service broke the user's Cognito session) applies with full force here: CloudTrail and Cognito threat-protection changes touch the auth path.
 
 ---
 
-## Story 13.1: User Deprovisioning (Disable / Revoke Access)
+## Story 13.1: Audit Event Categorization
+
+> **Added 2026-07-14 via correct-course.** **Reality (code-verified):** the audit log filter UI ([AuditLog.tsx:300-316](../../../velara-web/src/features/audit/components/AuditLog.tsx#L300)) is a flat, hand-picked pill list — `All / Success / Failures / Blocked / Grants / Certifications / Lifecycle / Provisioning` ([eventKindMeta.ts:19-43](../../../velara-web/src/features/audit/eventKindMeta.ts#L19)) — that mixes `outcome` values with specific `event_type` literals. Because the query API's `event_type` filter is exact-match only ([audit.py:87](../../../velara-api/app/api/v1/audit.py#L87); `audit_service.py:235`), each pill catches only the one event type it was hand-wired to: "Grants" misses `admin.grant_revoked` and `admin.grant_reaffirmed`; "Provisioning" misses `admin.user_invite_resent`. This is a known, commented limitation ([eventKindMeta.ts:12-17](../../../velara-web/src/features/audit/eventKindMeta.ts#L12)).
+>
+> There is **no category concept anywhere in the backend** — `event_type` is a free-text `String` column ([audit.py:112](../../../velara-api/app/models/audit.py#L112)) with no enum, no `VALID_EVENT_TYPES` set, and no grouping field. Today there are only 22 event types across two prefixes (`invocation.*`, `admin.*`). Stories 13.2–13.6 add roughly 15 more across new prefixes (`auth.*`, `access.*`, `audit.*`, plus new `admin.*` and a sandbox-security event) — without this story, the existing flat-pill pattern would be extended ad hoc per story, compounding the same exact-match gap for every new event family.
+
+As an admin or compliance reviewer,
+I want audit events grouped into a small set of meaningful categories at the top of the audit log,
+So that I can filter by "what kind of thing happened" (a skill ran, someone's access changed, someone logged in, a document was disclosed) without needing to know raw `event_type` strings, and so every event family — including the ones this epic is about to add — is filterable by family, not just by exact type.
+
+**Category taxonomy** (final list — event types marked *(new)* are added by later stories in this epic and must be mapped into this taxonomy at the point they're introduced):
+
+| Category | Event types |
+|---|---|
+| **Skill Execution** | `invocation.success`, `invocation.failure`, `invocation.cancelled`, `invocation.blocked`, `invocation.fan_out` |
+| **Skill Maintenance** | `admin.skill_created`, `admin.skill_updated`, `admin.skill_version_created`, `admin.skill_derived`, `admin.skill_draft_content_updated`, `admin.skill_adapter_proposed`, `admin.skill_exported`, `admin.skill_imported`, `admin.skill_promoted`, `admin.document_ingested` |
+| **Organization** | `admin.hierarchy_created` / `updated` / `deleted` *(new, 13.6)*, `admin.skill_attached` / `detached` *(new, 13.6)* |
+| **Access Control** | `admin.grant_created`, `admin.grant_reaffirmed`, `admin.grant_revoked`, `admin.user_provisioned`, `admin.user_invite_resent`, `admin.user_deprovisioned` / `reprovisioned` / `role_changed` *(new, 13.2)* |
+| **Authentication** | `auth.login_succeeded` / `login_failed` / `logout` / `session_revoked` *(new, 13.4)* |
+| **Compliance & Disclosure** | `access.artifact_disclosed` *(new, 13.3)*, `audit.log_accessed` *(new, 13.6)*, `admin.certification`, `admin.lifecycle_transition` |
+| **Security** | sandbox network-blocked event *(new, 13.6)*, denial/threshold-alarm events if persisted to `audit_log_entries` *(new, 13.4 — depends on that story's "design note" decision)* |
+
+**Acceptance Criteria:**
+
+**Given** the full set of audit `event_type` values (current 22 + all types this epic introduces)
+**When** the category mapping is implemented
+**Then** every event type resolves to exactly one of the 7 categories above via a single static, code-owned mapping (no DB migration, no backfill) — and a guard test (mirroring 12.5's registry-guard pattern) fails the build if a new `event_type` is introduced anywhere without a category assignment
+
+**Given** the audit log query API
+**When** a category filter is requested
+**Then** `GET /api/v1/audit` accepts a `category` query param that expands to the full set of `event_type` values in that category server-side (closing the exact-match gap the current FE pills work around) — `event_type` and `outcome` filters continue to work unchanged and can combine with `category`
+
+**Given** the audit log UI's top filter
+**When** it renders
+**Then** the pill/tab bar is replaced with the 7 categories (plus "All events"), each pill catching every event type in its category — "Success/Failures/Blocked" become a secondary `outcome` filter (still available, now orthogonal to category rather than conflated with it)
+
+**Given** an audit log row
+**When** it renders
+**Then** the existing per-row icon ([eventTypeIconMeta.ts](../../../velara-web/src/features/audit/eventTypeIconMeta.ts)) is unchanged by this story — only the top-level filter/grouping changes; row-level iconography is out of scope
+
+**Given** this story lands first in Epic 13
+**When** Stories 13.2, 13.3, 13.4, and 13.6 each introduce new event types
+**Then** each of those stories' own ACs include "assign the new event type(s) to a category" as a sub-step, enforced by this story's guard test — so the taxonomy never drifts out of sync with the real event-type list
+
+**Given** no production data exists yet
+**When** this story ships
+**Then** no data migration or backfill is required — this is a pure code/mapping change
+
+---
+
+## Story 13.2: User Deprovisioning (Disable / Revoke Access)
 
 > **Severity: the highest in this epic.** Not because it is hard — it is roughly the smallest story here — but because "we cannot revoke a terminated user's access" is the first thing a SOC 2 auditor tests and **no compensating control rescues it.**
 >
-> **Reality (code-verified):** this capability **does not exist at all.** `AuthProvider` ([auth.py:154-202](../../../velara-api/app/integrations/auth.py#L154)) defines exactly five methods — `issue_token`, `validate_token`, `list_users`, `create_user`, `resend_invite`. There is **no `disable_user`, no `delete_user`.** The users router ([users.py](../../../velara-api/app/api/v1/users.py)) exposes only `GET /users`, `POST /users`, `POST /users/resend-invite` — **no DELETE, no PATCH.** `CognitoAuthProvider` never calls `AdminDisableUser`/`AdminUserGlobalSignOut`, and the ECS task IAM policy grants no such action. An operator's only recourse today is the AWS Cognito console, out-of-band — which produces **no application audit event** (and, per 13.4, no CloudTrail record either).
+> **Reality (code-verified):** this capability **does not exist at all.** `AuthProvider` ([auth.py:154-202](../../../velara-api/app/integrations/auth.py#L154)) defines exactly five methods — `issue_token`, `validate_token`, `list_users`, `create_user`, `resend_invite`. There is **no `disable_user`, no `delete_user`.** The users router ([users.py](../../../velara-api/app/api/v1/users.py)) exposes only `GET /users`, `POST /users`, `POST /users/resend-invite` — **no DELETE, no PATCH.** `CognitoAuthProvider` never calls `AdminDisableUser`/`AdminUserGlobalSignOut`, and the ECS task IAM policy grants no such action. An operator's only recourse today is the AWS Cognito console, out-of-band — which produces **no application audit event** (and, per 13.5, no CloudTrail record either).
 >
 > **Aggravating:** revoking a *grant* (`admin.grant_revoked`, which does exist) removes data **scope** but leaves the **login active**; and the ID token is valid for 8h with no server-side session kill, so even a grant revoke is not effective immediately.
 
@@ -67,9 +119,13 @@ So that a terminated employee or offboarded client contact cannot log in, and I 
 **When** deprovisioning is invoked
 **Then** it has exactly the Cognito actions it needs (`AdminDisableUser`, `AdminEnableUser`, `AdminUserGlobalSignOut`) and no more — least-privilege, and **note the phantom-IAM-action lesson from Story 10.1**: verify each action name against the real Cognito API surface before adding it, since a non-existent action name is accepted by IAM and fails only at call time
 
+**Given** the new `admin.user_deprovisioned`, `admin.user_reprovisioned`, and `admin.user_role_changed` event types this story introduces
+**When** they are added
+**Then** each is assigned to the **Access Control** category in Story 13.1's mapping, and 13.1's guard test passes
+
 ---
 
-## Story 13.2: Audit the Read Path — PHI Access & Disclosure
+## Story 13.3: Audit the Read Path — PHI Access & Disclosure
 
 > **Reality (code-verified):** every path that hands a caller a presigned URL to a PHI-bearing S3 object writes **nothing** to `audit_log_entries`: [jobs.py:145](../../../velara-api/app/api/v1/jobs.py#L145) (`output_file_url`), [jobs.py:182](../../../velara-api/app/api/v1/jobs.py#L182) (each output file), [jobs.py:232](../../../velara-api/app/api/v1/jobs.py#L232) (fan-out child outputs), [client.py:328](../../../velara-api/app/api/v1/client.py#L328) and [client.py:366](../../../velara-api/app/api/v1/client.py#L366) (**client** downloads of their own outputs), [skills.py:188](../../../velara-api/app/api/v1/skills.py#L188) (export bundle).
 >
@@ -97,15 +153,19 @@ So that "who received this data, and when" is answerable — which HIPAA §164.5
 
 **Given** the S3 buckets holding ingested documents and outputs
 **When** an object is fetched
-**Then** S3 server access logging (or CloudTrail data events) captures it — so the out-of-band GET is not a blind spot even for URLs minted before this story. *(Overlaps 13.4; implement in whichever lands first, don't do it twice.)*
+**Then** S3 server access logging (or CloudTrail data events) captures it — so the out-of-band GET is not a blind spot even for URLs minted before this story. *(Overlaps 13.5; implement in whichever lands first, don't do it twice.)*
 
 **Given** a request for an accounting of disclosures (FR-SEC-17, P2)
 **When** it is run for a given document/subject over a date range
 **Then** the audit log can produce it — this AC is the *acceptance test* for the events above being sufficient, even if the reporting UI itself is deferred
 
+**Given** the new `access.artifact_disclosed` event type this story introduces
+**When** it is added
+**Then** it is assigned to the **Compliance & Disclosure** category in Story 13.1's mapping, and 13.1's guard test passes
+
 ---
 
-## Story 13.3: Authentication & Authorization Event Auditing
+## Story 13.4: Authentication & Authorization Event Auditing
 
 > **Reality (code-verified):** there is **no authentication event of any kind**, in the app or in the cloud layer. Dev login ([auth.py:53-77](../../../velara-api/app/api/v1/auth.py#L53)) writes nothing on success, and its 401 branch writes nothing at all — not even a structlog line with a user identifier. In prod, Cognito owns login and the app never sees it — and **`advanced_security_mode` / `user_pool_add_ons` is not set in `cognito.tf`** (verified absent), so Cognito's own threat-protection and compromised-credential detection are **OFF**, and there is no CloudTrail to capture the events regardless.
 >
@@ -129,7 +189,7 @@ So that I can detect credential attacks and access probing, and evidence login m
 
 **Given** logout and token/session revocation
 **When** they occur
-**Then** they are recorded (`auth.logout`, `auth.session_revoked`) — closing the loop with 13.1's session kill
+**Then** they are recorded (`auth.logout`, `auth.session_revoked`) — closing the loop with 13.2's session kill
 
 **Given** an authorization **denial** (403/404 from the hierarchy-scope or role guards)
 **When** it occurs
@@ -143,9 +203,13 @@ So that I can detect credential attacks and access probing, and evidence login m
 **When** the user pool is configured
 **Then** `advanced_security_mode` is enabled (compromised-credential + brute-force detection), and MFA enforcement is reviewed — it is currently `OPTIONAL` in non-dev, and optional MFA is weak evidence for CC6.1. ⚠️ **Terraform against the live auth path — plan only; operator applies.**
 
+**Given** the new `auth.login_succeeded`, `auth.login_failed`, `auth.logout`, and `auth.session_revoked` event types this story introduces
+**When** they are added
+**Then** each is assigned to the **Authentication** category in Story 13.1's mapping (and any denial/threshold-alarm events persisted to `audit_log_entries` are assigned to **Security**), and 13.1's guard test passes
+
 ---
 
-## Story 13.4: Cloud Detective Controls (CloudTrail, Access Logging, Config)
+## Story 13.5: Cloud Detective Controls (CloudTrail, Access Logging, Config)
 
 > **Reality (verified: zero matches for `cloudtrail`, `guardduty`, `aws_config`, `bucket_logging`, `access_logs`, `aws_wafv2` across all 15 `.tf` files in `velara-api/terraform/`):** there is **no CloudTrail**. No AWS control-plane action is recorded anywhere. This compounds *every* other finding: each place this epic says "an admin could do it in the Cognito console instead," that console action **is also not logged.** There are no ALB access logs, no S3 access logging, no GuardDuty, no AWS Config.
 >
@@ -163,7 +227,7 @@ So that a security incident can actually be investigated, and so that out-of-ban
 
 **Given** an object in the ingest / output / skill-artifact buckets
 **When** it is read or written
-**Then** S3 access logging (or CloudTrail S3 data events) captures it — closing 13.2's out-of-band-GET blind spot for *all* URLs, including previously minted ones
+**Then** S3 access logging (or CloudTrail S3 data events) captures it — closing 13.3's out-of-band-GET blind spot for *all* URLs, including previously minted ones
 
 **Given** an HTTP request to the ALB
 **When** it is served
@@ -181,7 +245,7 @@ So that a security incident can actually be investigated, and so that out-of-ban
 
 ---
 
-## Story 13.5: Close the Remaining Unaudited-Mutation Surface
+## Story 13.6: Close the Remaining Unaudited-Mutation Surface
 
 > **Reality:** Story 12.5's route-walk guard test surfaces ~42 mutating routes, of which ~20 have no audit decision. 12.5 fixes skill-authoring + ingest and directs the rest to be registered as **explicitly tracked exemptions**. This story is where those exemptions get paid down. **12.5's guard test is the entry point — this story flips registry entries from `exempt` to audited.**
 
@@ -217,9 +281,13 @@ So that the "every admin mutation is audited" invariant is true in fact, not jus
 **When** this story completes
 **Then** every entry that 12.5 registered as `exempt="not yet audited — known gap"` is either audited or has a **permanent, justified** exemption — the registry is the checklist and it ends this story with no temporary exemptions left
 
+**Given** the new hierarchy create/update/delete, skill attachment/detachment, `audit.log_accessed`, and sandbox network-blocked event types this story introduces
+**When** they are added
+**Then** the hierarchy and attachment events are assigned to the **Organization** category, `audit.log_accessed` and the sandbox event are assigned to **Compliance & Disclosure** / **Security** respectively in Story 13.1's mapping, and 13.1's guard test passes
+
 ---
 
-## Story 13.6: HIPAA & SOC 2 Control Mapping Documents
+## Story 13.7: HIPAA & SOC 2 Control Mapping Documents
 
 > **Reality:** `velara-api/docs/compliance-mapping.md` maps **21 CFR Part 11 only** (§11.10 / §11.50 / §11.70 / §11.300). There is **no HIPAA Security Rule mapping** and **no SOC 2 control matrix** anywhere in the repo — despite FR-SEC-08 naming HIPAA as a first-class framework. It is also the artifact an auditor reads *first*, and it currently **overstates coverage**: it marks §11.10(e) "audit trail — IMPLEMENTED," which is true for invocations and misleading given the read-path is at zero.
 

@@ -215,7 +215,7 @@ development_status:
   #   Added 2026-07-06 via correct-course (sprint-change-proposal-2026-07-06.md).
   #   Independent of Epic 11 — can start immediately. Order: 12-1 → 12-2 → 12-3 → 12-4.
   # ─────────────────────────────────────────────────────────
-  epic-12: in-progress
+  epic-12: done
   12-1-location-dependent-authoring-control: done
   12-2-audit-log-context-names: done
   12-3-distinct-audit-event-icons: done
@@ -229,13 +229,18 @@ development_status:
   #   Root cause (planning): FR-SEC-08 names HIPAA + 21 CFR Part 11 as co-equal frameworks, but only Part 11 was ever decomposed into FRs
   #   (SEC-09/10/11/12 are ALL Part 11 clauses) — HIPAA Security Rule audit obligations were never turned into requirements, so no story
   #   carried them. New FR-SEC-13..17 close that gap. Does NOT supersede 12-5 (which ships on its own cadence; its guard-test registry is
-  #   the entry point 13-5 plugs into). New docs: velara-api/docs/hipaa-security-rule-mapping.md + soc2-control-matrix.md.
-  #   Order: 13-1 → 13-2 → 13-3 → 13-4 → 13-5 → 13-6 (docs finalize LAST — must describe what actually shipped).
+  #   the entry point 13-6 plugs into). New docs: velara-api/docs/hipaa-security-rule-mapping.md + soc2-control-matrix.md.
+  #   RENUMBERED 2026-07-14 via correct-course (sprint-change-proposal-2026-07-14.md): inserted 13-1-audit-event-categorization as the
+  #   new first story (the flat FE pill-filter over event_type is exact-match-only and doesn't scale to the ~15 new event types this
+  #   epic adds) — original 13-1..13-6 shifted to 13-2..13-7, no scope changed. sprint-log.md's 13-1..13-6 headers were left as
+  #   originally logged (pre-renumber IDs) with a note.
+  #   Order: 13-1 (categorization, runs first) → 13-2 → 13-3 → 13-4 → 13-5 → 13-6 → 13-7 (docs finalize LAST — must describe what shipped).
   # ─────────────────────────────────────────────────────────
   epic-13: backlog
-  13-1-user-deprovisioning: backlog
-  13-2-audit-read-path-phi-disclosure: backlog
-  13-3-auth-and-authz-event-auditing: backlog
-  13-4-cloud-detective-controls: backlog
-  13-5-close-remaining-unaudited-mutations: backlog
-  13-6-hipaa-soc2-control-mapping-docs: backlog
+  13-1-audit-event-categorization: backlog
+  13-2-user-deprovisioning: backlog
+  13-3-audit-read-path-phi-disclosure: backlog
+  13-4-auth-and-authz-event-auditing: backlog
+  13-5-cloud-detective-controls: backlog
+  13-6-close-remaining-unaudited-mutations: backlog
+  13-7-hipaa-soc2-control-mapping-docs: backlog
