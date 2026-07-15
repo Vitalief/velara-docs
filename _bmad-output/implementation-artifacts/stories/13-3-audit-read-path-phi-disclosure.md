@@ -4,7 +4,7 @@ baseline_commit: f048518
 
 # Story 13.3: Audit the Read Path — PHI Access & Disclosure
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
