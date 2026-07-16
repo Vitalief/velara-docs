@@ -4,7 +4,7 @@ baseline_commit: 0ecc323
 
 # Story 13.7: HIPAA & SOC 2 Control Mapping Documents
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
