@@ -4,7 +4,7 @@ baseline_commit: d0b858c
 
 # Story 13.6: Close the Remaining Unaudited-Mutation Surface
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -101,6 +101,16 @@ so that the "every admin mutation is audited" invariant is true in fact, not jus
   - [x] **`docs/api-spec.json`:** confirmed **ZERO diff** — regenerated via `docker cp` (not `exec`, per the container-path trap) and `diff`'d clean against the tracked file.
   - [x] **No migration.** Confirmed `alembic current` still reports `0022_skill_version_bundle (head)`; no new file under `app/db/migrations/versions/`.
   - [x] **Terraform:** `terraform fmt -check` and `terraform validate` both pass on the AC4 metric-filter addition. Plan-only, per standing rule — not applied.
+
+### Review Findings
+
+_Code review 2026-07-16 (3 layers: adversarial, edge-case, acceptance-auditor). All 3 layers completed; strong convergence. Severities reflect real-consequence-at-call-site, not the subagents' raw ratings. **Verification run:** guard tests 8/8 green; AC3 audit-read 4/4 and AC4 sandbox 10/10 green once run with `AUTH_BACKEND=dev` (the container defaults to `cognito`, which 401s dev-minted test tokens — a known env trap, NOT a code defect; the dev's "1440 passed" claim is credible). hierarchy+attachment+audit-service suites 87/87 green. The dev's AC4 async-vs-sync correction (using async `record_admin_action` instead of the spec's `record_admin_action_sync`) was independently verified CORRECT by all three layers + a call-chain trace — `_run_code` is async under `asyncio.run(_execute())`, so the spec's premise was wrong and the correction is sound._
+
+- [x] [Review][Decision → RESOLVED: keep verbatim, accepted-by-spec] **Hierarchy `description` is logged verbatim (old→new) in update audits, while site-identifying columns are logged as a `{"changed": bool}` flag — inconsistent caution.** [velara-api/app/services/hierarchy_service.py:374] — `update_client`/`update_project`/`update_study`/`update_location` record `description={"from": old, "to": new}` verbatim into the append-only `audit_log_entries` table, whereas `update_location` records `postal_code`/`address`/`city`/`pi_name` as only `{"changed": bool}` ([hierarchy_service.py:839-842]). **Reviewer decision 2026-07-16: KEEP verbatim** — the spec explicitly declared client/project/study/location names+descriptions "org-internal, not PHI — safe to log" (AC1 / Dev Notes), the dev followed it, and no code change is the faster/lower-risk path. The inconsistency (site-identifying columns get changed-flags; free-text `description` does not) is recorded here so a future PHI-posture-hardening pass can flip `description` to a `{"changed": bool}` flag at all four sites if the risk tolerance tightens. No action this story.
+- [x] [Review][Patch] `record_audit_log_access` reuses the `hash()`-based advisory-lock key — 4th instance of a ledger-tracked defect; cross-process de-dupe unreliable under multi-ECS-task deploy, which is AC3's entire purpose [velara-api/app/services/audit_service.py:639] — **FIXED:** replaced builtin `hash()` with `hashlib.sha256(f"{event}:{org_id}:{user_id}")` truncated to 63 bits (stable across processes under `PYTHONHASHSEED` randomization), and folded `org_id` into the key (removes the cross-org lock-contention nit). `ruff` clean; AC3 tests 4/4 + audit_service unit 38/38 green. The 3 pre-existing `hash()` sites remain out-of-scope and are tracked in deferred-work.md (count updated).
+- [x] [Review][Defer] Mid-flight `session.commit()` on the shared execution session at the sandbox-block audit site [velara-api/app/services/execution_service.py:660] — deferred, safe today (fresh `fail_session` on the failure path; only the audit row is pending at that point), latent fragility only if a future mutation is added to `_run_code` before this line
+- [x] [Review][Defer] No de-dupe on `security.sandbox_network_blocked` → Celery at-least-once redelivery / fan-out re-run double-writes the row [velara-api/app/services/execution_service.py:660] — deferred, low impact (network-block is genuinely rare, each attempt is arguably a real event; the alarm reads the log line not this row, so alerting is unaffected)
+- [x] [Review][Defer] Audit-read de-dupe window keyed on `(user_id, org_id, event_type)` only — a differently-filtered read within the 15-min window is invisible, though the filter shape is the evidentiary value of the event [velara-api/app/services/audit_service.py:642] — deferred, spec makes filter-shape metadata explicitly optional; mirrors the already-tracked `record_access_denial` dedupe-key-omits-code class
 
 ## Dev Notes
 
