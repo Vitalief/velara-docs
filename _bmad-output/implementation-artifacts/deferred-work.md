@@ -2,6 +2,22 @@
 
 Items deferred during reviews — real but not actionable in their originating story.
 
+## Resolved by: 13-6-close-remaining-unaudited-mutations (2026-07-16)
+
+- **RESOLVED.** The 12.5 "hierarchy CRUD + skill-attachment audit gap" entry
+  (originally logged as a `deferred-work.md` note from Story 12.5, tracked as
+  16 `exempt="not yet audited — known gap"` registry entries in
+  `test_audit_coverage_guard.py`) is now closed. Story 13.6 threaded
+  `acting_user_id` through all 12 hierarchy CRUD service functions + `unattach_skill`,
+  added `admin.hierarchy_created/updated/deleted` (Organization category) and
+  `admin.skill_attached/detached` (Organization category), and flipped all 16
+  registry entries from `exempt` to `audited`. See Story 13.6 for the full
+  implementation.
+
+## Deferred from: 13-6-close-remaining-unaudited-mutations (2026-07-16)
+
+- **Sandbox hardening remains out of scope — the Python-monkeypatch sandbox is still escapable.** `code_sandbox.py`'s own docstring/harness comment admits the `socket.socket`/`socket.create_connection` monkeypatch network block can be bypassed via `ctypes -> libc` raw syscalls, and that Epic 7 was slated to replace the harness with a syscall-level sandbox (seccomp/nsjail/gVisor) — **Epic 7 shipped without that replacement.** Story 13.6 added detection + audit + alarm for the network block signal the *current* sandbox does raise (`security.sandbox_network_blocked`, CloudWatch `sandbox_network_blocked` metric filter), but a sufficiently motivated skill using `ctypes` to open a raw socket would bypass the block entirely and emit no signal at all — detection covers the monkeypatch's blind spot, not the sandbox's own escape hatch. Also carried forward from Story 3.4's review: no `RLIMIT_NPROC` / fork-bomb guard, and the child interpreter exposes the full worker venv's site-packages to untrusted code. Revisit when/if a kernel-level sandbox replacement (the original Epic 7 scope) is scheduled. [velara-api/app/services/code_sandbox.py]
+
 ## Deferred from: code review of 13-3-audit-read-path-phi-disclosure (2026-07-16)
 
 - **De-dupe key omits `artifact_kind`.** `record_artifact_disclosure`'s de-dupe query (`velara-api/app/services/audit_service.py:426-441`) filters on `event_type`/`user_id`/`org_id`/`artifact_ref`(+time window) but not `artifact_kind`. Not currently exploitable — no two artifact kinds share a ref format today (`str(job.id)`, `f"{job.id}:{index}"`, `str(child.id)`, `f"{skill_id}:{version}"` are all distinguishable by shape) — but structurally, a future call site reusing a ref format under a different kind within the 15-minute window would have its disclosure silently swallowed. Revisit if a new artifact kind is ever added whose ref format could collide with an existing one.
