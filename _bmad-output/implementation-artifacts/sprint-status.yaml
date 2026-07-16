@@ -53,11 +53,12 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-02
-last_updated: 2026-07-15
+last_updated: 2026-07-16
 
 # 2026-07-14: 13-1-audit-event-categorization moved to in-progress, then review (dev-story).
 # 2026-07-14: 13-2-user-deprovisioning moved to in-progress, then review (dev-story).
 # 2026-07-15: 13-3-audit-read-path-phi-disclosure moved to in-progress, then review (dev-story).
+# 2026-07-16: 13-3-audit-read-path-phi-disclosure moved to done (code review).
 project: Velara
 project_key: NOKEY
 tracking_system: file-system
@@ -243,7 +244,7 @@ development_status:
   epic-13: in-progress
   13-1-audit-event-categorization: done
   13-2-user-deprovisioning: done
-  13-3-audit-read-path-phi-disclosure: review
+  13-3-audit-read-path-phi-disclosure: done
   13-4-auth-and-authz-event-auditing: backlog
   13-5-cloud-detective-controls: backlog
   13-6-close-remaining-unaudited-mutations: backlog

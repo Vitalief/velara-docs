@@ -4,7 +4,7 @@ baseline_commit: f048518
 
 # Story 13.3: Audit the Read Path — PHI Access & Disclosure
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -22,6 +22,7 @@ so that "who received this data, and when" is answerable — which HIPAA §164.5
    **Given** any request that mints a presigned download URL for a job output, an output file, a fan-out child output, an ingested document, or an export bundle
    **When** the URL is issued
    **Then** an `access.artifact_disclosed` audit event is written recording the acting `user_id`, `org_id`, the artifact **reference** (job_id / file_ref_id / an S3-key *identifier* — **never** the content, never the filename, never the raw key path), the artifact **kind**, and the UTC timestamp. **Minting the URL is the disclosure** — treat it as the auditable act, since the subsequent GET is out-of-band and unobservable to the application.
+   > **Scope note (2026-07-16 review):** no route in the codebase mints a *download* presign for an ingested document today — only `presign_upload` exists (the opposite direction, upload). `ARTIFACT_KIND_INGESTED_DOCUMENT` is defined in `audit.py` as a reserved/forward-looking constant with zero call sites; the six wired disclosure sites cover job output, output file, fan-out child output, and export bundle only. AC1 is satisfied for every disclosure path that exists today. If/when an ingested-document download route is built, it must call `record_artifact_disclosure(artifact_kind=ARTIFACT_KIND_INGESTED_DOCUMENT, ...)` to close this gap.
 
 2. **AC2 — The invocation audit event carries the `file_ref_ids` it consumed.**
    **Given** a skill invocation that consumes documents
@@ -257,3 +258,13 @@ Claude Sonnet 5 (claude-sonnet-5)
 ## Change Log
 
 - 2026-07-15 — Story 13.3 implemented: all 9 tasks complete, all 6 ACs satisfied. `access.artifact_disclosed` disclosure events wired into all 6 presign sites with 15-min de-dupe; `file_ref_ids` added to invocation audit metadata at all 5 call sites; output-download presigned-URL TTL shortened 24h→15min; S3 access logging authored in Terraform (plan only, not applied — operator owes live plan+apply); 9 new integration tests + 8 new unit/integration tests for AC2; 2 pre-existing tests updated for the TTL/category-count changes this story makes. Zero migration. `docs/api-spec.json` diff is docstring-only (no contract change).
+- 2026-07-16 — Code review (3-layer: Blind Hunter, Edge Case Hunter, Acceptance Auditor): 1 decision-needed, 2 patch, 3 deferred, 9 dismissed as noise/false-positive.
+
+### Review Findings
+
+- [x] [Review][Decision] `ARTIFACT_KIND_INGESTED_DOCUMENT` is a dead constant — resolved 2026-07-16: scoped AC1 down via an inline note (see AC1 above) documenting it as a reserved/forward-looking constant with no wired site today; no download route exists for ingested documents yet. Revisit when one is built.
+- [x] [Review][Patch] `NameError` in new pip-install test — fixed 2026-07-16: removed the orphaned `assert proc.stderr.startswith(b"xxx")` line [tests/unit/services/test_code_driven_executor.py]. While verifying, found a second defect in the same test: `caplog` can never see this codebase's structlog output (`structlog.configure(logger_factory=PrintLoggerFactory())` in `app/core/logging.py` writes straight to stdout, never through stdlib `logging`) — rewrote the test to use `capsys` + ANSI-strip instead, matching how the log line actually renders. Also fixed a pre-existing `ruff` E501 in the same block. Verified: all 36 tests in the file pass.
+- [x] [Review][Patch] De-dupe check is TOCTOU-racy — fixed 2026-07-16: added `pg_advisory_xact_lock` keyed on `hash((user_id, artifact_ref))` before the check-then-insert in `record_artifact_disclosure` [app/services/audit_service.py]. Transaction-scoped (auto-released on commit/rollback), no schema change needed, so it fits the story's "no migration" constraint. Verified: full disclosure integration suite (9 tests, incl. the 5-poll de-dupe test) + full unit (735) + integration (677) regression all pass.
+- [x] [Review][Defer] De-dupe key omits `artifact_kind` [app/services/audit_service.py:426-441] — deferred, pre-existing pattern extended, not currently exploitable (no two artifact kinds share a ref format today)
+- [x] [Review][Defer] Export route writes two audit events with different `user_id` — `EVENT_ADMIN_SKILL_EXPORTED` uses `skill.created_by_user_id` [app/services/skill_export.py:247], the disclosure event correctly uses the actual requester [app/api/v1/skills.py:211] — deferred, pre-existing bug in code this story didn't touch
+- [x] [Review][Defer] No backfill/retroactive-coverage note for the app-level disclosure audit trail — S3 access logging (Task 6) explicitly covers URLs minted before this story shipped, but the `access.artifact_disclosed` application event obviously cannot retroactively record pre-deployment disclosures; this asymmetry isn't documented anywhere for a compliance reviewer — deferred, documentation gap only
