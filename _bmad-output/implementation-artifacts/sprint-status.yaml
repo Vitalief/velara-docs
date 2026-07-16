@@ -249,6 +249,6 @@ development_status:
   13-2-user-deprovisioning: done
   13-3-audit-read-path-phi-disclosure: done
   13-4-auth-and-authz-event-auditing: done
-  13-5-cloud-detective-controls: backlog
+  13-5-cloud-detective-controls: ready-for-dev
   13-6-close-remaining-unaudited-mutations: backlog
   13-7-hipaa-soc2-control-mapping-docs: backlog
