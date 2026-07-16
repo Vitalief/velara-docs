@@ -65,6 +65,7 @@ last_updated: 2026-07-16
 # 2026-07-16: 13-5-cloud-detective-controls moved to in-progress (dev-story).
 # 2026-07-16: 13-5-cloud-detective-controls moved to review (dev-story).
 # 2026-07-16: 13-5-cloud-detective-controls moved to done (code review — 6 patches applied, 1 decision resolved, 3 deferred).
+# 2026-07-16: 13-6-close-remaining-unaudited-mutations moved to in-progress (dev-story).
 project: Velara
 project_key: NOKEY
 tracking_system: file-system
@@ -253,5 +254,5 @@ development_status:
   13-3-audit-read-path-phi-disclosure: done
   13-4-auth-and-authz-event-auditing: done
   13-5-cloud-detective-controls: done
-  13-6-close-remaining-unaudited-mutations: ready-for-dev
+  13-6-close-remaining-unaudited-mutations: in-progress
   13-7-hipaa-soc2-control-mapping-docs: backlog
