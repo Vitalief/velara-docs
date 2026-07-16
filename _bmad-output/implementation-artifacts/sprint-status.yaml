@@ -257,4 +257,4 @@ development_status:
   13-4-auth-and-authz-event-auditing: done
   13-5-cloud-detective-controls: done
   13-6-close-remaining-unaudited-mutations: done
-  13-7-hipaa-soc2-control-mapping-docs: backlog
+  13-7-hipaa-soc2-control-mapping-docs: ready-for-dev
