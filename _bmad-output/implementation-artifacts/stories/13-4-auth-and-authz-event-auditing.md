@@ -4,7 +4,7 @@ baseline_commit: e5281dc
 
 # Story 13.4: Authentication & Authorization Event Auditing
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
