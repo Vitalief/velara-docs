@@ -61,6 +61,7 @@ last_updated: 2026-07-16
 # 2026-07-16: 13-3-audit-read-path-phi-disclosure moved to done (code review).
 # 2026-07-16: 13-4-auth-and-authz-event-auditing moved to in-progress (dev-story).
 # 2026-07-16: 13-4-auth-and-authz-event-auditing moved to review (dev-story).
+# 2026-07-16: 13-4-auth-and-authz-event-auditing moved to done (code review).
 project: Velara
 project_key: NOKEY
 tracking_system: file-system
@@ -247,7 +248,7 @@ development_status:
   13-1-audit-event-categorization: done
   13-2-user-deprovisioning: done
   13-3-audit-read-path-phi-disclosure: done
-  13-4-auth-and-authz-event-auditing: review
+  13-4-auth-and-authz-event-auditing: done
   13-5-cloud-detective-controls: backlog
   13-6-close-remaining-unaudited-mutations: backlog
   13-7-hipaa-soc2-control-mapping-docs: backlog
