@@ -4,7 +4,7 @@ baseline_commit: d212b34 (velara-api) / 3372772 (velara-web)
 
 # Story 15.1: Persist Structured Per-Execution Cost at Write Time
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
