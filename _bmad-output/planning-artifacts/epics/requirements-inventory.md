@@ -87,6 +87,7 @@
 - FR-USE-04 [P1]: Access logs capture every skill invocation, every read of skill internals, and every administrative action.
 - FR-USE-05 [P2]: Audit logs are retained for a minimum of seven years.
 - FR-USE-06 [P1]: Usage analytics — the platform surfaces **aggregate (Overview)** and **per-user** usage/value metrics (invocations, success rate, top skills, runtime, value/hours-saved, breakdown by invocation surface) in a **Usage & Value** screen. Per-user analysis lets an operator select an individual user and analyze their metrics.
+- FR-USE-07 [P1]: **(Added 2026-07-20, Epic 15.)** Every skill invocation that makes an LLM call records its own token counts and computed dollar cost as a durable, queryable fact of that execution — not only as an input to a platform-wide aggregate. Cost is surfaced per-invocation (Job detail), per-skill, and per-user (extending the existing Usage & Value screen), and a code-runtime or failed/cancelled invocation records an explicit zero/null cost rather than being silently excluded from any total. The same pricing applies to the AI integration assistant's skill-adaptation LLM calls (`propose_adapter`, Epic 11/14) — a separate spend path, priced and surfaced in the Audit Log.
 
 **Security and Compliance (SEC)**
 - FR-SEC-01 [P1]: Platform is hosted on a BAA-eligible cloud provider with a signed BAA in place before any PHI-adjacent skill is deployed.
@@ -206,6 +207,7 @@ _From design/ prototype (Velara v3.html, overrides.jsx, styles_v3.css, data.js) 
 | FR-USE-01–04, 06; FR-SEC-09 | Epic 9 | Audit log (append-only, queryable, Part 11 attributable/tamper-evident; write-path in Epic 3) + Usage & Value analytics (Overview + per-user) |
 | FR-SEC-08 (HIPAA) | Cross-cutting (E1, E7, E8, E9) | HIPAA named framework — PHI safeguards, BAA, encryption, audit |
 | FR-SEC-11 (Part 11 access) | Epic 7 + Epic 8 | Unique user IDs + auth (Cognito) and hierarchy-scoped RBAC / authority checks |
+| FR-USE-07 | Epic 15 | Per-invocation/per-skill/per-user cost tracking + priced AI-adapter-propose LLM spend |
 | UX-DR-14 (tab title) | Epic 1 (Story 1.5) | Per-page browser tab title (app shell) |
 
 _P2/P3 FRs deferred (not in Phase 1 epics): FR-REG-08/09, FR-EXE-06, FR-ING-05, FR-OUT-04, FR-ACL-06, FR-INV-04, FR-USE-05, FR-SEC-12 (formal 21 CFR Part 11 system validation / IQ-OQ-PQ)_

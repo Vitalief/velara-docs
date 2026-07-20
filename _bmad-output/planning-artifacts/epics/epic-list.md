@@ -11,6 +11,8 @@
 > **Added 2026-07-01** (see `sprint-change-proposal-2026-07-01.md`): access-control admin surfaces gap found near Epic 8 close. Epic 8's stories delivered RBAC enforcement (8.1), the IP client surface (8.2), and the client portal (8.3/8.4) but never the internal admin UI, and the skill-attachment model was a documented deferral. **Epic 8 gains Story 8.5** (Access Control screen — admin grant management UI over the 8.1 API) and **Story 8.6** (Skill Attachment Model & Assignment UI — real join table + assignment, replacing the scope-heuristic mock; **sequenced before 8.4** so client discovery consumes real attachments). **New Epic 10: Client User Provisioning** (Cognito `AdminCreateUser` + invites + user-management screens — a distinct identity-lifecycle concern, `USR-*` FRs, net-new vs SEC-06's pre-existing-user assumption). New FRs ACL-08/ACL-09/USR-01..03; ACL-09 supersedes the INV-07 "no attachment filtering" Phase-1 stance for the client portal; requires architecture ADRs (attachment model + Cognito provisioning).
 >
 > **Added 2026-07-06** (see `sprint-change-proposal-2026-07-06.md`): forward scope addition after Epic 10 close — the skill on-boarding path is too rigid. **New Epic 11: AI-Assisted Skill Integration, Versioning & Environment Promotion** — real multi-file ZIP bundle upload, a standardized code-driven entrypoint contract enforced at registration (absorbs the Epic 5.5 retro Action Item 1), an AI integration assistant that **proposes** a standardized adapter + manifest for human approval (adapter-only, core files byte-for-byte unchanged, re-certified before `client_ready`), UI-authored new versions (draft-mutable-in-place + immutable-on-publish; new-ZIP for hybrid), running an older version to compare (admin/ma_tech), and environment promotion (export/import Phase 1, in-app promote Phase-2 target). New `SKL-01..SKL-08` FRs; amends REG-01/REG-02; requires 3 architecture ADRs. **New Epic 12: Skill & Audit Lifecycle Polish** — four independent quick-fixes decoupled to ship on their own cadence: location-dependent authoring toggle (REG-10), backend-enriched audit context names (USE-07), distinct audit event icons (USE-08), duplicate-run cost warning (INV-10).
+>
+> **Added 2026-07-20** (see `sprint-change-proposal-2026-07-20-cost-tracking.md`). **New Epic 15: Per-Execution Cost Tracking** — an operator found only a single platform-wide aggregate dollar figure (Analytics Overview's `token_cost`); no per-invocation, per-skill, or per-user cost anywhere, and the AI-adapter-propose LLM spend (Epic 11/14) is captured in tokens but never priced either. Adds FR-USE-07. **Epic 9 stays `done`** (FR-USE-06 fully met as originally scoped) — this is new scope, not a defect.
 
 ## Epic 1: Platform Foundation & Local Dev Environment
 Developers can run the full platform locally — FastAPI + Celery + Redis + PostgreSQL + local object storage (MinIO/LocalStack) — behind provider abstractions (storage, secrets, auth) that make the eventual AWS swap a configuration change. A dev-auth shim issues the same JWT claims contract (`user_id`, `org_id`, role) Cognito will later provide. HIPAA controls (PHI sanitizer, S3-key-reference pattern, append-only audit, structured logging) ship from the first commit. **AWS provisioning, CI/CD, Cognito, and cloud observability move to Epic 7** — removing the AWS-account dependency from the critical path.
@@ -166,5 +168,23 @@ Closes the HIPAA / SOC 2 gaps a code-verified compliance gap analysis surfaced. 
 - 13.7 HIPAA & SOC 2 control mapping documents _(finalize last — must describe what actually shipped)_
 
 **FRs covered:** FR-SEC-13, FR-SEC-14, FR-SEC-15, FR-SEC-16, FR-SEC-17 _(all new)_; strengthens FR-SEC-08 (the HIPAA half, previously undecomposed) and FR-SEC-09 (audit completeness)
+
+---
+
+## Epic 15: Per-Execution Cost Tracking
+
+<!-- Added 2026-07-20 via correct-course. Authoritative story-able version: epics/epic-15-per-execution-cost-tracking.md. -->
+
+An operator asked whether individual skill executions are cost-tracked and found only a single platform-wide aggregate dollar figure (Analytics Overview's `token_cost`) — no per-invocation, per-skill, or per-user cost anywhere. Token counts already exist for prompt/hybrid runs but are buried in an untyped `result_metadata` JSONB blob; code-runtime skills carry no cost data at all. A second, distinct LLM-spend path — the AI integration assistant's `propose_adapter` calls (Epic 11/14) — has the identical gap: tokens/model are captured but never priced.
+
+**Epic 9 stays `done`** — FR-USE-06 (Epic 9's own scope) is fully met as written; this epic adds FR-USE-07, new scope Epic 9 was never asked to cover.
+
+**Stories (to be detailed via create-story):**
+- 15.1 Persist structured per-execution cost at write time _(the risk-bearing migration story — new `invocation_results` columns, execution-path write, relocated pricing table)_
+- 15.2 Surface per-invocation cost on the Job API + Run Console/Jobs History UI _(depends on 15.1)_
+- 15.3 Per-skill and per-user cost in Analytics _(depends on 15.1; independent of 15.2)_
+- 15.4 Cost the AI-assisted skill-adaptation LLM call _(depends on 15.1 for the shared pricing table only; audit-log-only, no schema change)_
+
+**FRs covered:** FR-USE-07 _(new)_
 
 ---
