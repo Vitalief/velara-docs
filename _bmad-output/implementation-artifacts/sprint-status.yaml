@@ -57,6 +57,7 @@ last_updated: 2026-07-20
 
 # 2026-07-20: Epic 13 marked done (7/7 stories complete, all code-reviewed).
 # 2026-07-20: Epic 14 (Skill Upgrade Flexibility) added via correct-course — 3 stories in backlog (sprint-change-proposal-2026-07-20.md).
+# 2026-07-20: Epic 14 moved to in-progress; 14-3-ui-explicit-version-increment moved to ready-for-dev (create-story, first story in epic).
 
 # 2026-07-16: 13-7-hipaa-soc2-control-mapping-docs moved to in-progress (dev-story).
 # 2026-07-16: 13-7-hipaa-soc2-control-mapping-docs moved to review (dev-story).
@@ -276,7 +277,7 @@ development_status:
   #   forward (FR amendments only). Supersedes 5.5.1 single-shape invariant; amends Epic 11 ADR #3 (inline in 14-1).
   #   Dev order: 14-3 (independent, FE-only) → 14-1 (shape-lock + egress migration) → 14-2 (adapter on upgrade, dep 14-1).
   # ─────────────────────────────────────────────────────────
-  epic-14: backlog
+  epic-14: in-progress
   14-1-relax-hybrid-shape-lock: backlog
   14-2-ai-adapter-on-upgrade-path: backlog
-  14-3-ui-explicit-version-increment: backlog
+  14-3-ui-explicit-version-increment: ready-for-dev
