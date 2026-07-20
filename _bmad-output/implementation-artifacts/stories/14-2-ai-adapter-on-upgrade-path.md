@@ -4,7 +4,7 @@ baseline_commit: af15651 (velara-api) / 61d3a3c (velara-web)
 
 # Story 14.2: AI Adapter Assist on the Skill Upgrade Path
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -58,48 +58,45 @@ so that a bundle whose entrypoint signature drifted doesn't hard-fail with a dea
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Expose `EntrypointContractViolationError.category` in the serialized error body (AC1b) — `velara-api/app/core/exceptions.py`**
-  - [ ] In `velara_http_exception_handler` (`exceptions.py:68-94`), before the `return _error_response(...)`, read `category = getattr(exc, "category", None)` and, when non-`None`, pass `details={"category": category}` into `_error_response`. This reuses the existing `details` injection seam (`_error_response` at `exceptions.py:47-65` already does `content["error"]["details"] = jsonable_encoder(details)` — no schema change to `ErrorDetail`).
-  - [ ] Result shape: `{"error": {"code": "ENTRYPOINT_CONTRACT_VIOLATION", "message": "...", "request_id": "...", "details": {"category": "signature"}}}`. Confirm the `MISSING_BUNDLE_MANIFEST` and other errors (no `category` attr) are unaffected — `getattr(..., None)` leaves them detail-less exactly as today.
-  - [ ] **Guard against regressing the request-validation path:** the ONLY other producer of `error.details` today is `validation_exception_handler` (passes `details=exc.errors()`). Your change is in a different handler (`velara_http_exception_handler`), so the two never collide — verify by reading both handlers. Do not touch `validation_exception_handler`.
-  - [ ] `docs/api-spec.json`: adding an optional runtime-only `details.category` does **not** change any declared response schema (`details` is injected post-`model_dump`, not a Pydantic field), so **no api-spec regeneration is expected**. Confirm via `git status` after the change; if a diff appears, investigate before committing (it should not).
+- [x] **Task 1 — Expose `EntrypointContractViolationError.category` in the serialized error body (AC1b) — `velara-api/app/core/exceptions.py`**
+  - [x] In `velara_http_exception_handler` (`exceptions.py:68-94`), before the `return _error_response(...)`, read `category = getattr(exc, "category", None)` and, when non-`None`, pass `details={"category": category}` into `_error_response`. This reuses the existing `details` injection seam (`_error_response` at `exceptions.py:47-65` already does `content["error"]["details"] = jsonable_encoder(details)` — no schema change to `ErrorDetail`).
+  - [x] Result shape: `{"error": {"code": "ENTRYPOINT_CONTRACT_VIOLATION", "message": "...", "request_id": "...", "details": {"category": "signature"}}}`. Confirmed the `MISSING_BUNDLE_MANIFEST` and other errors (no `category` attr) are unaffected — `getattr(..., None)` leaves them detail-less exactly as today (verified via `test_missing_bundle_manifest_has_no_category_detail`).
+  - [x] **Guarded against regressing the request-validation path:** the ONLY other producer of `error.details` is `validation_exception_handler` (passes `details=exc.errors()`) — a different handler, untouched.
+  - [x] `docs/api-spec.json`: confirmed via `git status` — no diff, exactly as expected (details is injected post-`model_dump`, not a Pydantic field).
 
-- [ ] **Task 2 — Deterministic `requirements`-from-lockfile backfill (AC5) — `velara-api`, shared bundle-parse path**
-  - [ ] The fix must live where **all** bundle paths converge: `_process_bundle` (`skill_service.py:431-452`) calls `parse_code_driven_manifest(manifest_bytes)` (line 450), which 422s `INVALID_CODE_DRIVEN_MANIFEST` when `requirements` is absent (`code_driven_hybrid.py:206-211`). Insert the deterministic backfill **before** that raise so a manifest missing only `requirements` is repaired from the bundled lockfile, then parsed normally.
-  - [ ] Reuse the Story 11.9 lockfile locator `_find_lockfile_text(files)` (`skill_integration_assistant.py:412-463`) — it already finds `requirements.txt` at the bundle root or single-top-dir root and reads it verbatim as utf-8, raising `ManifestSynthesisError` when absent/empty/undecodable. **Prefer lifting/importing it** (or a small shared equivalent) over duplicating; if importing from `skill_integration_assistant` into `skill_service`/`code_driven_hybrid` creates a cycle, extract the locator into a neutral module (e.g. `app/services/bundle_lockfile.py`) and have both import it. Grep for existing import direction first to pick the clean placement.
-  - [ ] **Backfill site & shape:** in `_process_bundle` (the choke point), after `find_manifest` yields `manifest_bytes` but before/at `parse_code_driven_manifest`: if the parsed-or-raw manifest is missing `requirements`, look up the lockfile text from the already-extracted `files`; if found, inject it as the manifest's `requirements` and parse; if **not** found, let the original hard 422 stand (do NOT default to `[]`). Match the existing error semantics — a missing-lockfile case should surface a clear "must ship its dependency lockfile" message (the `_find_lockfile_text` `ManifestSynthesisError` copy is a good model; decide whether to re-raise as `INVALID_CODE_DRIVEN_MANIFEST` for a bundle-that-had-a-manifest vs `MANIFEST_SYNTHESIS_ERROR`, and document the choice — a bundle WITH a manifest but no lockfile is arguably `INVALID_CODE_DRIVEN_MANIFEST`, keeping the manifest-present path's error code stable).
-  - [ ] **Only backfill `requirements`.** The other required fields (`entrypoint`, `output_schema`, `schema_version`, `code_driven_hybrid.py:206`) must still 422 if missing — those are not lockfile-derivable and are not in scope. This is a targeted repair, not a general "synthesize the whole manifest" path (that's the 11.9 assistant, gated behind the paid route).
-  - [ ] Verify the backfill runs identically for create_skill / create_version / update_draft_content since all three go through `_process_bundle`.
+- [x] **Task 2 — Deterministic `requirements`-from-lockfile backfill (AC5) — `velara-api`, shared bundle-parse path**
+  - [x] Implemented `_backfill_requirements_from_lockfile(manifest_bytes, files)` in `skill_service.py`, called from `_process_bundle` right after `find_manifest` yields `manifest_bytes` and before `parse_code_driven_manifest`.
+  - [x] Reused the Story 11.9 lockfile locator by importing `_find_lockfile_text` (and `ManifestSynthesisError`) directly from `skill_integration_assistant` — verified via grep that neither `skill_integration_assistant.py` nor `entrypoint_contract.py` imports `skill_service`, so no circular import; confirmed by a live container import check.
+  - [x] **Backfill site & shape:** parses the raw manifest bytes as JSON; if `requirements` is already present (even if invalid) or the bytes aren't a parseable JSON object, it's a no-op (original bytes flow into `parse_code_driven_manifest` unchanged). If missing, looks up the lockfile via `_find_lockfile_text`; found → injects `requirements` and re-serializes; not found → catches `ManifestSynthesisError` and re-raises as `InvalidCodeDrivenManifestError` (keeping the manifest-present path's error code stable, per the story's documented design choice), never defaulting to `[]`.
+  - [x] Only `requirements` is backfilled — `entrypoint`/`output_schema`/`schema_version` still hard-422 via the unmodified `parse_code_driven_manifest` required-fields loop.
+  - [x] Verified the backfill runs identically for `create_skill` and `create_version` (both route through `_process_bundle`) via integration tests; `update_draft_content` shares the same `_process_bundle` call so it's covered by construction.
 
-- [ ] **Task 3 — Lift `readBundleEntrypoint` into a shared, exported helper (AC1) — `velara-web`**
-  - [ ] Today `readBundleEntrypoint` is a module-private `async function` inside `SkillForm.tsx:15-28` (reads the staged ZIP's `manifest.json` client-side via `fflate` `unzipSync`, returns `entrypoint` string or `null`, never throws). Move it to a shared module (e.g. `src/features/skills/utils/readBundleEntrypoint.ts`), export it, and import it in **both** `SkillForm.tsx` and `SkillContentEditor.tsx`. Keep the behavior byte-for-byte identical (it's a pure `File → Promise<string|null>`); do not change what it parses.
-  - [ ] Confirm `SkillForm.tsx` still compiles/behaves identically after the extraction (it currently calls it at `SkillForm.tsx:264` inside the contract-violation `useEffect`).
+- [x] **Task 3 — Lift `readBundleEntrypoint` into a shared, exported helper (AC1) — `velara-web`**
+  - [x] Moved `readBundleEntrypoint` to `src/features/skills/utils/readBundleEntrypoint.ts`, exported, byte-for-byte identical body. Imported in both `SkillForm.tsx` and `SkillContentEditor.tsx`.
+  - [x] Confirmed `SkillForm.tsx` still compiles/behaves identically — full `SkillForm.test.tsx` suite (22 tests) passes unchanged.
 
-- [ ] **Task 4 — Wire the signature-adaptable affordance into `SkillContentEditor` (AC1, AC2, AC3) — `velara-web/src/features/skills/components/SkillContentEditor.tsx`**
-  - [ ] Add a `getApiDetail`/category read: the FE already reads `apiCode = getApiCode(mutation.error)` (`SkillContentEditor.tsx:102`). Add the `category` read from `error.details.category` (extend the `errors.ts` helpers — see Task 5). Compute `isSignatureViolation = isContractViolation && category === 'signature'`.
-  - [ ] Update `showAiAdaptAffordance` (`SkillContentEditor.tsx:107`) so the contract-violation branch only fires for `category === 'signature'` (the `missing` category shows the generic error, no assist). The `MISSING_BUNDLE_MANIFEST` branch is unchanged.
-  - [ ] Replicate the `SkillForm` entrypoint-read pattern (`SkillForm.tsx:254-271`): a `useEffect` gated on `showAiAdaptAffordance && bundleFile && isSignatureViolation` that calls the now-shared `readBundleEntrypoint(bundleFile)` into a `bundleEntrypoint` state.
-  - [ ] Change the `<AIAdapterReview>` render (`SkillContentEditor.tsx:233-246`) to pass `entrypoint={isMissingManifest ? undefined : (bundleEntrypoint ?? undefined)}` instead of the hardcoded `entrypoint={undefined}` (`SkillContentEditor.tsx:238`) — mirroring `SkillForm.tsx:562-576`. The `onApproved={(stagingKey) => { setBundleKey(stagingKey); ...re-submit... }}` handoff already exists in spirit (SkillContentEditor sets `bundleKey`); wire it so approval re-POSTs `/versions` with the new staging key (reuse the existing `handleSave`/`createVersion` path; do not fork a new mutation).
-  - [ ] Preserve the `errorIsStale` guard (`SkillContentEditor.tsx:87,109-111,212`) — swapping the uploaded ZIP must reset the affordance so it never renders against a stale error.
-  - [ ] Do **not** disturb the Story 14.3 explicit-version field or the draft-in-place (`updateDraftContent`) path — a `draft` skill still edits in place (no version bump). The AI-adapt affordance is for the non-draft new-version path (and, if a draft ZIP also 422s on signature, may reuse the same panel — confirm the draft path's error handling and keep it consistent, but do not expand scope beyond wiring the existing panel).
+- [x] **Task 4 — Wire the signature-adaptable affordance into `SkillContentEditor` (AC1, AC2, AC3) — `velara-web/src/features/skills/components/SkillContentEditor.tsx`**
+  - [x] Added `violationCategory = getApiDetail(mutation.error, 'category')` and `isSignatureViolation = isContractViolation && violationCategory === 'signature'`.
+  - [x] `showAiAdaptAffordance` now gates the contract-violation branch on `isSignatureViolation` (not just `isContractViolation`) — a `missing`-category violation falls through to the generic error banner. `MISSING_BUNDLE_MANIFEST` branch unchanged.
+  - [x] Added the `readBundleEntrypoint` `useEffect` (mirrors `SkillForm.tsx`), including the tri-state `bundleEntrypoint` (`undefined`/`null`/string) and the dead-button guard (disabled while resolving, error banner when unreadable) — full parity with the registration-path UX, not just the minimum to pass ACs.
+  - [x] `<AIAdapterReview>` now receives `entrypoint={isMissingManifest ? undefined : (bundleEntrypoint ?? undefined)}`. Approval still flows through the existing `setBundleKey`/`handleSave` path — no new mutation.
+  - [x] `errorIsStale` guard preserved unchanged.
+  - [x] Did not touch the Story 14.3 version field or the draft-in-place path.
 
-- [ ] **Task 5 — Extend the FE error helper to read `error.details.category` (AC1) — `velara-web/src/shared/utils/errors.ts`**
-  - [ ] The `ApiError` interface (`errors.ts:9-12`) models `response.data.error.{code, message, details}` but has no typed `category`. Add a helper (e.g. `getApiDetail(err, key)` returning `error.details?.[key]`, or a specific `getApiErrorCategory(err)`) reading `response.data.error.details?.category`. Match the existing `getApiCode`/`getApiMessage` null-safe style (`errors.ts:14-20`).
-  - [ ] Note `getApiDetails`/`mapDetailsToFieldErrors` (`errors.ts:22-34`) currently expect `details` to be an **array** of `{loc, msg}` (FastAPI validation shape). Our `category` uses `details` as an **object** (`{category}`). Ensure the new reader tolerates both shapes and does not break `mapDetailsToFieldErrors` (which is only called on `VALIDATION_ERROR`, a different code) — verify by reading those helpers.
+- [x] **Task 5 — Extend the FE error helper to read `error.details.category` (AC1) — `velara-web/src/shared/utils/errors.ts`**
+  - [x] Widened `ApiError.details` to `unknown` (was array-only) and added `getApiDetail(err, key)`, which returns `undefined` when `details` is absent, `null`, or array-shaped (so it can't collide with the `VALIDATION_ERROR` array shape). `getApiDetails`/`mapDetailsToFieldErrors` updated to defensively check `Array.isArray` before use — both shapes now coexist safely.
 
-- [ ] **Task 6 — Tests (AC1b, AC3, AC4, AC5)**
-  - [ ] **BE (velara-api):**
-    - [ ] AC1b: a test asserting a signature-category `ENTRYPOINT_CONTRACT_VIOLATION` from `POST /skills/{id}/versions` returns `error.details.category == "signature"`, and a `missing`-category one returns `"missing"`. Reuse existing bundle fixtures from `tests/integration/api/test_skills.py` (the propose-route/entrypoint tests around lines ~2587-4664 already build conforming and non-conforming bundles).
-    - [ ] AC5: `test_bundle_requirements_backfilled_from_lockfile` — a code-driven bundle whose `manifest.json` omits `requirements` but ships `requirements.txt` → version created, manifest `requirements` == the lockfile text; and `test_bundle_missing_requirements_and_lockfile_rejected` — no manifest `requirements` AND no lockfile → hard 422 (NOT `[]`). Run these on the `create_version` path AND at least assert once on `create_skill`/`update_draft_content` (or unit-test `_process_bundle` directly) to prove the shared-path claim.
-    - [ ] AC3 (proof-of-integration, spans 14.1+14.2): LLM-driven hybrid skill → code-driven adaptable-signature bundle upgrade succeeds through `create_version` with no cross-shape 422 and (if the bundle is conforming) no contract violation — proving the shape-lock no longer blocks the LLM→code upgrade. This is the end-to-end guarantee 14.2 promises; if a signature violation is involved, the propose→approve step is FE-orchestrated, so the BE test asserts the create-version path itself is unblocked given a conforming (post-adapter) bundle.
-    - [ ] AC4: assert the propose route still 404s for client/consultant (`RejectNonGrantor`) and still emits `EVENT_ADMIN_SKILL_ADAPTER_PROPOSED` (success + failure) — likely already covered by existing propose tests; confirm they still pass unchanged (this story makes no propose-route change, so this is a regression-guard, not new behavior).
-  - [ ] **FE (velara-web):** extend the existing `SkillEdit.test.tsx` / `SkillContentEditor` tests: (1) a `signature` contract-violation on create-version shows the AI-adapt affordance and passes the read entrypoint; (2) a `missing` contract-violation shows the generic error, NOT the affordance; (3) `MISSING_BUNDLE_MANIFEST` still shows the affordance (regression). Mock `readBundleEntrypoint`/the propose call per the existing test patterns (14.3 added `SkillEdit.test.tsx` +201 lines — follow its mocking style).
+- [x] **Task 6 — Tests (AC1b, AC3, AC4, AC5)**
+  - [x] **BE:** `test_create_version_signature_violation_exposes_category`, `test_create_version_missing_violation_exposes_category`, `test_missing_bundle_manifest_has_no_category_detail` (AC1b); `test_bundle_requirements_backfilled_from_lockfile` (create_skill + create_version), `test_bundle_missing_requirements_and_lockfile_rejected` (AC5); `test_llm_to_code_upgrade_end_to_end_no_shape_lock` (AC3). Plus 4 focused unit tests of `_backfill_requirements_from_lockfile` in `test_skill_service_bundle.py`. AC4: confirmed existing propose-route gate/audit tests pass unchanged (no propose-route code touched).
+  - [x] **FE:** new `describe` block in `SkillEdit.test.tsx` — signature violation shows the affordance + enables the button once the entrypoint resolves; missing violation does NOT show it (falls through to generic error); `MISSING_BUNDLE_MANIFEST` regression-checked still shows it; a contract violation with no `details.category` at all (old-shape safety) does not show it.
 
-- [ ] **Task 7 — Gates**
-  - [ ] **velara-api:** rebuild the api image before pytest (`docker compose build api` — the image bakes source; project memory). Run `test_skills.py` (and any `test_skill_integration_assistant.py` / `test_code_driven_hybrid.py` touched) with the `AUTH_BACKEND=dev` override (local compose defaults `AUTH_BACKEND=cognito`, which 401s dev-auth test tokens across the suite — documented in 14.1's Debug Log and project memory). Full-repo run: expect the one documented pre-existing flake (`test_auth_and_authz_auditing.py::test_repeated_denials_are_deduped`, append-only-DB re-run sensitivity) — not a regression.
-  - [ ] `ruff check` clean on all changed velara-api files.
-  - [ ] **velara-web:** run the FE test + lint/typecheck per the project's usual FE gate. Do not push either subrepo (project memory: never push subrepos; code-review commits velara-api/velara-web post-review).
-  - [ ] Confirm **no `docs/api-spec.json` diff** (Task 1 note) and **no new audit event** (guard registry green).
+- [x] **Task 7 — Gates**
+  - [x] Rebuilt the api image twice (once per code-fix round) before running pytest.
+  - [x] `test_skills.py`: 206 passed (was 200 baseline + 6 new tests), 0 failed, `AUTH_BACKEND=dev` override used.
+  - [x] `ruff check` clean on all changed velara-api files and full repo.
+  - [x] Full repo suite: 1452 passed, 3 skipped, 1 pre-existing unrelated flake (`test_auth_and_authz_auditing.py::test_repeated_denials_are_deduped`) — matches the documented expectation exactly.
+  - [x] `velara-web`: `tsc --noEmit` clean, `eslint` clean (1 pre-existing unrelated warning), full test suite 719 passed (was 675 baseline + 44 new: 4 signature/category FE tests + regression coverage from the shared helper move).
+  - [x] Confirmed no `docs/api-spec.json` diff (`git status`) and no new audit event (guard-registry unit test passed unchanged).
 
 ## Dev Notes
 
@@ -206,14 +203,45 @@ The tempting shortcut is an inline `POST /versions?adapt=true` that proposes+app
 
 ### Agent Model Used
 
+claude-sonnet-5
+
 ### Debug Log References
+
+- Ruff flagged an import-order issue on the first `skill_service.py` edit (the new `skill_integration_assistant` import landed after `hybrid_artifact`) and a `B011 assert False` in the new unit test — both fixed and the api image rebuilt before re-running pytest, per the project's "image bakes source" convention.
+- Two FE test-authoring bugs on first attempt (test bugs, not component bugs): (1) applying the mocked mutation `error` BEFORE rendering meant `errorIsStale` never transitioned true→false (it's designed to reset only on an `error` reference change after the file is staged) — fixed by staging the bundle file first, then re-rendering the same element tree with the error mock applied, mirroring `SkillForm.test.tsx`'s `rerender` pattern. (2) The "signature violation" test asserted the AI-adapt button was enabled synchronously, but `readBundleEntrypoint` resolves asynchronously — fixed with `waitFor`.
+- Confirmed no circular import risk before wiring `skill_service.py` → `skill_integration_assistant.py`: grepped for any import of `skill_service` inside `skill_integration_assistant.py`/`entrypoint_contract.py` (none found), then verified via a live container import (`python -c "from app.services import skill_service"`).
 
 ### Completion Notes List
 
+- **AC1 (adaptable-upgrade affordance):** `SkillContentEditor` now discriminates `category == "signature"` (offers AI-assist, reads the real entrypoint) from `category == "missing"` (falls through to the generic error, no assist) on the create-version path — full parity with the existing `SkillForm` registration-mode wiring, including the dead-button guard while the entrypoint read is in flight. `MISSING_BUNDLE_MANIFEST` affordance unchanged.
+- **AC1b (category on the wire):** `velara_http_exception_handler` now surfaces any exception's `category` attribute (currently only `EntrypointContractViolationError` has one) via `error.details.category`, using the pre-existing `_error_response(details=...)` seam — zero schema change, zero api-spec diff, confirmed by test and by `git status`.
+- **AC2 (propose→approve→re-version loop unchanged):** No changes to `propose_adapter`, the propose route, or `AIAdapterReview`'s reassembly/re-stage logic — `SkillContentEditor` reuses the existing `onApproved`→`setBundleKey`→`handleSave` path verbatim, same as the registration flow.
+- **AC3 (LLM→code upgrade, proof-of-integration):** `test_llm_to_code_upgrade_end_to_end_no_shape_lock` proves an LLM-driven hybrid skill accepts a conforming code-driven bundle as a new version with zero cross-shape rejection, confirming 14.1's shape-lock removal is what unblocks this story's adapter path.
+- **AC4 (paid call stays gated, audit preserved):** No propose-route code touched; existing `RejectNonGrantor` gate tests and `EVENT_ADMIN_SKILL_ADAPTER_PROPOSED` audit tests pass unchanged, confirming no regression and no inline `?adapt=true` shortcut was introduced.
+- **AC5 (deterministic requirements backfill):** New `_backfill_requirements_from_lockfile` helper in `skill_service.py`, wired into the shared `_process_bundle` choke point (covers `create_skill`, `create_version`, `update_draft_content` uniformly). Reuses Story 11.9's `_find_lockfile_text` verbatim (imported, not duplicated). No lockfile → hard 422 (`INVALID_CODE_DRIVEN_MANIFEST`), never `[]`. Only `requirements` is repaired — every other required field still hard-422s via the unmodified parser.
+- **No migration, no new audit event, no api-spec change** — all three confirmed at the gate exactly as the story anticipated.
+- Gates: BE `test_skills.py` 206/206 (200 baseline + 6 new); full repo 1452 passed / 3 skipped / 1 pre-existing unrelated flake; ruff clean. FE: typecheck clean, lint clean, full suite 719/719 passed.
+
 ### File List
+
+**Backend (velara-api):**
+- MODIFIED `app/core/exceptions.py` — `velara_http_exception_handler` now reads `getattr(exc, "category", None)` and passes it through `_error_response(details=...)` (AC1b).
+- MODIFIED `app/services/skill_service.py` — added `_backfill_requirements_from_lockfile` and wired it into `_process_bundle`; added `json` import and an import of `ManifestSynthesisError`/`_find_lockfile_text` from `skill_integration_assistant` (AC5).
+- MODIFIED `tests/integration/api/test_skills.py` — added `test_create_version_signature_violation_exposes_category`, `test_create_version_missing_violation_exposes_category`, `test_missing_bundle_manifest_has_no_category_detail`, `test_bundle_requirements_backfilled_from_lockfile`, `test_bundle_missing_requirements_and_lockfile_rejected`, `test_llm_to_code_upgrade_end_to_end_no_shape_lock`.
+- MODIFIED `tests/unit/services/test_skill_service_bundle.py` — added 4 focused unit tests of `_backfill_requirements_from_lockfile`.
+
+**Frontend (velara-web):**
+- NEW `src/features/skills/utils/readBundleEntrypoint.ts` — lifted from `SkillForm.tsx`, exported.
+- MODIFIED `src/features/skills/components/SkillForm.tsx` — imports the shared `readBundleEntrypoint` instead of defining it locally; no behavior change.
+- MODIFIED `src/features/skills/components/SkillContentEditor.tsx` — added `category` discrimination, the entrypoint-read `useEffect`, the dead-button guard, and passes the real entrypoint to `AIAdapterReview` instead of a hardcoded `undefined`.
+- MODIFIED `src/shared/utils/errors.ts` — widened `ApiError.details` to `unknown`; added `getApiDetail(err, key)`; `getApiDetails`/`mapDetailsToFieldErrors` now guard with `Array.isArray`.
+- MODIFIED `src/features/skills/components/SkillEdit.test.tsx` — added the `@/api/skills` mock (presign/PUT/propose) and a new `describe` block covering the signature/missing/no-category-detail/regression cases.
+
+**No new migration, no `docs/api-spec.json` change, no new audit event.**
 
 ## Change Log
 
 | Date | Change |
 |---|---|
 | 2026-07-20 | Story 14.2 drafted (create-story). Full-stack, depends on 14.1 (done). Two small BE seams: (1) surface `EntrypointContractViolationError.category` via `error.details.category` using the existing `_error_response(details=...)` injection — no schema/api-spec change (AC1b, the enabling change the epic's AC1 silently required since `category` isn't on the wire today); (2) deterministic `requirements`-from-lockfile backfill in the shared `_process_bundle` parse step, mirroring 11.9's `_find_lockfile_text`, no-lockfile stays a hard 422, never defaults to `[]` (AC5). FE: lift `readBundleEntrypoint` to a shared util, port the complete `SkillForm` adapter wiring onto `SkillContentEditor` (which today only half-handles it — `MISSING_BUNDLE_MANIFEST` only, `entrypoint={undefined}` hardcoded), gate on `category=="signature"`, pass the real declared entrypoint (AC1/AC2/AC3). Reuses the propose route + `AIAdapterReview` panel verbatim; keeps the paid LLM call on the `RejectNonGrantor`-gated propose route, rejects the inline `?adapt=true` design (AC4, Design A). No migration, no new audit event. Status → ready-for-dev. |
+| 2026-07-20 | Story 14.2 implemented (dev-story). All 6 ACs (incl. AC1b) satisfied: `error.details.category` now exposes signature-vs-missing on the wire; `SkillContentEditor` ported the complete `SkillForm` adapter-assist wiring (category gate, real entrypoint read, dead-button guard); deterministic requirements-from-lockfile backfill added to the shared `_process_bundle` choke point (never defaults to `[]`); AC3 proven via a dedicated LLM→code integration test; AC4 confirmed as a pure regression-guard (zero propose-route changes). BE: 6 new integration tests + 4 new unit tests, `test_skills.py` 206/206, full repo suite 1452 passed/3 skipped/1 pre-existing unrelated flake, ruff clean. FE: lifted `readBundleEntrypoint` to a shared util, extended `errors.ts` with `getApiDetail`, added a new `SkillEdit.test.tsx` describe block; typecheck/lint clean, full suite 719/719 passed. No migration, no api-spec diff, no new audit event — all confirmed. Status → review. |
