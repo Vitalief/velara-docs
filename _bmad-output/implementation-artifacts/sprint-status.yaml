@@ -58,6 +58,7 @@ last_updated: 2026-07-20
 # 2026-07-20: 14-1-relax-hybrid-shape-lock moved to in-progress (dev-story).
 # 2026-07-20: 14-1-relax-hybrid-shape-lock moved to review (dev-story).
 # 2026-07-20: 14-1-relax-hybrid-shape-lock moved to done (code review — 2 docstring patches applied [stale HYBRID_SHAPE_MISMATCH refs], 1 decision dismissed as out-of-scope, 6 findings dismissed as false-positive/non-actionable; all 5 ACs verified MET).
+# 2026-07-20: 14-2-ai-adapter-on-upgrade-path moved to ready-for-dev (create-story). Full-stack, depends on 14-1 (done). Two BE seams (expose ENTRYPOINT_CONTRACT_VIOLATION category via error.details; deterministic requirements-from-lockfile backfill) + FE (port SkillForm adapter wiring onto SkillContentEditor, gate on category=="signature"). No migration, no new audit event.
 # 2026-07-20: 14-3-ui-explicit-version-increment moved to in-progress (dev-story).
 # 2026-07-20: 14-3-ui-explicit-version-increment moved to review (dev-story).
 # 2026-07-20: 14-3-ui-explicit-version-increment moved to done (code review skipped — Project Lead judgment call, small well-scoped FE-only change).
@@ -286,5 +287,5 @@ development_status:
   # ─────────────────────────────────────────────────────────
   epic-14: in-progress
   14-1-relax-hybrid-shape-lock: done
-  14-2-ai-adapter-on-upgrade-path: backlog
+  14-2-ai-adapter-on-upgrade-path: ready-for-dev
   14-3-ui-explicit-version-increment: done
