@@ -4,7 +4,7 @@ baseline_commit: 6c6e97c (velara-api) / 61d3a3c (velara-web)
 
 # Story 14.1: Relax the Hybrid Manifest Shape-Lock
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -210,6 +210,23 @@ Delete the 4 raises, not the class (line 170). Keeping the class defined-but-unr
 - [Source: velara-api tests/unit/test_audit_coverage_guard.py:40-52] — version-create/export/import already mapped to existing audit events (confirms NO new audit event).
 - [Source: _bmad-output/implementation-artifacts/stories/11-6-author-new-skill-versions-from-ui.md] — Draft-Mutable Versioning ADR (amended here); the rollback-cleanup bug class in the same `update_draft_content` function.
 - [Source: project memory — [[project-story-11-6-review]], [[feedback-never-push-subrepos]], [[project-preexisting-ci-failures-fixed]] (api image bakes source), [[project-story-13-1-review]] (export_openapi container-path trap)].
+
+### Review Findings
+
+_Code review 2026-07-20 (adversarial: Blind Hunter + Edge Case Hunter + Acceptance Auditor). All 5 ACs verified MET against source. 2 patches, 1 decision, 6 dismissed as false-positive/non-actionable._
+
+- [x] [Review][Decision → Dismissed] Cross-shape draft in-place edit does not re-flag derived children — `update_draft_content` (skill_service.py:1418) re-derives the projection but, unlike `create_version` (which fans out `review_required=True` at skill_service.py:1245), never re-flags derived children on a shape-flipping in-place draft edit. **Resolved 2026-07-20: dismissed as out of scope** — AC5 scoped the re-review signal to the version-bump path; a pre-publish draft edit re-flagging children before the change ships would be premature. Children re-review on the next actual publish (`create_version`), the correct trigger.
+
+- [x] [Review][Patch] Stale route docstring still advertised the removed 422 HYBRID_SHAPE_MISMATCH (feeds OpenAPI description) [app/api/v1/skills.py:779] — FIXED: docstring now states the shape MAY change and the projection is re-derived.
+- [x] [Review][Patch] Stale `create_version` service docstring claimed a cross-shape swap is rejected HYBRID_SHAPE_MISMATCH [app/services/skill_service.py:1107] — FIXED: docstring now describes the re-derived projection (Story 14.1).
+
+**Dismissed (recorded for traceability, not actionable):**
+- Migration backfill "reintroduces the leak" for pre-migration rows (blind+edge) — inherent to per-version egress never having been recorded; explicitly documented as an approximation in the migration docstring, matches the project's 0020 backfill pattern. The fix is correct for all go-forward writes.
+- `downgrade()` drops the column / not data-idempotent (blind) — standard additive-column downgrade; expected.
+- `create_skill` LLM path relies on flush-materialized `default=list` (blind) — verified safe today (read is post-`session.flush()`); speculative future-fragility only.
+- Non-hybrid `else` "wipes" the projection at both sites (edge) — false positive: for non-hybrid (prompt/code) skills `schema_version`/`egress` are already `None`/`[]` (only ever set from a code-driven hybrid manifest), so the `else` is a no-op.
+- Bundle path never runs `is_code_driven_manifest` (edge) — by design: a bundle is always a code-driven hybrid (enforced by the preserved `InvalidBundleError` check); `_process_bundle` always yields a manifest.
+- Shared list aliasing between skill row and version row egress (edge) — `manifest.egress` is a fresh list per Pydantic parse; JSONB is never mutated in place on these paths, so the shared reference is never observed.
 
 ## Dev Agent Record
 
