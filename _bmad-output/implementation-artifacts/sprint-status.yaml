@@ -64,6 +64,7 @@ last_updated: 2026-07-20
 # 2026-07-20: 14-3-ui-explicit-version-increment moved to in-progress (dev-story).
 # 2026-07-20: 14-3-ui-explicit-version-increment moved to review (dev-story).
 # 2026-07-20: 14-3-ui-explicit-version-increment moved to done (code review skipped — Project Lead judgment call, small well-scoped FE-only change).
+# 2026-07-20: 14-2-ai-adapter-on-upgrade-path moved to done (code review — 3 patches applied: HIGH AC5 backfill-never-persisted → un-executable bundles fixed in _process_bundle + new unit tests; empty-string entrypoint dead-button fixed in readBundleEntrypoint + new test file; misleading AC5 test docstring corrected. 2 decisions resolved: undeclared MALFORMED_BUNDLE_MANIFEST feature ABSORBED into 14.2 (added AC6, corrected File List + false AC4 note); .env.example Cognito-ID rotation KEPT. 2 deferred, 3 dismissed. Gates re-run after api rebuild: BE test_skills 213 pass + bundle unit 19 pass, ruff clean; FE tsc/eslint clean, 157+7 tests pass).
 
 # 2026-07-20: Epic 13 marked done (7/7 stories complete, all code-reviewed).
 # 2026-07-20: Epic 14 (Skill Upgrade Flexibility) added via correct-course — 3 stories in backlog (sprint-change-proposal-2026-07-20.md).
@@ -290,7 +291,7 @@ development_status:
   # ─────────────────────────────────────────────────────────
   epic-14: in-progress
   14-1-relax-hybrid-shape-lock: done
-  14-2-ai-adapter-on-upgrade-path: review
+  14-2-ai-adapter-on-upgrade-path: done
   14-3-ui-explicit-version-increment: done
 
   # ─────────────────────────────────────────────────────────
