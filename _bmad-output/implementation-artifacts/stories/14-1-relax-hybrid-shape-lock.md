@@ -4,7 +4,7 @@ baseline_commit: 6c6e97c (velara-api) / 61d3a3c (velara-web)
 
 # Story 14.1: Relax the Hybrid Manifest Shape-Lock
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
