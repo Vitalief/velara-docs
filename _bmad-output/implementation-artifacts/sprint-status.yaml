@@ -54,6 +54,7 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-20
+# 2026-07-20: Epic 15 moved to in-progress; 15-1-persist-structured-per-execution-cost moved to ready-for-dev (create-story, first story in epic). Backend-only. New migration 0024 (4 additive-nullable cols on invocation_results) + new shared app/core/pricing.py (relocates _MODEL_PRICING, removes silent _DEFAULT_PRICING fallback) + cost computed/persisted at execution_tasks.py write-path seam via mark_completed/mark_blocked. AC4 scoped: failed/cancelled write NO result row today → explicit-zero delivered at 15.3 read layer, NOT by rewriting mark_failed. No FE, no api-spec, no new audit event.
 # 2026-07-20: 14-1-relax-hybrid-shape-lock moved to ready-for-dev (create-story).
 # 2026-07-20: 14-1-relax-hybrid-shape-lock moved to in-progress (dev-story).
 # 2026-07-20: 14-1-relax-hybrid-shape-lock moved to review (dev-story).
@@ -306,8 +307,8 @@ development_status:
   #   Dev order: 15-1 (migration + execution-path write, risk-bearing) → 15-2 / 15-3 / 15-4 (all three
   #   depend on 15-1 — 15-4 only for the shared pricing table, no shared schema — independent of each other).
   # ─────────────────────────────────────────────────────────
-  epic-15: backlog
-  15-1-persist-structured-per-execution-cost: backlog
+  epic-15: in-progress
+  15-1-persist-structured-per-execution-cost: ready-for-dev
   15-2-surface-per-invocation-cost-job-api-ui: backlog
   15-3-per-skill-and-per-user-cost-analytics: backlog
   15-4-cost-the-ai-assisted-skill-adaptation-llm-call: backlog
