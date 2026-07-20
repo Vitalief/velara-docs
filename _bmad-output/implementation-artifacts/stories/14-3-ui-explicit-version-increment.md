@@ -4,7 +4,7 @@ baseline_commit: 6c6e97c (velara-api) / bcafff3 (velara-web)
 
 # Story 14.3: Expose Explicit Version Increment in the Skill Edit UI
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -40,29 +40,29 @@ so that I control the semver signal a version change sends, without hand-calling
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Add the Version field to `SkillContentEditor`'s non-draft path (AC1, AC2, AC4) — `velara-web/src/features/skills/components/SkillContentEditor.tsx`**
-  - [ ] Add a `version` string state, e.g. `const [version, setVersion] = useState('')`, initialized empty (blank = auto-bump, AC2).
-  - [ ] Render a new `<Field label="Version (optional)">` **only when `!isDraft`** (the draft path never sets a version — the field must not appear there). Place it once, above or alongside the existing content/bundle inputs, so it applies uniformly whether `isHybrid` renders `SkillBundleUpload` or the plain-content branch renders the textarea (AC4 — one shared field feeding one shared body, not duplicated per runtime-type branch).
-  - [ ] Compute a **placeholder** showing the next auto-bump: reuse `skill.current_version?.version` (already on `SkillWithVersion.current_version.version`, no new fetch) and a local `bumpMinor(version: string): string` helper (`major.(minor+1).0`) mirroring the backend's `_bump_minor` — if there's no current version, show no placeholder (mirror the backend's `"0.0.0"` fallback only if needed for display; simplest is to omit the placeholder when `current_version` is null, since a skill always has one by the time this non-draft path is reachable). Placeholder text, not a pre-filled value — leaving the input empty must still omit `version` from the request body (AC2 — do not silently coerce placeholder-into-value).
-  - [ ] In `handleSave`, extend the existing body construction (`const body = bundleKey ? { bundle_key: bundleKey } : { content, content_type: contentType }`) to conditionally add `version: version.trim()` **only when non-empty** and **only when `!isDraft`**: e.g. `...(!isDraft && version.trim() ? { version: version.trim() } : {})`. The draft branch (`updateDraft`) must never receive a `version` key — `SkillDraftContentInput` has no such field and the backend route doesn't accept one.
+- [x] **Task 1 — Add the Version field to `SkillContentEditor`'s non-draft path (AC1, AC2, AC4) — `velara-web/src/features/skills/components/SkillContentEditor.tsx`**
+  - [x] Add a `version` string state, e.g. `const [version, setVersion] = useState('')`, initialized empty (blank = auto-bump, AC2).
+  - [x] Render a new `<Field label="Version (optional)">` **only when `!isDraft`** (the draft path never sets a version — the field must not appear there). Place it once, above or alongside the existing content/bundle inputs, so it applies uniformly whether `isHybrid` renders `SkillBundleUpload` or the plain-content branch renders the textarea (AC4 — one shared field feeding one shared body, not duplicated per runtime-type branch).
+  - [x] Compute a **placeholder** showing the next auto-bump: reuse `skill.current_version?.version` (already on `SkillWithVersion.current_version.version`, no new fetch) and a local `bumpMinor(version: string): string` helper (`major.(minor+1).0`) mirroring the backend's `_bump_minor` — if there's no current version, show no placeholder (mirror the backend's `"0.0.0"` fallback only if needed for display; simplest is to omit the placeholder when `current_version` is null, since a skill always has one by the time this non-draft path is reachable). Placeholder text, not a pre-filled value — leaving the input empty must still omit `version` from the request body (AC2 — do not silently coerce placeholder-into-value).
+  - [x] In `handleSave`, extend the existing body construction (`const body = bundleKey ? { bundle_key: bundleKey } : { content, content_type: contentType }`) to conditionally add `version: version.trim()` **only when non-empty** and **only when `!isDraft`**: e.g. `...(!isDraft && version.trim() ? { version: version.trim() } : {})`. The draft branch (`updateDraft`) must never receive a `version` key — `SkillDraftContentInput` has no such field and the backend route doesn't accept one.
 
-- [ ] **Task 2 — Client-side semver + greater-than validation (AC3) — same file**
-  - [ ] Add a local `isValidSemver(v: string): boolean` (canonical `X.Y.Z`, non-negative integers, no leading zeros beyond `0` itself — match the backend's `_parse_semver`/`InvalidVersionError` acceptance, see Dev Notes) and a `semverGreaterThan(a: string, b: string): boolean` helper. **Do not import anything** — there is no semver library in this repo; `CertificationHistory.tsx` already hand-rolls an equivalent `parseSemver`/`semverGt` pair (not exported) — write a local equivalent in this file rather than trying to share it across features.
-  - [ ] On blur or on submit attempt, if `version.trim()` is non-empty and (not canonical semver OR not strictly greater than `skill.current_version?.version`), show an inline field error via `Field`'s `error` prop: `` `Must be greater than current ${current}.` `` (or a canonical-format message if the string doesn't parse as semver at all). This is a **pre-submit UX nicety** — it must not block the actual submit path from also handling the server's 422 (see next bullet); if the client check has a bug or edge case it disagrees with the server on, the server's `INVALID_VERSION` must still be user-visible.
-  - [ ] The **existing** error-rendering block (`{mutation.error && !showAiAdaptAffordance && <p>{apiMessage ?? getErrorMessage(mutation.error)}</p>}`) already surfaces any 422 `INVALID_VERSION` returned by `createVersion` generically — confirm `getApiMessage` returns the backend's exact message (`"New version 'X' must be greater than current 'Y'."`) and that it renders inline near the button, not as a toast, so AC3's "clear inline field error" is satisfied. If a field-scoped placement is preferred (message under the Version input rather than at the bottom), route the `INVALID_VERSION` case specifically to the `Field`'s `error` prop as well — but do not remove the generic bottom-of-panel handling for other error codes.
+- [x] **Task 2 — Client-side semver + greater-than validation (AC3) — same file**
+  - [x] Add a local `isValidSemver(v: string): boolean` (canonical `X.Y.Z`, non-negative integers, no leading zeros beyond `0` itself — match the backend's `_parse_semver`/`InvalidVersionError` acceptance, see Dev Notes) and a `semverGreaterThan(a: string, b: string): boolean` helper. **Do not import anything** — there is no semver library in this repo; `CertificationHistory.tsx` already hand-rolls an equivalent `parseSemver`/`semverGt` pair (not exported) — write a local equivalent in this file rather than trying to share it across features.
+  - [x] On blur or on submit attempt, if `version.trim()` is non-empty and (not canonical semver OR not strictly greater than `skill.current_version?.version`), show an inline field error via `Field`'s `error` prop: `` `Must be greater than current ${current}.` `` (or a canonical-format message if the string doesn't parse as semver at all). This is a **pre-submit UX nicety** — it must not block the actual submit path from also handling the server's 422 (see next bullet); if the client check has a bug or edge case it disagrees with the server on, the server's `INVALID_VERSION` must still be user-visible.
+  - [x] The **existing** error-rendering block (`{mutation.error && !showAiAdaptAffordance && <p>{apiMessage ?? getErrorMessage(mutation.error)}</p>}`) already surfaces any 422 `INVALID_VERSION` returned by `createVersion` generically — confirm `getApiMessage` returns the backend's exact message (`"New version 'X' must be greater than current 'Y'."`) and that it renders inline near the button, not as a toast, so AC3's "clear inline field error" is satisfied. If a field-scoped placement is preferred (message under the Version input rather than at the bottom), route the `INVALID_VERSION` case specifically to the `Field`'s `error` prop as well — but do not remove the generic bottom-of-panel handling for other error codes.
 
-- [ ] **Task 3 — Frontend tests (AC: all) — `velara-web/src/features/skills/components/SkillEdit.test.tsx` (or a new co-located `SkillContentEditor.test.tsx` if the existing suite only exercises `SkillEdit` at arm's length — check first)**
-  - [ ] Version field renders for a non-draft skill (`isDraft === false`), both `isHybrid` and inline branches; does **not** render for a `draft` skill.
-  - [ ] Leaving the field blank and saving calls `createVersion`/`useCreateSkillVersion`'s mutate with a body that has **no `version` key** (assert via the mocked hook's `mutate` call args — `expect(mutate).toHaveBeenCalledWith(expect.not.objectContaining({ version: expect.anything() }), ...)` or equivalent).
-  - [ ] Entering a valid greater version includes `version` in the mutate body, unchanged otherwise.
-  - [ ] Entering a version **not** greater than `current_version.version` shows the inline client-side error and does not (or does, then server-rejects — pick whichever matches the implementation) proceed; separately, mock the mutation hook's `error` to a `INVALID_VERSION` `ApiError` shape and assert the message renders inline (covers the server-truth path independent of the client check).
-  - [ ] Follow the existing suite's pattern: `vi.mock('@/features/skills/hooks/useSkills')`, mocked `useCreateSkillVersion`/`useDraftContent`/`useUpdateDraftContent` return shapes already established in `SkillEdit.test.tsx` (lines ~93-107) — extend those mocks with `current_version: { version: '1.4.0', ... }` fixtures rather than inventing a new mock shape.
+- [x] **Task 3 — Frontend tests (AC: all) — `velara-web/src/features/skills/components/SkillEdit.test.tsx` (or a new co-located `SkillContentEditor.test.tsx` if the existing suite only exercises `SkillEdit` at arm's length — check first)**
+  - [x] Version field renders for a non-draft skill (`isDraft === false`), both `isHybrid` and inline branches; does **not** render for a `draft` skill.
+  - [x] Leaving the field blank and saving calls `createVersion`/`useCreateSkillVersion`'s mutate with a body that has **no `version` key** (assert via the mocked hook's `mutate` call args — `expect(mutate).toHaveBeenCalledWith(expect.not.objectContaining({ version: expect.anything() }), ...)` or equivalent).
+  - [x] Entering a valid greater version includes `version` in the mutate body, unchanged otherwise.
+  - [x] Entering a version **not** greater than `current_version.version` shows the inline client-side error and does not (or does, then server-rejects — pick whichever matches the implementation) proceed; separately, mock the mutation hook's `error` to a `INVALID_VERSION` `ApiError` shape and assert the message renders inline (covers the server-truth path independent of the client check).
+  - [x] Follow the existing suite's pattern: `vi.mock('@/features/skills/hooks/useSkills')`, mocked `useCreateSkillVersion`/`useDraftContent`/`useUpdateDraftContent` return shapes already established in `SkillEdit.test.tsx` (lines ~93-107) — extend those mocks with `current_version: { version: '1.4.0', ... }` fixtures rather than inventing a new mock shape.
 
-- [ ] **Task 4 — Gates**
-  - [ ] `npm run typecheck` → 0 errors.
-  - [ ] `npm run lint` → 0 new errors (baseline: 1 known pre-existing `Icon.tsx` warning per Story 11.6 — confirm current baseline hasn't shifted before attributing any new warning to this story).
-  - [ ] `npm run test` (vitest) → record new pass count; no regressions in `SkillEdit.test.tsx` / `SkillContentEditor`-adjacent suites.
-  - [ ] **No backend changes, no migration, no `docs/api-spec.json` regen** — the `version` field already exists in `SkillVersionCreate`/`create_version` and is already in the OpenAPI contract (confirm with a quick diff-check that nothing changed, do not regenerate speculatively).
+- [x] **Task 4 — Gates**
+  - [x] `npm run typecheck` → 0 errors.
+  - [x] `npm run lint` → 0 new errors (baseline: 1 known pre-existing `Icon.tsx` warning per Story 11.6 — confirm current baseline hasn't shifted before attributing any new warning to this story).
+  - [x] `npm run test` (vitest) → record new pass count; no regressions in `SkillEdit.test.tsx` / `SkillContentEditor`-adjacent suites.
+  - [x] **No backend changes, no migration, no `docs/api-spec.json` regen** — the `version` field already exists in `SkillVersionCreate`/`create_version` and is already in the OpenAPI contract (confirm with a quick diff-check that nothing changed, do not regenerate speculatively).
 
 ## Dev Notes
 
@@ -141,14 +141,31 @@ Epic 14 (Skill Upgrade Flexibility) has 3 stories; this is **14.3, the first to 
 
 ### Agent Model Used
 
+claude-sonnet-5
+
 ### Debug Log References
+
+- `Skill` (the prop type `SkillContentEditor` originally declared) lacks `current_version` — only `SkillWithVersion` carries it. Widened `SkillContentEditorProps.skill` to `SkillWithVersion` (the only shape `SkillEdit` ever passes in via `useSkill`, which returns `SkillWithVersion`) rather than adding a second optional prop.
+- The house `Field` component (`shared/components/Field.tsx`) renders `<label>` as a sibling of its input children with no `htmlFor`/`id` association — `getByLabelText` cannot resolve it (confirmed by running the new tests red first: 4 failures on that exact query). No prior test in the repo queries a `Field`-wrapped input via `getByLabelText` either (only components with real semantic `<label htmlFor>` markup, e.g. `AIAdapterReview`, `SkillBundleUpload`, use that query). Fixed by adding a small `getVersionInput()` test helper that locates the input via the label text's `nextElementSibling`, and using `getByPlaceholderText` for the content textarea instead. Did not modify `Field.tsx` itself — out of scope for this story and would ripple across every other `Field` consumer.
 
 ### Completion Notes List
 
+- **AC1/AC2/AC4:** Added an optional "Version (optional)" `Field` to `SkillContentEditor`, rendered only when `!isDraft` (never on the draft in-place-edit path), positioned once above the runtime-type branch so it applies identically to both the inline-content and hybrid ZIP-bundle new-version flows. Placeholder shows the next auto-minor-bump (`bumpMinor(skill.current_version.version)`); leaving the field blank omits `version` from the mutation body entirely, preserving the exact pre-story auto-bump behavior (verified by a test asserting `mutate` is called with `expect.not.objectContaining({ version: ... })`).
+- **AC3:** Added local, non-exported `isValidSemver`/`semverGreaterThan`/`parseSemver` helpers (mirroring the backend's canonical-form acceptance) for a pre-submit inline check (shown after first blur or a submit attempt), plus confirmed the existing generic error-rendering block already surfaces the server's `INVALID_VERSION` 422 message verbatim as a fallback/source-of-truth path — covered independently by a test that mocks the mutation hook's `error` directly (bypassing the client-side check).
+- **Version state is cleared on a successful save** (alongside the existing bundle-key reset) so a second save doesn't silently resend a stale explicit version — the placeholder then recomputes from the newly-current version.
+- **Zero backend changes** — confirmed `velara-api` git status is clean throughout; the `version` param, bump/validate logic, and `SkillVersionCreate` schema were already fully implemented and unchanged. No migration, no `docs/api-spec.json` diff.
+- **Widened `SkillContentEditorProps.skill`** from `Skill` to `SkillWithVersion` (see Debug Log) — the only production caller (`SkillEdit.tsx`) already passes a `SkillWithVersion`, so this is a type-accuracy fix with no behavioral change.
+- Gates: typecheck 0 errors; lint 0 errors (1 known pre-existing `Icon.tsx` warning, baseline unchanged); vitest 715 passed across 59 files (SkillEdit.test.tsx alone: 17 passed, up from 10 pre-story).
+
 ### File List
+
+**Frontend (velara-web):**
+- MODIFIED `src/features/skills/components/SkillContentEditor.tsx` — Version field, state, semver validation helpers, `handleSave` body wiring, widened prop type to `SkillWithVersion`
+- MODIFIED `src/features/skills/components/SkillEdit.test.tsx` — new `describe('SkillEdit — explicit version increment (Story 14.3)')` block (8 new tests) + `getVersionInput()` test helper
 
 ## Change Log
 
 | Date | Change |
 |---|---|
 | 2026-07-20 | Story 14.3 drafted (create-story). Pure FE story — backend `version` param already exists and is unchanged. Target surface identified precisely as `SkillContentEditor.tsx` (not `SkillEdit.tsx`, which only mounts it). Epic 14 marked in-progress (first story). Status → ready-for-dev. |
+| 2026-07-20 | Story 14.3 implemented (dev-story). Added optional Version field to `SkillContentEditor`'s non-draft path with auto-bump placeholder, client-side semver + greater-than validation, and blank-omits-version wiring into `handleSave`. Widened `SkillContentEditorProps.skill` to `SkillWithVersion` (needed for `current_version`). 8 new frontend tests in `SkillEdit.test.tsx`. Zero backend changes (confirmed). Gates: typecheck 0, lint 0 new errors, vitest 715 passed. Status → review. |
