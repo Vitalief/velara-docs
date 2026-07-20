@@ -4,7 +4,7 @@ baseline_commit: 0ecc323
 
 # Story 13.7: HIPAA & SOC 2 Control Mapping Documents
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -109,6 +109,15 @@ so that our first conversation with an auditor starts from an accurate picture r
   - [x] **Markdown sanity:** tables render, links resolve (the `../../` relative links to epic/story files, and the intra-repo file citations). No broken internal references.
   - [x] **The "checked doc" standard (AC5):** before marking done, do a final pass asking of every ✅ "can I point to the code/TF line that proves this?" and of every ❌/⚠️ "is this still true at the final commit?" **This story's entire value is that the docs are verified — a plausible-but-unchecked doc is the failure it exists to prevent.**
   - [x] Record the **final commit hash** the docs were verified against in each doc's header (replacing `cddc082`), so the next reader knows the as-of point.
+
+### Review Findings
+
+_Code review 2026-07-16 (3 layers: adversarial, edge-case, acceptance-auditor). All 3 layers completed. This was a compliance-CLAIM audit — findings are false/overstated/inconsistent claims, verified against shipped code at `609c9ca`. **Convergence:** two independent layers flagged the S3-access-logging green-wash as the top finding (the Acceptance Auditor, which didn't drill into s3.tf's plan-only banner, called it a clean pass — reviewer read the code and confirmed Blind+Edge were right). All app-code claims (audit events, deprovisioning, session-kill, disclosure sites, TTLs, AWS Config decline substance) independently verified accurate; the Trap-2 discipline was honored EVERYWHERE except the S3-logging leg. All 3 patches applied + verified this session (docs-only diff preserved; markdown tables intact; cross-doc consistency restored)._
+
+- [x] [Review][Patch] **S3 access logging presented as ✅ IMPLEMENTED/CLOSED with no plan-only caveat, but it is unapplied Terraform (`s3.tf:227` "⚠️ terraform plan only — do NOT apply") — the exact Trap-2 green-wash this epic exists to eliminate, while the same docs correctly caveat their sibling detective controls.** [velara-api/docs/soc2-control-matrix.md:53] — **FIXED:** split the S3-object-access-logging leg from the live app-level egress audit in all 4 locations (CC6.7 row; SOC2 §9 new row 3a; HIPAA §6 new row 2a; data-handling §3 retention) and marked it "⚠️ AUTHORED + PLANNED — apply pending operator (plan-only Terraform, `s3.tf`)". The `access.artifact_disclosed` half stays ✅ IMPLEMENTED (live in image).
+- [x] [Review][Patch] **CC4.1 (✅ IMPLEMENTED) contradicted HIPAA §164.308(a)(1)(ii)(D) (⚠️ PARTIAL) for the same audit-log-review control — AC5 cross-document-consistency violation.** [velara-api/docs/soc2-control-matrix.md:39] — **FIXED:** aligned CC4.1 (row + §9 summary) to ⚠️ PARTIAL with the same reasoning HIPAA uses (procedure never executed / alarm apply-pending), and added an explicit cross-reference to the HIPAA row.
+- [x] [Review][Patch] **AWS Config decline labeled "cited verbatim" but not byte-identical to `guardduty.tf` (added trailing period + comment-to-prose reflow).** [velara-api/docs/soc2-control-matrix.md:113] — **FIXED:** relabeled to "quoted from the decision block in `terraform/guardduty.tf` (reflowed from the source comment; substance preserved)".
+- [x] [Review][Defer] Retention-table row attributes the CloudWatch API-log-retention bump to Story 13.5, but the `security_events` alarm that motivates it is Story 13.4; the row also implied a uniform `var.log_retention_days` while the 13.3 access-logs bucket hardcodes `expiration { days = 365 }` (`s3.tf:266`) [velara-api/docs/data-handling-policy.md:32] — deferred, cosmetic traceability nit (same value today; logged to deferred-work.md). _Partially addressed incidentally: the S3-access-log retention row was clarified to note the hardcoded `expiration { days = 365 }` during Patch 1; the 13.5-vs-13.4 story attribution on the CloudWatch row remains for a future pass._
 
 ## Dev Notes
 
