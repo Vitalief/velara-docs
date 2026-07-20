@@ -56,6 +56,7 @@ generated: 2026-06-02
 last_updated: 2026-07-20
 # 2026-07-20: 14-1-relax-hybrid-shape-lock moved to ready-for-dev (create-story).
 # 2026-07-20: 14-1-relax-hybrid-shape-lock moved to in-progress (dev-story).
+# 2026-07-20: 14-1-relax-hybrid-shape-lock moved to review (dev-story).
 # 2026-07-20: 14-3-ui-explicit-version-increment moved to in-progress (dev-story).
 # 2026-07-20: 14-3-ui-explicit-version-increment moved to review (dev-story).
 # 2026-07-20: 14-3-ui-explicit-version-increment moved to done (code review skipped — Project Lead judgment call, small well-scoped FE-only change).
@@ -283,6 +284,6 @@ development_status:
   #   Dev order: 14-3 (independent, FE-only) → 14-1 (shape-lock + egress migration) → 14-2 (adapter on upgrade, dep 14-1).
   # ─────────────────────────────────────────────────────────
   epic-14: in-progress
-  14-1-relax-hybrid-shape-lock: in-progress
+  14-1-relax-hybrid-shape-lock: review
   14-2-ai-adapter-on-upgrade-path: backlog
   14-3-ui-explicit-version-increment: done
