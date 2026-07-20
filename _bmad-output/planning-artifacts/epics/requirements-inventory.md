@@ -5,7 +5,7 @@
 **Organizational Hierarchy (ORG)**
 - FR-ORG-01 [P1]: The platform stores Organizations, Clients, Projects, Studies, and Locations as first-class entities with names, descriptions, and creation metadata.
 - FR-ORG-02 [P1]: Studies are optional children of Projects. A Project with no Studies attaches skills directly at the Project level.
-- FR-ORG-03 [P1]: Locations are children of Studies. A Study can have zero or more Locations.
+- FR-ORG-03 [P1]: **(Superseded 2026-07-20, Epic 16.)** Locations are children of Clients — created once per Client and reused across every Project/Study underneath it. A Study associates zero or more existing Client Locations (rather than owning distinct Location rows); the same physical site is entered once and reused, never re-created per Study.
 - FR-ORG-04 [P1]: All access control policies, audit logs, and skill invocation records reference the full hierarchy path (Org → Client → Project → Study → Location where applicable).
 - FR-ORG-05 [P1]: The data model supports multiple Organizations without schema changes, even though Phase 1 deploys with one.
 - FR-ORG-06 [P1]: The Organization layer is never exposed in the UI. All user-facing paths, labels, and audit displays begin at the Client level. The UI nav section for this tree is labelled "Engagements."
@@ -15,12 +15,13 @@
 - FR-REG-01 [P1]: Skills are stored as versioned, immutable artifacts. Each version has a unique identifier.
 - FR-REG-02 [P1]: Skill lifecycle states: `draft`, `internal_ready`, `client_ready`, `retired`. State drives invocation access.
 - FR-REG-03 [P1]: Skills carry required metadata: name, description, author, created date, last modified date, lifecycle state, tags, runtime type (`prompt`, `code`, `hybrid`), visibility designation, input schema, output schema.
-- FR-REG-04 [P1]: Skills have an optional scope: Project-level or Study-level. Study-scoped skills are only invocable within the context of their Study.
+- FR-REG-04 [P1]: Skills have an optional scope: Project-level or Study-level, determining the **granularity at which the skill runs** — a Project-scoped skill runs in a Project's context, a Study-scoped skill runs in a Study's context. **(Clarified 2026-07-20, Epic 16.)** Scope is independent of *where a skill is attached* — attachment (FR-REG-10) only controls which part of the hierarchy a skill is reachable from; the skill's own scope alone determines where underneath that point it is actually invocable.
 - FR-REG-05 [P1]: Skills carry one of three visibility designations: `internal_only`, `client_facing`, or `paired` (both versions exist with lineage tracked).
 - FR-REG-06 [P1]: For Paired skills: the internal (parent) skill and the client-facing (derived) skill are linked via derivation lineage. Updates to the parent flag the derived skill for review before re-certification.
 - FR-REG-07 [P1]: Skill descriptions are first-class artifacts. A skill with an inadequate description does not pass technical certification.
 - FR-REG-08 [P2]: Skill versions can be pinned to specific Projects or Engagements, isolating them from later changes until explicitly upgraded.
 - FR-REG-09 [P2]: Retired skills remain in the registry for audit but cannot be invoked.
+- FR-REG-10 [P1]: **(Added 2026-07-20, Epic 16.)** A skill may be attached at the Client level. A Client-attached skill becomes available at every node under that Client matching the skill's own scope (every Project if Project-scoped, every Study if Study-scoped) — without being re-attached individually at each one.
 
 **Skill Execution (EXE)**
 - FR-EXE-01 [P1]: The platform supports prompt-based skills — an instruction set, context, and optional reference files passed to an LLM.
@@ -43,6 +44,7 @@
 - FR-ING-02 [P1]: Uploaded files are validated for type and format before being passed to the skill. Invalid files are rejected with a clear error.
 - FR-ING-03 [P1]: File uploads support sizes up to 100 MB per file.
 - FR-ING-04 [P1]: The connector framework makes adding future ingest sources consistent and cheap. New connectors do not require changes to the skill execution layer.
+- FR-ING-05 [P1]: **(Added 2026-07-20, Epic 16.)** A protocol document may be uploaded once, at Study creation (or added later via Study edit for Studies that predate this capability), and is automatically available to skills run within that Study — without re-uploading at every invocation. A skill may declare that it needs documents beyond the Study's protocol; the Run Console upload affordance remains available for that case, and is otherwise optional.
 
 **Output Generation (OUT)**
 - FR-OUT-01 [P1]: The platform generates PDF, PPTX, DOCX, and XLSX files as skill outputs.
@@ -67,7 +69,7 @@
 - FR-INV-06 [P1]: In context-first mode, the Client → Project → Study context is pre-populated. The user selects the skill to run.
 - FR-INV-07 [P1]: In skill-first mode, the skill is pre-selected and locked. The context picker shows all Clients, Projects, and Studies without filtering by skill attachment.
 - FR-INV-08 [P1]: Both run modes provide a back button that returns the user to the originating screen.
-- FR-INV-09 [P1]: Skills attached at the Project level are visible and runnable from both the Project screen and from within each Study screen under that Project.
+- FR-INV-09 [P1]: Skills attached at the Client level are visible and runnable at every Project (if Project-scoped) or every Study (if Study-scoped) under that Client. Skills attached at the Project level are visible and runnable from both the Project screen and from within each Study screen under that Project. **(Extended 2026-07-20, Epic 16.)**
 
 **Certification and Validation (CRT)**
 - FR-CRT-01 [P1]: Every skill submitted for `client_ready` status passes through a two-key certification workflow. Both keys must be recorded before the state can advance.
@@ -88,6 +90,7 @@
 - FR-USE-05 [P2]: Audit logs are retained for a minimum of seven years.
 - FR-USE-06 [P1]: Usage analytics — the platform surfaces **aggregate (Overview)** and **per-user** usage/value metrics (invocations, success rate, top skills, runtime, value/hours-saved, breakdown by invocation surface) in a **Usage & Value** screen. Per-user analysis lets an operator select an individual user and analyze their metrics.
 - FR-USE-07 [P1]: **(Added 2026-07-20, Epic 15.)** Every skill invocation that makes an LLM call records its own token counts and computed dollar cost as a durable, queryable fact of that execution — not only as an input to a platform-wide aggregate. Cost is surfaced per-invocation (Job detail), per-skill, and per-user (extending the existing Usage & Value screen), and a code-runtime or failed/cancelled invocation records an explicit zero/null cost rather than being silently excluded from any total. The same pricing applies to the AI integration assistant's skill-adaptation LLM calls (`propose_adapter`, Epic 11/14) — a separate spend path, priced and surfaced in the Audit Log.
+- FR-USE-08 [P1]: **(Added 2026-07-20, Epic 16.)** A Project or Study detail screen surfaces the outputs of skills that were run in that context (a hierarchy-scoped view of recent invocations), not only the global Jobs History list.
 
 **Security and Compliance (SEC)**
 - FR-SEC-01 [P1]: Platform is hosted on a BAA-eligible cloud provider with a signed BAA in place before any PHI-adjacent skill is deployed.
@@ -208,6 +211,7 @@ _From design/ prototype (Velara v3.html, overrides.jsx, styles_v3.css, data.js) 
 | FR-SEC-08 (HIPAA) | Cross-cutting (E1, E7, E8, E9) | HIPAA named framework — PHI safeguards, BAA, encryption, audit |
 | FR-SEC-11 (Part 11 access) | Epic 7 + Epic 8 | Unique user IDs + auth (Cognito) and hierarchy-scoped RBAC / authority checks |
 | FR-USE-07 | Epic 15 | Per-invocation/per-skill/per-user cost tracking + priced AI-adapter-propose LLM spend |
+| FR-ORG-03 (superseded), FR-REG-04 (clarified), FR-INV-09 (extended), FR-REG-10, FR-ING-05, FR-USE-08 | Epic 16 | Client-owned Locations + Study association; Client-level skill attachment; Study-creation-time protocol upload; hierarchy-scoped run history |
 | UX-DR-14 (tab title) | Epic 1 (Story 1.5) | Per-page browser tab title (app shell) |
 
 _P2/P3 FRs deferred (not in Phase 1 epics): FR-REG-08/09, FR-EXE-06, FR-ING-05, FR-OUT-04, FR-ACL-06, FR-INV-04, FR-USE-05, FR-SEC-12 (formal 21 CFR Part 11 system validation / IQ-OQ-PQ)_

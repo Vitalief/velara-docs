@@ -70,6 +70,7 @@ last_updated: 2026-07-20
 # 2026-07-20: Epic 14 (Skill Upgrade Flexibility) added via correct-course — 3 stories in backlog (sprint-change-proposal-2026-07-20.md).
 # 2026-07-20: Epic 14 moved to in-progress; 14-3-ui-explicit-version-increment moved to ready-for-dev (create-story, first story in epic).
 # 2026-07-20: Epic 15 (Per-Execution Cost Tracking) added via correct-course — 4 stories in backlog (sprint-change-proposal-2026-07-20-cost-tracking.md). Adds FR-USE-07 (PRD amendment); Epic 9 stays done.
+# 2026-07-20: Epic 16 (Engagement Hierarchy, Attachment & Ingest Model Refinement) added via correct-course — 6 stories in backlog (sprint-change-proposal-2026-07-20-engagement-model-refinement.md). Supersedes FR-ORG-03, clarifies FR-REG-04, extends FR-INV-09, adds FR-REG-10/FR-ING-05/FR-USE-08 (PRD amendments); Epics 3/4/5/8 stay done. Story 16-1 (Location data migration, real-data not additive) is isolated and risk-bearing — architect review recommended before create-story.
 
 # 2026-07-16: 13-7-hipaa-soc2-control-mapping-docs moved to in-progress (dev-story).
 # 2026-07-16: 13-7-hipaa-soc2-control-mapping-docs moved to review (dev-story).
@@ -310,3 +311,21 @@ development_status:
   15-2-surface-per-invocation-cost-job-api-ui: backlog
   15-3-per-skill-and-per-user-cost-analytics: backlog
   15-4-cost-the-ai-assisted-skill-adaptation-llm-call: backlog
+
+  # ─────────────────────────────────────────────────────────
+  # Epic 16: Engagement Hierarchy, Attachment & Ingest Model Refinement
+  #   Added 2026-07-20 via correct-course (sprint-change-proposal-2026-07-20-engagement-model-refinement.md).
+  #   Trigger: real-usage friction — Locations re-created per Study, skill attachment stops at Project/Study,
+  #   documents re-uploaded every invocation, cluttered engagement-screen buttons, no hierarchy-level run
+  #   visibility. Epics 3/4/5/8 all stay done — this epic supersedes/amends FR-ORG-03, FR-REG-04, FR-INV-09
+  #   and adds FR-REG-10/FR-ING-05/FR-USE-08.
+  #   Dev order: 16-1 (Location data migration, ISOLATED and risk-bearing — architect review recommended
+  #   before create-story) → 16-2/16-3/16-4/16-5/16-6 (all independent of each other once 16-1 lands).
+  # ─────────────────────────────────────────────────────────
+  epic-16: backlog
+  16-1-move-locations-to-client-ownership: backlog
+  16-2-client-level-location-management-and-study-association-ui: backlog
+  16-3-client-level-skill-attachment: backlog
+  16-4-study-creation-time-protocol-upload: backlog
+  16-5-consolidate-engagement-screen-actions-into-single-menu: backlog
+  16-6-hierarchy-scoped-run-history-on-project-study-screens: backlog

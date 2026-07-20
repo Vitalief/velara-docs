@@ -13,6 +13,8 @@
 > **Added 2026-07-06** (see `sprint-change-proposal-2026-07-06.md`): forward scope addition after Epic 10 close — the skill on-boarding path is too rigid. **New Epic 11: AI-Assisted Skill Integration, Versioning & Environment Promotion** — real multi-file ZIP bundle upload, a standardized code-driven entrypoint contract enforced at registration (absorbs the Epic 5.5 retro Action Item 1), an AI integration assistant that **proposes** a standardized adapter + manifest for human approval (adapter-only, core files byte-for-byte unchanged, re-certified before `client_ready`), UI-authored new versions (draft-mutable-in-place + immutable-on-publish; new-ZIP for hybrid), running an older version to compare (admin/ma_tech), and environment promotion (export/import Phase 1, in-app promote Phase-2 target). New `SKL-01..SKL-08` FRs; amends REG-01/REG-02; requires 3 architecture ADRs. **New Epic 12: Skill & Audit Lifecycle Polish** — four independent quick-fixes decoupled to ship on their own cadence: location-dependent authoring toggle (REG-10), backend-enriched audit context names (USE-07), distinct audit event icons (USE-08), duplicate-run cost warning (INV-10).
 >
 > **Added 2026-07-20** (see `sprint-change-proposal-2026-07-20-cost-tracking.md`). **New Epic 15: Per-Execution Cost Tracking** — an operator found only a single platform-wide aggregate dollar figure (Analytics Overview's `token_cost`); no per-invocation, per-skill, or per-user cost anywhere, and the AI-adapter-propose LLM spend (Epic 11/14) is captured in tokens but never priced either. Adds FR-USE-07. **Epic 9 stays `done`** (FR-USE-06 fully met as originally scoped) — this is new scope, not a defect.
+>
+> **Added 2026-07-20** (see `sprint-change-proposal-2026-07-20-engagement-model-refinement.md`). **New Epic 16: Engagement Hierarchy, Attachment & Ingest Model Refinement** — five real usage-friction points: Locations re-created per Study (moving to Client-owned + Study-associated), skill attachment stuck at Project/Study (adding a Client level), documents re-uploaded at every invocation (moving the protocol to Study-creation time), cluttered engagement-screen action buttons (consolidating into one menu), and no hierarchy-level visibility into run outputs (new Project/Study "Recent Runs" panel). Supersedes FR-ORG-03; clarifies FR-REG-04; extends FR-INV-09; adds FR-REG-10/FR-ING-05/FR-USE-08. **Epics 3, 4, 5, and 8 all stay `done`** — this is forward-amending scope, not a defect in any of them. The Location data migration (Story 16.1) is real-data, not additive-nullable, and is isolated as its own first story with an architect review recommended before implementation.
 
 ## Epic 1: Platform Foundation & Local Dev Environment
 Developers can run the full platform locally — FastAPI + Celery + Redis + PostgreSQL + local object storage (MinIO/LocalStack) — behind provider abstractions (storage, secrets, auth) that make the eventual AWS swap a configuration change. A dev-auth shim issues the same JWT claims contract (`user_id`, `org_id`, role) Cognito will later provide. HIPAA controls (PHI sanitizer, S3-key-reference pattern, append-only audit, structured logging) ship from the first commit. **AWS provisioning, CI/CD, Cognito, and cloud observability move to Epic 7** — removing the AWS-account dependency from the critical path.
@@ -186,5 +188,25 @@ An operator asked whether individual skill executions are cost-tracked and found
 - 15.4 Cost the AI-assisted skill-adaptation LLM call _(depends on 15.1 for the shared pricing table only; audit-log-only, no schema change)_
 
 **FRs covered:** FR-USE-07 _(new)_
+
+---
+
+## Epic 16: Engagement Hierarchy, Attachment & Ingest Model Refinement
+
+<!-- Added 2026-07-20 via correct-course. Authoritative story-able version: epics/epic-16-engagement-model-refinement.md. -->
+
+Five real usage-friction points surfaced across the Engagements, Skill Attachment, and Run Console screens. Locations are re-created per Study today (`Location.study_id` is a hard FK) — this epic moves them to Client ownership, reused across every Project/Study underneath via a new Study↔Location association (reusing the codebase's own polymorphic-join precedent, `SkillAttachment`/`UserAccessGrant`). Skill attachment stops at Project/Study today — this epic adds a Client level, where a skill becomes available at every descendant node matching its own scope, and unifies the two currently-divergent availability-resolution algorithms (client-portal backend vs. internal-admin FE walk-up) into one server-side resolution. Documents are only ever uploaded at invocation time today — this epic adds a Study-creation-time protocol upload, consumed automatically by skills run in that Study, with the Run Console upload staying available for skills that declare they need more. Engagement-screen cards render every action as a separate always-visible button — this epic introduces the codebase's first `Menu`/dropdown component to consolidate them. And outputs are only visible via the global Jobs History today — this epic adds a hierarchy-scoped "Recent Runs" panel to Project/Study detail screens.
+
+**Epics 3, 4, 5, and 8 all stay `done`** — every affected epic's original ACs described the shipped model correctly at the time; this epic supersedes/amends specific FRs going forward, the same pattern Epic 14 used on Epic 11 and Epic 15 used on Epic 9.
+
+**Stories (to be detailed via create-story):**
+- 16.1 Move Locations to Client ownership (data migration) _(the risk-bearing story — real-data translation, not additive-nullable; must be isolated and verified before anything else in the epic touches Location-adjacent code)_
+- 16.2 Client-level Location management + Study association UI _(depends on 16.1)_
+- 16.3 Client-level skill attachment _(depends on 16.1 for shared screens only; unifies the client-portal and internal-admin availability-resolution algorithms server-side)_
+- 16.4 Study-creation-time protocol upload _(depends on 16.1 for shared screens only)_
+- 16.5 Consolidate engagement-screen actions into a single menu _(independent; first Menu component in the codebase)_
+- 16.6 Hierarchy-scoped run history on Project/Study screens _(independent)_
+
+**FRs covered:** FR-ORG-03 _(superseded)_, FR-REG-04 _(clarified)_, FR-INV-09 _(extended)_, FR-REG-10 _(new)_, FR-ING-05 _(new)_, FR-USE-08 _(new)_
 
 ---
