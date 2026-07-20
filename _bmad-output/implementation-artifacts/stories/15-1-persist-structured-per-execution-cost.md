@@ -4,7 +4,7 @@ baseline_commit: d212b34 (velara-api) / 3372772 (velara-web)
 
 # Story 15.1: Persist Structured Per-Execution Cost at Write Time
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -54,39 +54,39 @@ so that cost is a permanent fact about that specific execution, not something re
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Relocate the pricing table into a shared module (AC3)**
-  - [ ] Create `velara-api/app/core/pricing.py`. Move `_MODEL_PRICING` (the `{model: (input_usd_per_token, output_usd_per_token)}` map, currently `analytics_service.py:37-40`) here as the single source of truth. Keep the published-rate-card comment (`claude-opus-4-8` = $5/MTok in, $25/MTok out, verified 2026-07-03).
-  - [ ] Add a `compute_cost_usd(*, model, input_tokens, output_tokens) -> Decimal | None` function that prices a **known** model from its token counts and returns `None` (after a structured `logger.warning` carrying the model name only — never PHI) for an **unrecognized** `model`. It uses `Decimal` (not float) to match the Numeric column and avoid binary-float drift on money. Note: the code-runtime "no tokens → `Decimal("0")`" case is decided by the caller at the write-path runtime split (Task 3), **not** inside this function — this function only handles the price-a-model computation.
-  - [ ] **Delete `_DEFAULT_PRICING` and its silent fallback** (`analytics_service.py:43`). Unknown model → warn + `None`, everywhere (AC3). This is the deliberate behavior change.
-  - [ ] Update `analytics_service.py` to `from app.core.pricing import _MODEL_PRICING` (or the public name you choose) instead of defining its own. **Do not** change `_token_cost()`'s query logic in this story (that is 15.3) — only its source of the pricing constants. Confirm its existing tests still pass.
+- [x] **Task 1 — Relocate the pricing table into a shared module (AC3)**
+  - [x] Create `velara-api/app/core/pricing.py`. Move `_MODEL_PRICING` (the `{model: (input_usd_per_token, output_usd_per_token)}` map, currently `analytics_service.py:37-40`) here as the single source of truth. Keep the published-rate-card comment (`claude-opus-4-8` = $5/MTok in, $25/MTok out, verified 2026-07-03).
+  - [x] Add a `compute_cost_usd(*, model, input_tokens, output_tokens) -> Decimal | None` function that prices a **known** model from its token counts and returns `None` (after a structured `logger.warning` carrying the model name only — never PHI) for an **unrecognized** `model`. It uses `Decimal` (not float) to match the Numeric column and avoid binary-float drift on money. Note: the code-runtime "no tokens → `Decimal("0")`" case is decided by the caller at the write-path runtime split (Task 3), **not** inside this function — this function only handles the price-a-model computation.
+  - [x] **Delete `_DEFAULT_PRICING` and its silent fallback** (`analytics_service.py:43`). Unknown model → warn + `None`, everywhere (AC3). This is the deliberate behavior change.
+  - [x] Update `analytics_service.py` to `from app.core.pricing import _MODEL_PRICING` (or the public name you choose) instead of defining its own. **Do not** change `_token_cost()`'s query logic in this story (that is 15.3) — only its source of the pricing constants. Confirm its existing tests still pass.
 
-- [ ] **Task 2 — Add the four columns: model + migration (AC1, AC5) — `velara-api`**
-  - [ ] Add `input_tokens` (Integer, nullable), `output_tokens` (Integer, nullable), `model` (String, nullable), `cost_usd` (Numeric, nullable) to the `InvocationResult` model (`app/models/invocation.py`, beside `result_metadata`). For `cost_usd`, use `sa.Numeric` mapped to `Decimal` (e.g. `Mapped[Decimal | None]`). Pick a Numeric precision/scale generous enough for USD token cost (e.g. `Numeric(12, 6)` — sub-cent precision; document the choice in a comment).
-  - [ ] New Alembic migration `velara-api/app/db/migrations/versions/0024_invocation_cost_tracking.py`, `down_revision = "0023_skill_version_egress"` (verified head — nothing revises 0023). `upgrade()` adds the four columns (all nullable, **no server_default / no backfill** — pre-existing rows stay NULL per AC5); `downgrade()` drops all four. Mirror the `0023` module docstring style: state explicitly that historical rows are intentionally left NULL and why (no structural token data existed pre-migration).
-  - [ ] Migration round-trip locally: `alembic upgrade head` (0023→0024) → `alembic downgrade -1` → `alembic upgrade head` again, clean both directions.
+- [x] **Task 2 — Add the four columns: model + migration (AC1, AC5) — `velara-api`**
+  - [x] Add `input_tokens` (Integer, nullable), `output_tokens` (Integer, nullable), `model` (String, nullable), `cost_usd` (Numeric, nullable) to the `InvocationResult` model (`app/models/invocation.py`, beside `result_metadata`). For `cost_usd`, use `sa.Numeric` mapped to `Decimal` (e.g. `Mapped[Decimal | None]`). Pick a Numeric precision/scale generous enough for USD token cost (e.g. `Numeric(12, 6)` — sub-cent precision; document the choice in a comment).
+  - [x] New Alembic migration `velara-api/app/db/migrations/versions/0024_invocation_cost_tracking.py`, `down_revision = "0023_skill_version_egress"` (verified head — nothing revises 0023). `upgrade()` adds the four columns (all nullable, **no server_default / no backfill** — pre-existing rows stay NULL per AC5); `downgrade()` drops all four. Mirror the `0023` module docstring style: state explicitly that historical rows are intentionally left NULL and why (no structural token data existed pre-migration).
+  - [x] Migration round-trip locally: `alembic upgrade head` (0023→0024) → `alembic downgrade -1` → `alembic upgrade head` again, clean both directions.
 
-- [ ] **Task 3 — Compute + persist cost at the write-path seam (AC2, AC4) — `velara-api/app/workers/execution_tasks.py` + `app/services/job_service.py`**
-  - [ ] At the confirmed seam in `execution_tasks.py` (right after `output_file_key, result_metadata = await execution_service.execute_skill(...)` at ~`:256`, before the `is_blocked` check at `:269`), derive the four cost fields from `result_metadata`:
+- [x] **Task 3 — Compute + persist cost at the write-path seam (AC2, AC4) — `velara-api/app/workers/execution_tasks.py` + `app/services/job_service.py`**
+  - [x] At the confirmed seam in `execution_tasks.py` (right after `output_file_key, result_metadata = await execution_service.execute_skill(...)` at ~`:256`, before the `is_blocked` check at `:269`), derive the four cost fields from `result_metadata`:
     - Read `model`/`input_tokens`/`output_tokens` from `result_metadata` (reuse/extend the existing `_extract_token_metadata` idiom at `:103-114` rather than re-deriving keys).
     - **Runtime split (AC4):** if this is a **code** runtime (no token keys present in `result_metadata` — equivalently `job_ctx["runtime_type"] == "code"`), set `input_tokens=None`, `output_tokens=None`, `model=None`, `cost_usd=Decimal("0")`. Otherwise (prompt/hybrid) set the token fields from metadata and `cost_usd = compute_cost_usd(...)` (which is `None` for an unknown model, per AC3/AC4).
-  - [ ] Thread the four fields into **both** result-writing paths: pass them through `mark_completed` (`job_service.py:490-513`) and `mark_blocked` (`job_service.py:516-544`) as new keyword args, and set them on the `InvocationResult(...)` constructor in each. Keep `result_metadata=` unchanged (columns are additive).
-  - [ ] Do **not** touch `mark_failed`/`mark_cancelled` (`job_service.py:547-578`) — they write no result row; AC4's failed/cancelled outcome is a 15.3 read-layer concern (see Dev Note). Do not add a result-row write there in this story.
-  - [ ] Confirm the fan-out **child** completed-path (the second `mark_completed` call site, ~`execution_tasks.py:587-591`, per subagent map) also receives the cost fields — a child job is a real completed invocation and must be priced too. Grep for every `mark_completed(`/`mark_blocked(` call site and update all of them.
+  - [x] Thread the four fields into **both** result-writing paths: pass them through `mark_completed` (`job_service.py:490-513`) and `mark_blocked` (`job_service.py:516-544`) as new keyword args, and set them on the `InvocationResult(...)` constructor in each. Keep `result_metadata=` unchanged (columns are additive).
+  - [x] Do **not** touch `mark_failed`/`mark_cancelled` (`job_service.py:547-578`) — they write no result row; AC4's failed/cancelled outcome is a 15.3 read-layer concern (see Dev Note). Do not add a result-row write there in this story.
+  - [x] Confirm the fan-out **child** completed-path (the second `mark_completed` call site, ~`execution_tasks.py:587-591`, per subagent map) also receives the cost fields — a child job is a real completed invocation and must be priced too. Grep for every `mark_completed(`/`mark_blocked(` call site and update all of them.
 
-- [ ] **Task 4 — Tests (AC1-AC5)**
-  - [ ] **Unit — `tests/unit/core/test_pricing.py` (new):** `compute_cost_usd` for a known model (assert exact `Decimal` against hand-computed $5/$25-per-MTok math), unknown model → `None` + a warning is logged, and zero/None token inputs behave sanely. Assert `Decimal`, not float.
-  - [ ] **Unit — `tests/unit/services/test_job_service.py`:** `mark_completed`/`mark_blocked` persist the four new fields onto the `InvocationResult` row when passed; default to `None`/unset when not passed (back-compat for existing callers/tests).
-  - [ ] **Integration — `tests/integration/workers/test_execution_tasks.py`:** prove cost persists **across all three runtimes** through the real task write path — prompt/hybrid → real `cost_usd` + token columns populated; **code → `cost_usd=0`, tokens/model NULL** (AC4); an unknown-model prompt result → `cost_usd=NULL` (AC3/AC4). This is the highest-value regression net — it exercises the exact `execute_skill → mark_completed → InvocationResult` seam this story changes.
-  - [ ] **Integration:** re-read the **stored** row from the DB (fresh query, not the in-memory object) and assert the four columns — do not assert only the object the service returned. (Project lesson: "in-memory repair not threaded into the persisted artifact" is a recurring bug class; a test that never re-reads the stored bytes masks it.)
-  - [ ] **Analytics regression:** confirm `analytics_service.py`'s existing token-cost tests still pass unchanged after the pricing-table relocation (import-source change only; no query-behavior change in 15.1).
+- [x] **Task 4 — Tests (AC1-AC5)**
+  - [x] **Unit — `tests/unit/core/test_pricing.py` (new):** `compute_cost_usd` for a known model (assert exact `Decimal` against hand-computed $5/$25-per-MTok math), unknown model → `None` + a warning is logged, and zero/None token inputs behave sanely. Assert `Decimal`, not float.
+  - [x] **Unit — `tests/unit/services/test_job_service.py`:** `mark_completed`/`mark_blocked` persist the four new fields onto the `InvocationResult` row when passed; default to `None`/unset when not passed (back-compat for existing callers/tests).
+  - [x] **Integration — `tests/integration/workers/test_execution_tasks.py`:** prove cost persists **across all three runtimes** through the real task write path — prompt/hybrid → real `cost_usd` + token columns populated; **code → `cost_usd=0`, tokens/model NULL** (AC4); an unknown-model prompt result → `cost_usd=NULL` (AC3/AC4). This is the highest-value regression net — it exercises the exact `execute_skill → mark_completed → InvocationResult` seam this story changes.
+  - [x] **Integration:** re-read the **stored** row from the DB (fresh query, not the in-memory object) and assert the four columns — do not assert only the object the service returned. (Project lesson: "in-memory repair not threaded into the persisted artifact" is a recurring bug class; a test that never re-reads the stored bytes masks it.)
+  - [x] **Analytics regression:** confirm `analytics_service.py`'s existing token-cost tests still pass unchanged after the pricing-table relocation (import-source change only; no query-behavior change in 15.1).
 
-- [ ] **Task 5 — Gates**
-  - [ ] Rebuild the api image before running pytest in-container (`docker compose build api`) — the image bakes source; a stale image gives false results (project lesson).
-  - [ ] Run pytest with the `AUTH_BACKEND=dev` override (the documented host recipe; `docker-compose.yml` defaults `api` to `cognito`, which 401s Dev-token tests across the whole suite).
-  - [ ] Full `tests/integration/workers/test_execution_tasks.py` + `tests/unit/services/test_job_service.py` + new `test_pricing.py` green; then the full repo suite (note any pre-existing unrelated flake, e.g. the documented append-only-DB dedupe re-run sensitivity from 13.4/13.6, so it is not mistaken for a regression).
-  - [ ] `ruff check` on all changed files → clean.
-  - [ ] Confirm **no `docs/api-spec.json` diff** (`git status`) — no response schema changed in this story.
-  - [ ] Confirm **no new audit event type** and the guard registry is untouched.
+- [x] **Task 5 — Gates**
+  - [x] Rebuild the api image before running pytest in-container (`docker compose build api`) — the image bakes source; a stale image gives false results (project lesson).
+  - [x] Run pytest with the `AUTH_BACKEND=dev` override (the documented host recipe; `docker-compose.yml` defaults `api` to `cognito`, which 401s Dev-token tests across the whole suite).
+  - [x] Full `tests/integration/workers/test_execution_tasks.py` + `tests/unit/services/test_job_service.py` + new `test_pricing.py` green; then the full repo suite (note any pre-existing unrelated flake, e.g. the documented append-only-DB dedupe re-run sensitivity from 13.4/13.6, so it is not mistaken for a regression).
+  - [x] `ruff check` on all changed files → clean.
+  - [x] Confirm **no `docs/api-spec.json` diff** (`git status`) — no response schema changed in this story.
+  - [x] Confirm **no new audit event type** and the guard registry is untouched.
 
 ## Dev Notes
 
@@ -157,8 +157,42 @@ pytest under `docker compose exec api`, run with `-e AUTH_BACKEND=dev`. Rebuild 
 
 ### Agent Model Used
 
+claude-sonnet-5
+
 ### Debug Log References
+
+- Migration round-trip verified twice: once after Task 2 (model + migration only), once again after Task 3 (write-path changes) — `alembic upgrade head` → `alembic downgrade -1` → `alembic upgrade head`, clean both times, final state `0024_invocation_cost_tracking (head)`.
+- `docker compose build api` rebuilt 4 times across the session (after Task 1-3 code, after adding tests, after ruff line-length fixes) — each followed by `docker compose up -d api worker` to recreate containers on the fresh image, per the documented "image bakes source" project lesson.
+- Full repo suite: `docker compose exec -e AUTH_BACKEND=dev api pytest` → **1483 passed, 1 failed, 3 skipped**. The 1 failure (`tests/integration/api/test_auth_and_authz_auditing.py::test_repeated_denials_are_deduped`) reproduces in total isolation (`pytest tests/integration/api/test_auth_and_authz_auditing.py::test_repeated_denials_are_deduped` alone also fails) and matches the documented pre-existing flake (fixed-`user_id` dedupe-count test, re-run-sensitive against the append-only `velara_test` DB — same class of flake noted in Stories 13.4/13.6/14.1). Not touched by this story's file set.
+- `ruff check` on all 10 changed/new files: clean after 2 line-length fixes in the new `test_pricing.py`.
+- `git status --short` confirms no `docs/api-spec.json` diff and no touched audit-guard-registry files.
 
 ### Completion Notes List
 
+- **Task 1 (AC3):** Created `app/core/pricing.py` as the single pricing source of truth (`_MODEL_PRICING` + `compute_cost_usd`, `Decimal`-based, unrecognized model → `None` + structured warning log, never a fallback price). `analytics_service.py` now imports `_MODEL_PRICING` from the new module; deleted `_DEFAULT_PRICING` and its silent-fallback usage in `_token_cost()` — unrecognized models now `continue` (contribute $0 to the aggregate) instead of being mispriced at another model's rate. Updated the one existing test that asserted the old fallback behavior (`test_analytics.py`, renamed `test_token_cost_unknown_model_uses_default_pricing_not_dropped` → `test_token_cost_unknown_model_contributes_zero_never_mispriced`) plus its AC6 docstring line; `_MODEL_PRICING`-referencing test (`test_token_cost_survives_malformed_and_huge_token_values`) needed no change (import path unaffected by the relocation).
+- **Task 2 (AC1, AC5):** Added `input_tokens`/`output_tokens`/`model`/`cost_usd` (Integer/Integer/String(64)/Numeric(12,6), all nullable) to `InvocationResult` (`app/models/invocation.py`). New migration `0024_invocation_cost_tracking`, chained off verified head `0023_skill_version_egress`, additive/nullable, **no backfill** (AC5) — round-trip verified clean both directions.
+- **Task 3 (AC2, AC4):** Added `_extract_cost_fields()` in `execution_tasks.py`, built on the existing `_extract_token_metadata` helper — absence of token keys (code runtime, or the fan-out parent roll-up which made no LLM call of its own) → explicit `cost_usd=Decimal("0")`, tokens/model `None`; presence of token keys → real fields + `compute_cost_usd()` (which itself yields `None` for an unrecognized model). Threaded `**cost_fields` into all **three** `mark_completed`/`mark_blocked` call sites: the primary single/fan-out-child write-path seam (both the blocked and completed branches share one `cost_fields` computation), and the fan-out **parent** roll-up's `mark_completed` call — confirmed via grep that these are the only three call sites in the codebase; the previous story draft's guess at a distinct "child" call site was a mis-read of the fan-out **parent** aggregation callback, corrected during implementation (see Dev Note reconciliation below). `mark_failed`/`mark_cancelled` deliberately untouched, per the story's AC4 scope note.
+- **Task 4:** New `tests/unit/core/test_pricing.py` (8 tests: known-model exact Decimal math, zero/None token handling, unknown-model → `None` + warning log via `structlog.testing.capture_logs()`, pricing-table sanity). Extended `tests/integration/workers/test_execution_tasks.py` with 7 new tests exercising the real `_extract_cost_fields` → `mark_completed`/`mark_blocked` seam across prompt/hybrid (priced), code (explicit zero), unrecognized-model (NULL), blocked path, and a back-compat/no-kwargs case (AC5 — all NULL) — every test re-queries the **stored** row fresh, never asserting only the in-memory object. Added a `TestInvocationResultCostColumns` class to `tests/unit/services/test_job_service.py` (column-spec + signature-contract checks, mirroring the file's existing `TestInvocationJobModel` style). Confirmed all pre-existing `test_analytics.py` tests still pass unchanged in behavior (30/30) after the pricing-table relocation.
+- **Task 5:** All gates green — see Debug Log References above.
+- **Dev Note reconciliation:** the story's Dev Notes speculated (from a subagent's approximate line-number map) a second "fan-out child" `mark_completed` call site around `execution_tasks.py:587-591`. On inspection, `execution_tasks.py` has exactly **three** `mark_completed`/`mark_blocked` calls: the primary write-path (`mark_blocked` + `mark_completed`, used by both single jobs and fan-out **children** — a child is just a `run_skill` invocation with `parent_job_id` set, so it already goes through the primary seam) and the fan-out **parent** roll-up's `mark_completed` in `aggregate_results`'s `_aggregate()`. The parent roll-up writes a `result_metadata` that is a fan-out summary dict (`{"fan_out": True, "child_count": ..., "children": [...]}`) with no token keys of its own (the parent made no LLM call — each child already has its own priced row) — `_extract_cost_fields` correctly routes this through the same explicit-zero branch as a code-runtime row, avoiding any double-counting of children's already-priced cost. This is documented inline at the parent call site.
+
 ### File List
+
+**New:**
+- `velara-api/app/core/pricing.py`
+- `velara-api/app/db/migrations/versions/0024_invocation_cost_tracking.py`
+- `velara-api/tests/unit/core/__init__.py`
+- `velara-api/tests/unit/core/test_pricing.py`
+
+**Modified:**
+- `velara-api/app/models/invocation.py`
+- `velara-api/app/services/job_service.py`
+- `velara-api/app/services/analytics_service.py`
+- `velara-api/app/workers/execution_tasks.py`
+- `velara-api/tests/integration/workers/test_execution_tasks.py`
+- `velara-api/tests/unit/services/test_job_service.py`
+- `velara-api/tests/integration/api/test_analytics.py`
+
+## Change Log
+
+- 2026-07-20 — Implemented Story 15.1 (persist structured per-execution cost). Migration `0024_invocation_cost_tracking` (4 additive-nullable columns on `invocation_results`); new `app/core/pricing.py` single-source pricing table (removes the old `_DEFAULT_PRICING` silent-mispricing fallback); cost computed once at the `execution_tasks.py` write-path seam and threaded into all 3 `mark_completed`/`mark_blocked` call sites. 15 new tests, 1 existing test updated for the deliberate AC3 fallback-removal behavior change. All gates green (1483 passed / 1 pre-existing unrelated flake / 3 skipped; ruff clean; migration round-trip clean; no api-spec diff; no audit-registry change).
