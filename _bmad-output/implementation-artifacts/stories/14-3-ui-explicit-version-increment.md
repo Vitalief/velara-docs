@@ -4,7 +4,7 @@ baseline_commit: 6c6e97c (velara-api) / bcafff3 (velara-web)
 
 # Story 14.3: Expose Explicit Version Increment in the Skill Edit UI
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -169,3 +169,4 @@ claude-sonnet-5
 |---|---|
 | 2026-07-20 | Story 14.3 drafted (create-story). Pure FE story — backend `version` param already exists and is unchanged. Target surface identified precisely as `SkillContentEditor.tsx` (not `SkillEdit.tsx`, which only mounts it). Epic 14 marked in-progress (first story). Status → ready-for-dev. |
 | 2026-07-20 | Story 14.3 implemented (dev-story). Added optional Version field to `SkillContentEditor`'s non-draft path with auto-bump placeholder, client-side semver + greater-than validation, and blank-omits-version wiring into `handleSave`. Widened `SkillContentEditorProps.skill` to `SkillWithVersion` (needed for `current_version`). 8 new frontend tests in `SkillEdit.test.tsx`. Zero backend changes (confirmed). Gates: typecheck 0, lint 0 new errors, vitest 715 passed. Status → review. |
+| 2026-07-20 | Code review skipped (Project Lead judgment call — small, well-scoped FE-only change with clean gates). velara-web committed directly (`61d3a3c` on `development`, uncommitted/unpushed to remote — local only, awaiting explicit push approval). Status → done. |
