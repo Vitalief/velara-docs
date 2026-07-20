@@ -55,6 +55,9 @@
 generated: 2026-06-02
 last_updated: 2026-07-20
 
+# 2026-07-20: Epic 13 marked done (7/7 stories complete, all code-reviewed).
+# 2026-07-20: Epic 14 (Skill Upgrade Flexibility) added via correct-course — 3 stories in backlog (sprint-change-proposal-2026-07-20.md).
+
 # 2026-07-16: 13-7-hipaa-soc2-control-mapping-docs moved to in-progress (dev-story).
 # 2026-07-16: 13-7-hipaa-soc2-control-mapping-docs moved to review (dev-story).
 # 2026-07-20: 13-7-hipaa-soc2-control-mapping-docs moved to done (code review — 3 patches applied [S3-logging green-wash caveat, CC4.1 consistency, verbatim-label], 1 deferred).
@@ -254,7 +257,7 @@ development_status:
   #   originally logged (pre-renumber IDs) with a note.
   #   Order: 13-1 (categorization, runs first) → 13-2 → 13-3 → 13-4 → 13-5 → 13-6 → 13-7 (docs finalize LAST — must describe what shipped).
   # ─────────────────────────────────────────────────────────
-  epic-13: in-progress
+  epic-13: done
   13-1-audit-event-categorization: done
   13-2-user-deprovisioning: done
   13-3-audit-read-path-phi-disclosure: done
@@ -262,3 +265,18 @@ development_status:
   13-5-cloud-detective-controls: done
   13-6-close-remaining-unaudited-mutations: done
   13-7-hipaa-soc2-control-mapping-docs: done
+
+  # ─────────────────────────────────────────────────────────
+  # Epic 14: Skill Upgrade Flexibility
+  #   Added 2026-07-20 via correct-course (sprint-change-proposal-2026-07-20.md).
+  #   Trigger: upgrading two hybrid skills post-Epic-13 hit the shape-lock (LLM→code blocked),
+  #   the AI adapter not being wired into the upgrade path, and no UI version increment.
+  #   Investigation: the shape-lock is a PROJECTION guard, not execution-critical (executor routes
+  #   per-version on manifest bytes). Epic 11 stays done; Epic 14 extends its versioning/adapter model
+  #   forward (FR amendments only). Supersedes 5.5.1 single-shape invariant; amends Epic 11 ADR #3 (inline in 14-1).
+  #   Dev order: 14-3 (independent, FE-only) → 14-1 (shape-lock + egress migration) → 14-2 (adapter on upgrade, dep 14-1).
+  # ─────────────────────────────────────────────────────────
+  epic-14: backlog
+  14-1-relax-hybrid-shape-lock: backlog
+  14-2-ai-adapter-on-upgrade-path: backlog
+  14-3-ui-explicit-version-increment: backlog
