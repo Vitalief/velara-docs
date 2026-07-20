@@ -54,6 +54,7 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-20
+# 2026-07-20: 14-3-ui-explicit-version-increment moved to in-progress (dev-story).
 
 # 2026-07-20: Epic 13 marked done (7/7 stories complete, all code-reviewed).
 # 2026-07-20: Epic 14 (Skill Upgrade Flexibility) added via correct-course — 3 stories in backlog (sprint-change-proposal-2026-07-20.md).
@@ -280,4 +281,4 @@ development_status:
   epic-14: in-progress
   14-1-relax-hybrid-shape-lock: backlog
   14-2-ai-adapter-on-upgrade-path: backlog
-  14-3-ui-explicit-version-increment: ready-for-dev
+  14-3-ui-explicit-version-increment: in-progress
