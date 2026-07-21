@@ -4,7 +4,7 @@ baseline_commit: d212b34 (velara-api) / 3372772 (velara-web)
 
 # Story 15.1: Persist Structured Per-Execution Cost at Write Time
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -87,6 +87,15 @@ so that cost is a permanent fact about that specific execution, not something re
   - [x] `ruff check` on all changed files → clean.
   - [x] Confirm **no `docs/api-spec.json` diff** (`git status`) — no response schema changed in this story.
   - [x] Confirm **no new audit event type** and the guard registry is untouched.
+
+### Review Findings
+
+_Code review 2026-07-21 (3-layer: Blind Hunter + Edge Case Hunter + Acceptance Auditor). Acceptance Auditor found ZERO AC violations — all 5 ACs met, File List an exact match (no drift), out-of-scope guards clean, fan-out parent roll-up correctly avoids double-counting. All surviving findings are forward-looking (deferred); 3 dismissed as unreachable/out-of-scope._
+
+- [x] [Review][Defer] `Decimal(str(float_rate))` re-imports binary-float drift for a future non-clean rate [app/core/pricing.py:57] — deferred, latent. Verified today's only rate (claude-opus-4-8) stringifies cleanly (`5e-06`→`0.000005`), zero drift. Bites only when a model with a non-binary-clean per-MTok rate is added. Fix-when-relevant: use `Decimal("5") / Decimal(1_000_000)` instead of `Decimal(str(5.0/1_000_000))`.
+- [x] [Review][Defer] `Numeric(12,6)` truncates a future sub-1e-6 per-token rate [app/models/invocation.py:40] — deferred, latent. Verified no truncation for current rates (products land exactly on 6dp; max realistic run $30 vs ~$1M ceiling). Relevant only if a model priced below $1/MTok is added. Whoever adds model #2 should re-check the scale.
+- [x] [Review][Defer] Analytics read path (float, from audit log) computes cost differently from the write path (Decimal, from result row) — can diverge [app/services/analytics_service.py:197-209] — deferred, BY DESIGN. Spec explicitly defers all read-layer rewiring (reading the new `cost_usd` column) to Story 15.3; 15.1 changed only `_token_cost`'s import source, not its query logic. Flag for 15.3's author to reconcile.
+- [x] [Review][Defer] `SUM(cost_usd)` silently collapses NULL (unknown-model) vs 0 (no LLM call) → under-reports spend with no signal [app/workers/execution_tasks.py:135-147] — deferred to 15.3 read layer. The NULL-vs-0 distinction is deliberate (unknown ≠ zero); the aggregation that must COALESCE/surface unpriced-run counts is Story 15.3's `_token_cost` rewrite per this story's AC4 scope note. Suggest 15.3 surface a "runs with unknown model / NULL cost" count so unpriced spend isn't invisible.
 
 ## Dev Notes
 
