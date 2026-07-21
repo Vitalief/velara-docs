@@ -54,6 +54,7 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-21
+# 2026-07-21: 15-2-surface-per-invocation-cost-job-api-ui moved to ready-for-dev (create-story). Full-stack, depends on 15-1 (done). Surface-only — reads 15.1's 4 InvocationResult columns; NO migration/write-path change. BE: +4 fields on JobResult, +cost_usd on JobSummary (list needs an InvocationResult outerjoin + 3-tuple list_jobs return change — client.py unpack arity must be fixed too), regen docs/api-spec.json. FE: extend hand-written JobResult/JobSummary types + render cost via reused fmtUsd (null→"—", 0→"$0.00") in JobsHistory table+detail and RunConsole. Client IP boundary preserved (no Client* cost field). No audit event.
 # 2026-07-20: Epic 15 moved to in-progress; 15-1-persist-structured-per-execution-cost moved to ready-for-dev (create-story, first story in epic). Backend-only. New migration 0024 (4 additive-nullable cols on invocation_results) + new shared app/core/pricing.py (relocates _MODEL_PRICING, removes silent _DEFAULT_PRICING fallback) + cost computed/persisted at execution_tasks.py write-path seam via mark_completed/mark_blocked. AC4 scoped: failed/cancelled write NO result row today → explicit-zero delivered at 15.3 read layer, NOT by rewriting mark_failed. No FE, no api-spec, no new audit event.
 # 2026-07-20: 15-1-persist-structured-per-execution-cost moved to in-progress (dev-story).
 # 2026-07-20: 15-1-persist-structured-per-execution-cost moved to review (dev-story). All 5 tasks complete: pricing table relocated to app/core/pricing.py (removes silent _DEFAULT_PRICING mispricing fallback, AC3); migration 0024 (4 additive-nullable cols on invocation_results, no backfill, round-trip verified, AC1/AC5); cost computed once at execution_tasks.py write-path seam via new _extract_cost_fields, threaded into all 3 mark_completed/mark_blocked call sites incl. fan-out parent roll-up (AC2/AC4); 15 new tests + 1 existing test updated for the deliberate AC3 behavior change. Gates: 1483 passed/1 pre-existing unrelated flake (test_repeated_denials_are_deduped)/3 skipped; ruff clean; no api-spec diff; no audit-registry change.
@@ -312,7 +313,7 @@ development_status:
   # ─────────────────────────────────────────────────────────
   epic-15: in-progress
   15-1-persist-structured-per-execution-cost: done
-  15-2-surface-per-invocation-cost-job-api-ui: backlog
+  15-2-surface-per-invocation-cost-job-api-ui: ready-for-dev
   15-3-per-skill-and-per-user-cost-analytics: backlog
   15-4-cost-the-ai-assisted-skill-adaptation-llm-call: backlog
 
