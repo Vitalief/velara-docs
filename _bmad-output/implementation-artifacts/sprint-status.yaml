@@ -321,7 +321,7 @@ development_status:
   15-2-surface-per-invocation-cost-job-api-ui: done
   15-3-per-skill-and-per-user-cost-analytics: backlog
   15-4-cost-the-ai-assisted-skill-adaptation-llm-call: backlog
-  15-5-capture-code-driven-hybrid-sandbox-llm-usage: draft
+  15-5-capture-code-driven-hybrid-sandbox-llm-usage: in-progress
 
   # ─────────────────────────────────────────────────────────
   # Epic 16: Engagement Hierarchy, Attachment & Ingest Model Refinement

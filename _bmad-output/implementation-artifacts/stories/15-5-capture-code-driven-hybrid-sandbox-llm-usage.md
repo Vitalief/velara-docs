@@ -1,10 +1,10 @@
 ---
-baseline_commit: TBD (velara-api) — set at dev-story pickup
+baseline_commit: 22c8dfb (velara-api)
 ---
 
 # Story 15.5: Capture Code-Driven Hybrid Sandbox LLM Usage (Envelope Usage Contract + Adapter Enforcement)
 
-Status: draft
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -33,11 +33,11 @@ so that its per-execution cost is a true dollar figure — not a silent $0.00 th
 3. **AC3 — A code-driven hybrid that reports NO usage stores `cost_usd=NULL`, never `$0`.**
    Formalizes the interim fix as the permanent, tested contract for this runtime: absence of usage on an LLM-using runtime is "unknown" (NULL), because a run that made LLM calls is never free. A genuine `code` run (no LLM) still stores an explicit `cost_usd=0` per 15.1/AC4 — that behavior is unchanged. The discriminator is the `runtime` marker (`_LLM_USING_RUNTIMES`), not the mere absence of keys.
 
-4. **AC4 — A completed code-driven hybrid with missing usage is an AI-Adapter trigger.**
-   A code-driven hybrid whose envelope omits `usage` (or reports it empty) is a **contract violation** surfaced the same way `ENTRYPOINT_CONTRACT_VIOLATION` is today (`entrypoint_contract.py:48-73`): a typed error (`CODE_DRIVEN_USAGE_CONTRACT_VIOLATION` or equivalent, category-tagged like the existing contract errors) that makes the skill eligible for the AI Adapter's propose flow (`skill_integration_assistant.propose_adapter`, `skill_integration_assistant.py:952+`). The adapter proposes an entrypoint/adapter patch that makes the skill emit `usage` in its envelope. **The static entrypoint contract only validates the input signature (`validate_entrypoint_contract`, `entrypoint_contract.py:156-232`); it cannot inspect the return shape** — so enforcement is **runtime-observed → adapt** (the run completes once, then non-compliance is known and the adapter is offered), NOT a pre-execution static gate. This is the deliberate, documented model (chosen over manifest-declared-and-verified 2026-07-21).
+4. **AC4 — A code-driven hybrid that does not declare `reports_usage` routes into the existing AI-Adapter flow at registration.**
+   The `CodeDrivenHybridManifest` gains a `reports_usage: bool = False` field (mirroring the existing `ai_adapted: bool` precedent, `code_driven_hybrid.py:77`). A code-driven hybrid that has not declared `reports_usage: true` is treated as a **synthesizable-gap manifest** — the same staging-time path a manifest missing `entrypoint`/`output_schema` takes today (`_manifest_missing_synthesizable_field` → `MalformedBundleManifestError` → `propose_adapter`, `skill_service.py:472-490,544-545` + `skills.py:460-464`). So on upload/re-upload, a non-declaring skill is offered AI adaptation through the **existing** propose flow — the adapter proposes a manifest that sets `reports_usage: true` and (if needed) an entrypoint patch to emit `usage`. **No new runtime→adapter bridge, no new skill-version state, no new error code.** (Architect decision 2026-07-21, Winston: enforce at registration via a declared capability routed through the already-built synthesis path — the boring, paved road — rather than build a novel runtime-observed trigger channel into a subsystem that is otherwise entirely staging-time/static. The rejected runtime-observed model would have introduced a parallel trigger channel + a registered-version-vs-staged-bytes impedance mismatch to avoid adding one manifest boolean.)
 
 5. **AC5 — The usage contract is documented for skill authors.**
-   The code-driven hybrid entrypoint/envelope contract documentation (wherever the envelope shape is specified for skill authors — the docstring on `CodeDrivenResultEnvelope`, and any bundle/skill-authoring reference doc) states that an LLM-using code-driven hybrid MUST return `usage` with its token counts and model, and explains that omitting it makes the skill non-conforming (adapter-eligible) and its cost unknowable. `velara-protocol-extractor` is updated (or a bridge is documented) to emit `usage` from its existing internal counters — it already has `input_tokens`/`output_tokens`/`model` in hand, so this is a small change at its envelope-return site.
+   The docstrings on `CodeDrivenResultEnvelope` (the `usage` field) and `CodeDrivenHybridManifest` (the `reports_usage` field) state that an LLM-using code-driven hybrid MUST declare `reports_usage: true` and return `usage` with its token counts and model, and that omitting the declaration makes the skill adapter-eligible at registration and its cost unknowable. **The real skill (`velara-protocol-extractor`) is OUT OF SCOPE** — it lives outside any repo here (client-provided, per [[project-client-skill-contract]]); the operator re-uploads it once this platform change is live, at which point it flows through the new adapter path and gets `reports_usage`/`usage` added by the assistant. This story only makes the platform ready to enforce and price.
 
 6. **AC6 — Existing runtimes and the "genuine code run = $0" case are provably unaffected.**
    Regular `hybrid` (`execution_service.py:1040-1049`) and `prompt` pricing are unchanged (they already surface top-level tokens). A `code` runtime with no LLM still stores `cost_usd=0`. Fan-out parent roll-up (`execution_tasks.py:632-640`) is unaffected. Tests assert each of these did not regress.
@@ -47,8 +47,9 @@ so that its per-execution cost is a true dollar figure — not a silent $0.00 th
 - `_run_prompt` / `_run_hybrid` / `_run_code` LLM call sites and the regular hybrid write path — they already report usage correctly.
 - Analytics aggregation (`analytics_service.py`) and the Job API/UI surfacing — 15.3 / 15.2 own those; once this story lands, a priced code-driven hybrid simply flows through the already-built read/display paths.
 - Migration / `InvocationResult` columns — 15.1's columns already hold everything; this story only changes what gets written into them.
-- The AI Adapter's authoring prompts / decision logic / `RejectNonGrantor` gate — this story adds a new *trigger signal*, it does not rewrite the propose flow.
-- Manifest-declared-usage enforcement (the rejected "declare + verify at registration" model) — explicitly not built; enforcement is runtime-observed per AC4.
+- The AI Adapter's authoring prompts / decision logic / `RejectNonGrantor` gate — this story routes a new case into the EXISTING propose flow, it does not rewrite it. (If the synthesis prompt already round-trips arbitrary manifest fields, adding `reports_usage` may need zero prompt change — verify in Task 4.)
+- The real skill `velara-protocol-extractor` — outside any repo here; operator re-uploads post-merge (AC5).
+- A runtime-observed → adapter trigger channel (the rejected model) — enforcement is a declared manifest capability routed through the existing staging-time flow per AC4.
 
 ## Tasks / Subtasks
 
@@ -64,22 +65,23 @@ so that its per-execution cost is a true dollar figure — not a silent $0.00 th
 - [ ] **Task 3 — Formalize NULL-not-$0 for missing usage (AC3) — `app/workers/execution_tasks.py`**
   - [ ] Confirm/keep the interim `_LLM_USING_RUNTIMES` discriminator in `_extract_cost_fields` (already applied 2026-07-21). Ensure `code_driven_hybrid` is in the set and covered by a test asserting NULL (not $0) when usage is absent.
 
-- [ ] **Task 4 — Make missing usage an AI-Adapter trigger (AC4) — `code_driven_executor.py` + adapter seam**
-  - [ ] Introduce a typed, category-tagged contract error (e.g. `CodeDrivenUsageContractViolation` / `CODE_DRIVEN_USAGE_CONTRACT_VIOLATION`) raised or recorded when a completed code-driven hybrid returns no `usage`. Model it on `EntrypointContractViolationError` (`entrypoint_contract.py:48-73`) incl. a `.category`.
-  - [ ] Decide (and document) the surfacing point: because enforcement is post-execution, the run still COMPLETES (output is valid; only cost is unknown). The violation must be recorded/surfaced such that the skill becomes adapter-eligible WITHOUT failing the user's job. Options to resolve during dev/architect review: (a) attach a non-fatal contract-warning to the job/skill that the adapter route reads; (b) surface it on the skill's version state so the Integration Assistant offers a proposal. Pick the seam that matches how `ENTRYPOINT_CONTRACT_VIOLATION` already flows into `propose_adapter`.
-  - [ ] Wire the adapter propose path (`skill_integration_assistant.py`) to recognize the new violation as a proposable case (an entrypoint patch that makes the skill emit `usage`). Reuse the existing static re-validation fail-closed seam (`skill_integration_assistant.py:1084-1092`) pattern.
+- [ ] **Task 4 — Declare `reports_usage` on the manifest + route a non-declaring skill into the existing adapter flow (AC4) — `app/services/code_driven_hybrid.py` + `app/services/skill_service.py`**
+  - [ ] Add `reports_usage: bool = False` to `CodeDrivenHybridManifest` (`code_driven_hybrid.py:57-133`), mirroring the `ai_adapted: bool = False` precedent (`:77`). Docstring: authors of an LLM-using code-driven hybrid MUST set it `true` and emit `usage`.
+  - [ ] Make a code-driven hybrid that does NOT declare `reports_usage: true` route into the existing synthesis/assist path. The cleanest hook is `_manifest_missing_synthesizable_field` (`skill_service.py:472-490`): extend it (or the `_process_bundle` routing at `:541-545`) so a manifest that parses but lacks `reports_usage: true` is treated like a synthesizable gap → `MalformedBundleManifestError` → the existing `propose_adapter` flow. NO new error code, NO new route.
+  - [ ] Confirm the adapter's synthesis prompt/path can add `reports_usage` (and, if the entrypoint doesn't emit `usage`, an adapter patch) — reuse the existing fail-closed static re-validation seam (`skill_integration_assistant.py:1084-1092`). If the synthesis path already round-trips arbitrary manifest fields, this may be zero-change; verify and note it.
+  - [ ] Guard against a false-positive loop: a manifest that legitimately declares `reports_usage: true` must NOT route to assist. And a NON-LLM code-driven skill (if such a thing exists) needs a way to be honest — decide during dev whether `reports_usage: false` is a valid explicit declaration (skill asserts "I make no LLM calls" → priced as $0-code) vs the default-unset "author forgot" case. Document the choice.
 
-- [ ] **Task 5 — Update the real skill + author docs (AC5) — `velara-protocol-extractor` + contract docs**
-  - [ ] Update `velara-protocol-extractor`'s entrypoint to return `usage` (it already has `input_tokens`/`output_tokens`/`model` internally — the numbers currently buried in its domain `canonical.data.metadata`). NOTE: this skill lives OUTSIDE the repo (per [[project-client-skill-contract]] it is in ~/Downloads / client-provided) — coordinate the change or document a temporary read-bridge with an explicit removal trigger.
-  - [ ] Document the `usage` requirement in the code-driven hybrid authoring/contract reference.
+- [ ] **Task 5 — Document the contract for skill authors (AC5) — docstrings only**
+  - [ ] Ensure the `CodeDrivenResultEnvelope.usage` and `CodeDrivenHybridManifest.reports_usage` docstrings fully state the contract (declare + emit; omitting → adapter-eligible + unknowable cost). The real skill (`velara-protocol-extractor`) is OUT OF SCOPE per AC5 — no repo file to edit here; the operator re-uploads it post-merge.
 
 - [ ] **Task 6 — Tests (AC2, AC3, AC4, AC6)**
   - [ ] Envelope with `usage` present → `result_metadata` has top-level tokens → priced correctly (`test_execution_tasks.py` seam-style, mirroring `test_cost_persisted_for_hybrid_runtime_known_model`).
   - [ ] Envelope with NO `usage` on `runtime=code_driven_hybrid` → `cost_usd=NULL` (already added 2026-07-21: `test_cost_null_not_zero_for_llm_runtime_missing_usage`).
   - [ ] Genuine `code` run (no runtime marker) → still `cost_usd=0` (existing `test_cost_persisted_for_code_runtime_is_explicit_zero` — assert unchanged).
   - [ ] Unknown model in `usage` → NULL, tokens still recorded (mirror `test_cost_unknown_model_is_null_not_mispriced`).
-  - [ ] The contract-violation → adapter-eligible path (new): a completed code-driven hybrid with no usage produces the typed violation / adapter-eligibility signal.
-  - [ ] `CodeDrivenResultEnvelope.model_validate` still accepts a well-formed envelope both WITH and WITHOUT `usage` (no `CODE_DRIVEN_ENVELOPE_ERROR` for the missing-usage case — that must reach the adapter, not fail as malformed).
+  - [ ] The registration routing (new): a code-driven hybrid manifest WITHOUT `reports_usage: true` routes to `MalformedBundleManifestError`/assist (via `_manifest_missing_synthesizable_field` or its extension); a manifest WITH `reports_usage: true` registers normally (no assist). Mirror the existing Story 14.2 malformed-manifest routing tests.
+  - [ ] `CodeDrivenResultEnvelope.model_validate` still accepts a well-formed envelope both WITH and WITHOUT `usage` (no `CODE_DRIVEN_ENVELOPE_ERROR` for the missing-usage case — a legacy skill still executes; it just prices NULL until re-uploaded/adapted).
+  - [ ] `CodeDrivenHybridManifest` accepts `reports_usage` true/false/absent and defaults to `False`.
 
 - [ ] **Task 7 — Gates**
   - [ ] Rebuild the api + worker images before pytest (source is baked). Run with `AUTH_BACKEND=dev`.
@@ -97,9 +99,11 @@ Epic 15 modeled three runtimes (`prompt`, `hybrid`, `code`) and priced them by "
 
 The real skill DOES emit `input_tokens`/`output_tokens`/`model`/`est_cost_usd`/`n_llm_calls` — but inside its **domain** canonical payload, mixed with clinical data (`soa_pages`, `page_count`). `canonical` is a bare `dict`; those keys are un-modeled, un-validated, and specific to this one skill. Reading them hard-codes a private convention that the next code-driven skill author has no reason to follow — re-arming the exact $0 bug for every future skill. The reserved `usage` field + adapter enforcement is what makes it a *contract*, not a lucky read.
 
-### Enforcement is runtime-observed, not static (the key constraint)
+### Enforcement is a DECLARED capability at registration, not a runtime-observed trigger (architect decision 2026-07-21)
 
-`validate_entrypoint_contract` (`entrypoint_contract.py:156-232`) statically checks only the entrypoint's INPUT signature (`sig.bind(input_path=None, output_dir=None, params={})`). There is no static inspection of what the skill RETURNS — the envelope is only validated at execution time (`code_driven_executor.py:588`). You cannot statically prove a Python function will populate `usage`. So "must report usage" is enforced by: run once → observe missing usage → mark adapter-eligible → adapter proposes the patch. This mirrors how `ENTRYPOINT_CONTRACT_VIOLATION` already becomes a `propose_adapter` trigger. (The rejected alternative — declare `emits_usage` in the manifest and verify at registration — was considered and set aside 2026-07-21 for being a heavier manifest-schema change; runtime-observed adaptation reuses existing machinery.)
+The whole integration-assistant subsystem — entrypoint contract, `propose_adapter`, static re-validation — operates on **staged bundle bytes at upload/registration time**. `propose_adapter` is called explicitly by `POST /integration-assistant/propose` against a staged bundle (`skills.py:399-483`); it never touches a completed execution. And `validate_entrypoint_contract` (`entrypoint_contract.py:156-232`) statically checks only the entrypoint's INPUT signature — nothing inspects what the skill RETURNS until execution (`code_driven_executor.py:588`), so "must emit usage" genuinely cannot be gated statically.
+
+Winston's call: rather than bolt a novel *runtime-observed → adapter* bridge onto an otherwise entirely staging-time subsystem (which would need a parallel trigger channel + a registered-version-vs-staged-bytes retrieval path — new state, new failure modes, all to avoid one boolean), enforce via a **declared capability**: the manifest carries `reports_usage: bool` (precedent: `ai_adapted: bool`, `code_driven_hybrid.py:77`). A code-driven hybrid that doesn't declare it routes into the **already-built** malformed-manifest→synthesis path (`_manifest_missing_synthesizable_field` → `MalformedBundleManifestError` → `propose_adapter`, Story 14.2). This is the boring, paved road: no new error code, no new route, no new runtime state. The operator's own re-upload plan (AC5) is exactly this flow. Runtime stays honest and dumb — usage present → price; absent on an LLM runtime → NULL (the interim fix, formalized in AC3). (The rejected alternative — runtime-observed → adapt — fights the architecture; see the AC4 note.)
 
 ### Cost source = OUR pricing table, always
 
@@ -121,4 +125,5 @@ When `usage` reports tokens+model, price via `compute_cost_usd` against `app/cor
 
 ## Change Log
 
+- 2026-07-21 — Re-scoped AC4/AC5 + Task 4/5 after architect (Winston) review: enforcement is a DECLARED manifest capability (`reports_usage: bool`) routed through the existing malformed-manifest→synthesis→`propose_adapter` path at registration, NOT a novel runtime-observed→adapter trigger (which fought the otherwise-entirely-staging-time subsystem). Real skill `velara-protocol-extractor` moved OUT of scope (operator re-uploads post-merge). Status → ready-for-dev.
 - 2026-07-21 — Drafted Story 15.5 after a live code-driven hybrid job (velara-protocol-extractor) reported $0.00 for a ~$1.38 execution. Root cause: code-driven hybrid LLM calls happen inside the sandbox and their usage is never surfaced in the `CodeDrivenResultEnvelope` (no usage field), so `_extract_cost_fields` mis-classified them as free code runs. Interim NULL-not-$0 discriminator applied to `execution_tasks.py` immediately; this story adds a first-class envelope `usage` contract, threads it into the existing write-path pricing seam, and makes a missing-usage run an AI-Adapter trigger (runtime-observed enforcement — the static contract checks only the input signature, so usage can't be gated pre-execution). Backend + contract only; no migration, no FE, no new audit event.
