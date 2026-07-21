@@ -4,7 +4,7 @@ baseline_commit: 90e1c57 (velara-api) / 3372772 (velara-web, branch story/14-2-a
 
 # Story 15.2: Surface Per-Invocation Cost on the Job API and UI
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
