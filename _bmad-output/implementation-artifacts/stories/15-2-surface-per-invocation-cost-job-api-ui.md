@@ -4,7 +4,7 @@ baseline_commit: 90e1c57 (velara-api) / 3372772 (velara-web, branch story/14-2-a
 
 # Story 15.2: Surface Per-Invocation Cost on the Job API and UI
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -258,6 +258,15 @@ claude-sonnet-5
 - `velara-web/src/features/run/components/RunConsole.tsx`
 - `velara-web/src/features/run/components/JobsHistory.test.tsx`
 - `velara-web/src/features/run/components/RunConsole.test.tsx`
+
+### Review Findings
+
+_Code review 2026-07-21 (3-layer: Blind Hunter + Edge Case Hunter + Acceptance Auditor). All 5 ACs verified MET, File List an exact match (no drift), all out-of-scope constraints honored, the dev's Decimal→field_serializer deviation verified correct and complete on BOTH schemas. 0 high, 0 medium findings._
+
+- [x] [Review][Patch] Token display coerces a null token count to "0" — mixed null/non-null tokens render "N in / 0 out", conflating unknown-count with zero (the same null-vs-zero distinction the code correctly honors for `cost_usd`) [velara-web/src/features/run/components/JobsHistory.tsx:95, velara-web/src/features/run/components/RunConsole.tsx:1279] — FIXED: each token side renders `fmtNum(v)` or "—" independently
+- [x] [Review][Patch] JobsHistory detail panel missing the `!isFanOut` guard that RunConsole applies — a fan-out parent shows a parent-level cost/token card inconsistently between the two surfaces [velara-web/src/features/run/components/JobsHistory.tsx:79] — FIXED: guard changed to `!job.fan_out && job.result`, matching RunConsole
+- [x] [Review][Patch] Misleading `"__unset__"` sentinel + false docstring in the test helper — both the sentinel and an explicit `cost_usd=None` collapse to the same NULL write, so the documented "distinguish not-provided from unknown-model" behavior does not exist [velara-api/tests/integration/api/test_jobs.py:399] — FIXED: sentinel removed (default `None`), body simplified to `Decimal(str(cost_usd)) if cost_usd is not None else None`, docstring corrected
+- [x] [Review][Defer] `Decimal(12,6)` → `float` wire cast can drift near the 6-dp boundary [velara-api/app/schemas/job.py:87] — deferred; the deliberate, spec-endorsed wire convention (matches `AnalyticsOverview.token_cost: float`), same class deferred by Story 15.1's review — no impact for clean-rate models today
 
 ## Change Log
 
