@@ -104,6 +104,29 @@ So that adaptation spend is visible in the same audited, priced way execution sp
 
 ---
 
+## Story 15.5: Capture Code-Driven Hybrid Sandbox LLM Usage
+
+_Depends on: Story 15.1 (columns + write-path seam). Added 2026-07-21 after a live defect._
+
+As a Vitalief operator,
+I want a code-driven hybrid skill's real LLM usage (spent inside its sandbox) captured and priced,
+So that its per-execution cost is a true dollar figure, not a silent $0.00 on our most expensive runtime.
+
+**Context (from a live finding):** Epic 15's investigation modeled `prompt`/`hybrid`/`code` runtimes but missed **code-driven hybrid** (`code_driven_executor.py`) — a fourth path where LLM calls run inside the sandbox and usage is never surfaced in the result envelope (`CodeDrivenResultEnvelope` has no usage field). `_extract_cost_fields` therefore mis-classified every code-driven hybrid as a free "code run" and stored `cost_usd=0`. Confirmed live: a `velara-protocol-extractor` run stored $0 for a real $1.38 execution (139K in / 27K out on opus-4-8). An interim discriminator fix (LLM-using runtime with no usage → NULL, not $0) was applied immediately; this story is the proper fix.
+
+**Acceptance Criteria (summary — see the story file for full detail):**
+
+1. **AC1** — `CodeDrivenResultEnvelope` gains a first-class, validated `usage` field (`input_tokens`/`output_tokens`/`model`), optional on the model but contractually required.
+2. **AC2** — reported usage is threaded to the write-path top-level token keys and priced by **our** `app/core/pricing.py` table (never the skill's self-reported `est_cost_usd`).
+3. **AC3** — a code-driven hybrid reporting no usage stores `cost_usd=NULL` (unknown), never `$0`; a genuine `code` run still stores `$0`.
+4. **AC4** — a completed code-driven hybrid with missing usage is an **AI-Adapter trigger** (runtime-observed, mirroring `ENTRYPOINT_CONTRACT_VIOLATION`), since the static entrypoint contract only validates the input signature, not the return shape.
+5. **AC5** — the usage requirement is documented for skill authors; `velara-protocol-extractor` updated to emit `usage`.
+6. **AC6** — existing runtimes and the "genuine code run = $0" case are provably unaffected.
+
+**Notes:** Backend + contract only — no migration (15.1's columns already exist), no FE, no new audit event. Reuses the pricing table and the adapter propose flow; does not modify either's core logic.
+
+---
+
 ## Story Sequencing & Dependencies
 
 | Story | Depends on | Ship order | Weight |
@@ -112,5 +135,6 @@ So that adaptation spend is visible in the same audited, priced way execution sp
 | **15-2** Surface per-invocation cost (Job API + UI) | **15-1** | 2nd (or parallel w/ 15-3/15-4) | Medium |
 | **15-3** Per-skill/per-user cost in Analytics | **15-1** | 2nd (or parallel w/ 15-2/15-4) | Medium |
 | **15-4** Cost the adapter-propose LLM call | **15-1** (pricing table only) | 2nd (or parallel w/ 15-2/15-3) | Light |
+| **15-5** Capture code-driven hybrid sandbox usage | **15-1** | after 15-1 (added 2026-07-21 from a live defect) | Medium (envelope contract + adapter trigger) |
 
-**Recommended order:** 15-1 → (15-2, 15-3, 15-4 in any order — no interdependency once 15-1 lands). Per `create-story` discipline, each story is expanded to full implementation detail one at a time when picked up — these epic-level ACs are the contract, not the implementation plan.
+**Recommended order:** 15-1 → (15-2, 15-3, 15-4, 15-5 in any order — no interdependency once 15-1 lands). 15-5 is worth prioritizing before 15-3, since per-skill/per-user analytics (15-3) will under-report until code-driven hybrids are priced. Per `create-story` discipline, each story is expanded to full implementation detail one at a time when picked up — these epic-level ACs are the contract, not the implementation plan.
