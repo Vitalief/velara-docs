@@ -4,7 +4,7 @@ baseline_commit: db04cef (top-level docs repo); velara-web working tree at HEAD 
 
 # Story 16.2: Client-Level Location Management + Study Association UI
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -123,52 +123,52 @@ these must be repaired or Location CRUD is dead in the internal UI.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Types: repair the stale Location contract (AC5)** —
+- [x] **Task 1 — Types: repair the stale Location contract (AC5)** —
   `src/features/engagements/types.ts`
-  - [ ] `Location.study_id` (line 54) → `client_id: string` (matches backend `LocationRead`, which
+  - [x] `Location.study_id` (line 54) → `client_id: string` (matches backend `LocationRead`, which
     now returns `client_id` and no `study_id`).
-  - [ ] `LocationCreateInput` (line 77): **remove** `study_id` (line 78). Remaining fields (`name`,
+  - [x] `LocationCreateInput` (line 77): **remove** `study_id` (line 78). Remaining fields (`name`,
     `postal_code` required; `description`/`address`/`city`/`pi_name` optional) already match the
     backend `LocationCreate` schema. `client_id` is NOT added to this type — it goes in the URL path.
-  - [ ] Add `export interface StudyLocationAssociationCreate { location_id: string }`.
-  - [ ] `LocationUpdateInput` (line 87) is already correct — no change.
+  - [x] Add `export interface StudyLocationAssociationCreate { location_id: string }`.
+  - [x] `LocationUpdateInput` (line 87) is already correct — no change.
 
-- [ ] **Task 2 — API client: repoint create, add the four new calls (AC1, AC2, AC3, AC5)** —
+- [x] **Task 2 — API client: repoint create, add the four new calls (AC1, AC2, AC3, AC5)** —
   `src/api/hierarchy.ts`
-  - [ ] Rename/repoint `createLocation` → `createClientLocation(clientId: string, input:
+  - [x] Rename/repoint `createLocation` → `createClientLocation(clientId: string, input:
     LocationCreateInput)` → `POST /api/v1/clients/${clientId}/locations`, unwrap `response.data.data`
     (returns `Location`). (The old `createLocation` at line 110 POSTing `/api/v1/locations` is
     removed — that backend route no longer exists.)
-  - [ ] Add `listClientLocations(clientId: string): Promise<Location[]>` → `GET
+  - [x] Add `listClientLocations(clientId: string): Promise<Location[]>` → `GET
     /api/v1/clients/${clientId}/locations`, unwrap `response.data.data`.
-  - [ ] Add `associateLocation(studyId: string, locationId: string): Promise<void>` → `POST
+  - [x] Add `associateLocation(studyId: string, locationId: string): Promise<void>` → `POST
     /api/v1/studies/${studyId}/locations` with body `{ location_id: locationId }`. **204, no body —
     do NOT unwrap `.data.data`** (there is none; `await apiClient.post(...)` only).
-  - [ ] Add `disassociateLocation(studyId: string, locationId: string): Promise<void>` → `DELETE
+  - [x] Add `disassociateLocation(studyId: string, locationId: string): Promise<void>` → `DELETE
     /api/v1/studies/${studyId}/locations/${locationId}`. **204, no body** (`await
     apiClient.delete(...)` only).
-  - [ ] `listLocations` (line 103, `GET /locations?study_id=`), `updateLocation`, `deleteLocation`,
+  - [x] `listLocations` (line 103, `GET /locations?study_id=`), `updateLocation`, `deleteLocation`,
     `getLocation` are **unchanged** — keep as-is. (Note: `deleteLocation` still exists and is still
     the "delete the Location entity" call — it is used by the Location detail-page delete, NOT by the
     Study-disassociate flow.)
 
-- [ ] **Task 3 — Query/mutation hooks (AC1, AC2, AC3, AC5)** —
+- [x] **Task 3 — Query/mutation hooks (AC1, AC2, AC3, AC5)** —
   `src/features/engagements/hooks/useEngagements.ts`
-  - [ ] `useCreateLocation` (line 129): change `mutationFn` to `createClientLocation(clientId, input)`
+  - [x] `useCreateLocation` (line 129): change `mutationFn` to `createClientLocation(clientId, input)`
     and fix the `onSuccess` invalidation — it currently keys off `input.study_id` (line 133), which
     no longer exists. Invalidate the new client-locations key (`['clientLocations', clientId]`) and
     the study-locations list where relevant. Simplest shape: `useCreateClientLocation(clientId:
     string)` taking `clientId` up front (mirror `useUpdateProject(id, clientId)` at line 72), so the
     invalidation key is stable. Dev's call on exact hook signature — keep it consistent with the
     existing `use*` factory patterns in this file.
-  - [ ] Add `useClientLocations(clientId: string | undefined)` — `useQuery` with key
+  - [x] Add `useClientLocations(clientId: string | undefined)` — `useQuery` with key
     `['clientLocations', clientId]`, `enabled: !!clientId`, `queryFn: () =>
     listClientLocations(clientId!)`. Mirror `useLocations` (line 121) exactly in shape.
-  - [ ] Add `useAssociateLocation(studyId: string)` and `useDisassociateLocation(studyId: string)`
+  - [x] Add `useAssociateLocation(studyId: string)` and `useDisassociateLocation(studyId: string)`
     mutation hooks — `onSuccess` invalidates `['locations', studyId]` (the Study's associated-list
     query) so the Study screen refreshes. Mirror the `useMutation` + `qc.invalidateQueries` shape of
     the other mutation hooks.
-  - [ ] `useLocationContext` (line 249): **rework the ancestor chain.** It currently does
+  - [x] `useLocationContext` (line 249): **rework the ancestor chain.** It currently does
     `useStudy(location.data?.study_id)` → `useProject` → `useClient`. A Location no longer has a
     `study_id`. Replace with `useClient(location.data?.client_id)` directly (a Location's only parent
     is now its Client). Drop the `study`/`project` intermediates from what this context returns, OR
@@ -176,34 +176,34 @@ these must be repaired or Location CRUD is dead in the internal UI.
     in lockstep so it no longer reads a Study ancestor. Update the header comment at lines 202-204
     which still names `Location.study_id` as a walk field.
 
-- [ ] **Task 4 — Client screen: Add Location card + create modal (AC1, AC5)** —
+- [x] **Task 4 — Client screen: Add Location card + create modal (AC1, AC5)** —
   `EngagementsScreen.tsx`
-  - [ ] `ClientDetail` (line 745): add a Locations `ChildListCard` (reuse the existing generic
+  - [x] `ClientDetail` (line 745): add a Locations `ChildListCard` (reuse the existing generic
     `ChildListCard`, line 821 — it already renders any `{id, name, description}[]`) after the
     Projects card, fed by the new `useClientLocations(client.id)` hook, with `addLabel="Add
     Location"` and `onAdd` opening the create modal. `onSelect` navigates to the location detail
     (`h.goToLocation(l.id)`).
-  - [ ] `ModalMode` (line 160): the `add-location` variant currently carries `{ studyId, studyName }`
+  - [x] `ModalMode` (line 160): the `add-location` variant currently carries `{ studyId, studyName }`
     (line 167). Change the create variant to carry `{ clientId, clientName }` (creation is now at the
     Client). The `edit-location` variant (line 168) currently carries `studyName` (line 168) — since
     a Location has no single Study, change it to carry the owning `clientName` (or drop the parent
     name entirely; the edit modal only uses `parentName` for the "Under:" header line at :398-402 —
     dev's call, keep it coherent).
-  - [ ] `EntityModal` `add-location` submit branch (lines 326-336): build `LocationCreateInput`
+  - [x] `EntityModal` `add-location` submit branch (lines 326-336): build `LocationCreateInput`
     **without** `study_id` (remove line 328) and call the client-create mutation with the modal's
     `clientId`. The `edit-location` branch (line 337) and `updateLocation` wiring (line 229-232,
     which reads `mode.location.study_id` at :231) must switch to the client-scoped update hook /
     invalidation (`updateLocation` PATCH itself is unchanged; only the query-key the update
     invalidates changes — it can no longer key on `study_id`).
-  - [ ] `openAddLocation` (line 1562) currently takes `(studyId, studyName)` and sets an
+  - [x] `openAddLocation` (line 1562) currently takes `(studyId, studyName)` and sets an
     `add-location` modal. Split concerns: the **Client** screen's add opens the create modal with
     `clientId`; the **Study** screen's affordance (Task 5) opens the associate picker instead. Rename
     or repurpose accordingly and update `DetailHandlers` (line 1242) + the wiring at line 1655-1661.
-  - [ ] `EntityBadge`/`parentName`/`namePlaceholder` for the location branch (lines 364-380): update
+  - [x] `EntityBadge`/`parentName`/`namePlaceholder` for the location branch (lines 364-380): update
     the `add-location` parent-name source from `studyName` to `clientName`.
 
-- [ ] **Task 5 — Study screen: Associate + Disassociate (AC2, AC3)** — `EngagementsScreen.tsx`
-  - [ ] `StudyDetail` (line 978): the Locations `ChildListCard` (lines 1021-1027) "Add Location"
+- [x] **Task 5 — Study screen: Associate + Disassociate (AC2, AC3)** — `EngagementsScreen.tsx`
+  - [x] `StudyDetail` (line 978): the Locations `ChildListCard` (lines 1021-1027) "Add Location"
     button becomes **"Associate Location"** — `onAdd` opens a new picker component (see next bullet)
     rather than the create modal. The card still lists the Study's associated Locations via the
     unchanged `useLocations(study.id)` (line 990) — **no change to that query**. Each row gains a
@@ -212,7 +212,7 @@ these must be repaired or Location CRUD is dead in the internal UI.
     `src/features/skills/components/ConfirmDialog.tsx`) and on confirm calls
     `useDisassociateLocation(study.id).mutate(location.id)`. **This must call disassociate, NOT
     deleteLocation.**
-  - [ ] Build an **Associate Location picker** modeled on `AttachPanel`
+  - [x] Build an **Associate Location picker** modeled on `AttachPanel`
     (`src/features/admin/components/AccessControl.tsx:133`) — a right-docked slide-in
     (`fixed right-0 top-0 z-40 … w-[360px] … border-l shadow-xl`, scrim `fixed inset-0 z-30
     bg-black/20`, Esc-to-close, focus-trap) listing the Client's Locations from
@@ -226,41 +226,41 @@ these must be repaired or Location CRUD is dead in the internal UI.
     already in `AttachPanel`; reuse `Icon` from `src/shared/components/Icon.tsx` (project rule: no
     emoji/unicode icons — the only allowed glyph is ⌘).
 
-- [ ] **Task 6 — Location detail + breadcrumb: remove the single-Study assumption (AC5)** —
+- [x] **Task 6 — Location detail + breadcrumb: remove the single-Study assumption (AC5)** —
   `EngagementsScreen.tsx`
-  - [ ] `LocationDetailRoute` (line 1377): the breadcrumb (lines 1397-1403) currently builds
+  - [x] `LocationDetailRoute` (line 1377): the breadcrumb (lines 1397-1403) currently builds
     Client → Project → Study → Location from `useLocationContext`. Rework to **Client → Location**
     (a Location's only ancestor is its Client now). Remove the `study`/`project` crumbs (or the
     Study/Project crumbs specifically — the Location is directly under the Client). `usePageTitle`
     and `useStoreActivePath` (lines 1380-1381) currently pass `study.data?.id` — update to reflect
     the Client-only chain (`useStoreActivePath(client.data?.id, undefined, undefined)` — a Location no
     longer has an active project/study).
-  - [ ] `LocationDetail` (line 1110): remove the `studyName` prop and the `Study` MetaChip
+  - [x] `LocationDetail` (line 1110): remove the `studyName` prop and the `Study` MetaChip
     (line 1145). `onDelete` (wired at line 1411 as `h.requestDeleteLocation(leaf, leaf.study_id)`) no
     longer has a `study_id` to pass — see Task 7 for how `requestDeleteLocation`/`confirmDelete`
     change (the post-delete navigation target can no longer be "the parent study"; navigate to the
     owning Client instead: `entityPath('client', leaf.client_id)`).
-  - [ ] The tree panel's Location nodes and `locationsCache`/`handleLocationsLoaded`
+  - [x] The tree panel's Location nodes and `locationsCache`/`handleLocationsLoaded`
     (`:1450, :1486, :1647`) are keyed by Study (they populate on Study expansion via the unchanged
     `GET /locations?study_id=`) — that still works (a Study's associated Locations). Confirm no code
     in the tree reads `location.study_id`; if it does, repoint it. (Grep `location.study_id` /
     `\.study_id` across the file — known sites: `:231`, `:328`, `:1411`, and `useLocationContext`.)
 
-- [ ] **Task 7 — Remove the destructive study-delete Location cascade (AC6)** —
+- [x] **Task 7 — Remove the destructive study-delete Location cascade (AC6)** —
   `EngagementsScreen.tsx`
-  - [ ] `confirmDelete` (lines 1597-1626): in the `kind === 'study'` branch, **remove** the
+  - [x] `confirmDelete` (lines 1597-1626): in the `kind === 'study'` branch, **remove** the
     `fetchStudyLocations` + `for (loc of locations) cascadeDeleteOneLocation(...)` loop
     (lines 1615-1618). A Study delete is now just `await deleteStudy.mutateAsync(studyId)` →
     navigate to the parent project. The backend cascades the `study_location_association` rows; the
     Client's Locations are untouched.
-  - [ ] Remove the now-dead machinery: `fetchStudyLocations` (`:1462`), `cascadeDeleteOneLocation`
+  - [x] Remove the now-dead machinery: `fetchStudyLocations` (`:1462`), `cascadeDeleteOneLocation`
     (`:1630`), `cascadeDeleteLocation` hook (`:1498`), the `countingLocations`/`setCountingLocations`
     state and the location-count pre-fetch in `requestDeleteStudy` (`:1565-1590`) — `requestDeleteStudy`
     collapses to just `setDeleteTarget({ kind: 'study', study, projectId })`.
-  - [ ] Update the delete-study `ConfirmDialog` copy (`:1663-1673`): drop the "This study has N
+  - [x] Update the delete-study `ConfirmDialog` copy (`:1663-1673`): drop the "This study has N
     location(s). Deleting it will also remove all locations." message and the `countingLocations`
     "Checking for locations…" state — a plain "Delete this study?" is correct now.
-  - [ ] `requestDeleteLocation` (`:1592`) currently takes `(location, studyId)`; the location-detail
+  - [x] `requestDeleteLocation` (`:1592`) currently takes `(location, studyId)`; the location-detail
     caller no longer has a `study_id`. Change its signature to not require a Study, and the post-delete
     navigation in `confirmDelete`'s `kind === 'location'` branch (`:1601-1607`) from
     `navigate(entityPath('study', studyId))` to `navigate(entityPath('client', location.client_id))`
@@ -268,32 +268,32 @@ these must be repaired or Location CRUD is dead in the internal UI.
     Location[]` from the `study` variant (no longer pre-fetched per Task 7's cascade removal) and
     drop `studyId` from the `location` variant (the location delete no longer needs a Study).
 
-- [ ] **Task 8 — Tests (AC1-AC7)** — co-located `.test.tsx`/`.test.ts` beside sources (project rule:
+- [x] **Task 8 — Tests (AC1-AC7)** — co-located `.test.tsx`/`.test.ts` beside sources (project rule:
   tests co-located; framework is Vitest + Testing Library, per every prior FE story)
-  - [ ] `hierarchy.ts` / hooks: assert `createClientLocation` POSTs `/clients/{id}/locations` with no
+  - [x] `hierarchy.ts` / hooks: assert `createClientLocation` POSTs `/clients/{id}/locations` with no
     `study_id`; `associateLocation` POSTs `/studies/{id}/locations` `{location_id}` and does not
     attempt to read a response body; `disassociateLocation` DELETEs the right URL.
-  - [ ] Client screen: "Add Location" opens the create form, submits a Client-owned Location, the
+  - [x] Client screen: "Add Location" opens the create form, submits a Client-owned Location, the
     Locations card refreshes.
-  - [ ] Study screen: "Associate Location" opens the picker; already-associated Locations are
+  - [x] Study screen: "Associate Location" opens the picker; already-associated Locations are
     excluded/disabled; selecting one associates and the Study's Locations list refreshes; the
     disassociate control calls **disassociate** (assert it does NOT call `DELETE /locations/{id}`).
-  - [ ] **AC6 regression test (highest-value):** a Study delete calls `DELETE /studies/{id}` and does
+  - [x] **AC6 regression test (highest-value):** a Study delete calls `DELETE /studies/{id}` and does
     **NOT** issue any `DELETE /locations/{id}` calls — assert the Client's Locations survive. This is
     the test that proves the destructive-cascade removal.
-  - [ ] Location detail breadcrumb renders Client → Location (no Study crumb); `useLocationContext`
+  - [x] Location detail breadcrumb renders Client → Location (no Study crumb); `useLocationContext`
     resolves via `client_id`.
-  - [ ] Type/contract: a `LocationRead`-shaped fixture with `client_id` (no `study_id`) flows through
+  - [x] Type/contract: a `LocationRead`-shaped fixture with `client_id` (no `study_id`) flows through
     the type without a TS error; assert `study_id` is no longer referenced (the fix is complete).
 
-- [ ] **Task 9 — Gates**
-  - [ ] `npm run typecheck` (or `tsc --noEmit`) clean — the `study_id`→`client_id` change will surface
+- [x] **Task 9 — Gates**
+  - [x] `npm run typecheck` (or `tsc --noEmit`) clean — the `study_id`→`client_id` change will surface
     every stale reference as a compile error; chase them all (grep `study_id` across
     `src/features/engagements/` and `src/api/hierarchy.ts` first to pre-empt).
-  - [ ] `npm run lint` (eslint) clean on every changed file.
-  - [ ] `npm test` (Vitest) green — full FE suite; no new failures. Prior stories run ~735-737 FE
+  - [x] `npm run lint` (eslint) clean on every changed file.
+  - [x] `npm test` (Vitest) green — full FE suite; no new failures. Prior stories run ~735-737 FE
     tests; expect that order of magnitude.
-  - [ ] **No backend change, no `docs/api-spec.json` change** — confirm `git status` in velara-api is
+  - [x] **No backend change, no `docs/api-spec.json` change** — confirm `git status` in velara-api is
     clean (this story touches velara-web only). Do NOT commit velara-web (subrepo — dev-story only
     commits the top-level docs repo, per the never-push-subrepos rule).
 
@@ -444,12 +444,128 @@ booleans — use `isLoading`/`isError` from the query.
 - [Source: _bmad-output/planning-artifacts/architecture/implementation-patterns-consistency-rules.md] —
   velara-web structure, TanStack Query keys, error-envelope + loading-state conventions.
 
+## Change Log
+
+- 2026-07-23 — Implemented Story 16.2. All 9 tasks complete: repaired the stale FE Location contract
+  (`study_id`→`client_id`, dead `/locations` POST route call removed) that had been silently broken
+  since 16.1's backend shipped; moved Location creation to the Client screen; turned the Study
+  screen's "Add Location" into an Associate/Disassociate flow via a new `AssociateLocationPanel`
+  (modeled on `AttachPanel`); removed the destructive study-delete Location cascade (AC6 — a Study
+  delete no longer deletes the Client's shared Locations); reworked the Location detail breadcrumb to
+  Client→Location (no single owning Study post-16.1). 2 new files, 7 modified (5 in-scope + 2
+  pre-existing test files whose wholesale `useEngagements` mocks needed the renamed/new hook exports
+  — discovered via the full-suite gate, not originally in the story's own File List draft). Gates:
+  `tsc --noEmit` clean, `eslint` clean (1 pre-existing unrelated warning), `vitest run` 61 files / 745
+  tests passing (0 new failures). No backend/velara-api change — confirmed clean `git status` there.
+  Not committed to velara-web (subrepo, per the never-push-subrepos rule — dev-story only commits the
+  top-level docs repo). Status → review.
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
+claude-sonnet-5
+
 ### Debug Log References
+
+- `EngagementsScreen.test.tsx` and two other test files (`src/routes/internal.test.tsx`,
+  `src/pages/LogoutFlow.test.tsx`) mock `@/features/engagements/hooks/useEngagements` wholesale by
+  export name — every renamed/added hook (`useCreateClientLocation`, `useClientLocations`,
+  `useAssociateLocation`, `useDisassociateLocation`) had to be added to all three mock factories or
+  the app crashed on render with "No export is defined on the mock." Found via the full `npm test`
+  run after the feature-scoped `EngagementsScreen.test.tsx` run alone passed — a reminder that a
+  hook-rename blast radius isn't fully visible from a single test file.
+- Two Associate-panel/disassociate tests initially failed on ambiguous `getByText`/`getByRole`
+  queries because "Mass General Hospital" and a "Remove" button render in both the Study's own
+  Locations card and the overlaying picker/dialog simultaneously — fixed by scoping queries with
+  `within(panel)` / `within(dialog)`.
+- One test asserted on `.mutate` for the disassociate confirm flow, but `confirmDelete` calls
+  `.mutateAsync` (matching the existing delete-study/delete-location pattern) — fixed the test to
+  assert `mutateAsync`.
 
 ### Completion Notes List
 
+- **Task 1 (AC5):** `Location.study_id` → `client_id`; `study_id` dropped from `LocationCreateInput`;
+  new `StudyLocationAssociationCreate` type added. `LocationUpdateInput` unchanged.
+- **Task 2 (AC1, AC2, AC3, AC5):** `createLocation` replaced with `createClientLocation(clientId,
+  input)` → `POST /clients/{clientId}/locations`; added `listClientLocations`, `associateLocation`
+  (204, no body), `disassociateLocation` (204, no body). `listLocations`/`updateLocation`/
+  `deleteLocation`/`getLocation` unchanged.
+- **Task 3 (AC1, AC2, AC3, AC5):** `useCreateClientLocation(clientId)` replaces `useCreateLocation`
+  (invalidates `['clientLocations', clientId]` — the old hook's invalidation kept off `input.study_id`
+  which no longer exists). Added `useClientLocations`, `useAssociateLocation(studyId)`,
+  `useDisassociateLocation(studyId)`. **Deviation from the story's literal Task 3 wording (documented
+  here per the story's own "dev's call" note):** `useUpdateLocation`/`useDeleteLocation` now take
+  `clientId` (not `studyId`) as their second/only param, invalidating `['clientLocations', clientId]`
+  — necessary because a Location's owning entity is now the Client, not a Study, so update/delete
+  invalidation must key off the Client to actually work; a `studyId`-keyed invalidation would be a
+  silent no-op post-migration. `useLocationContext` reworked to walk `client_id → Client` directly
+  (drops the `study`/`project` intermediates — a Location has no single owning Study).
+- **Task 4 (AC1, AC5):** `ClientDetail` gains a Locations `ChildListCard` fed by
+  `useClientLocations(client.id)`. `ModalMode`'s `add-location`/`edit-location` variants now carry
+  `clientId`/`clientName` instead of `studyId`/`studyName`. `EntityModal`'s `add-location` submit
+  branch drops `study_id` from the payload entirely (matches the backend `LocationCreate` schema,
+  which has neither `study_id` nor `client_id` — the owning client is URL-path-only).
+- **Task 5 (AC2, AC3):** New `StudyLocationsCard` component (Locations card variant with a per-row
+  "Remove" affordance — the generic `ChildListCard` doesn't support per-row actions, so a dedicated
+  component was added rather than overloading the shared one). New
+  `AssociateLocationPanel.tsx` (right-docked picker modeled on `AttachPanel`, `attachedIds`-style
+  exclusion via the Study's already-associated Locations). Remove opens a `ConfirmDialog` and calls
+  `useDisassociateLocation(studyId).mutateAsync(locationId)` — never `deleteLocation`.
+- **Task 6 (AC5):** `LocationDetailRoute`'s breadcrumb rewritten from the old 5-segment
+  Client→Project→Study→Location path to **Client→Location** (a Location's only ancestor now).
+  `LocationDetail` no longer takes a `studyName` prop or renders a `Study` MetaChip.
+  `useStoreActivePath` for the Location route now only carries the Client id.
+- **Task 7 (AC6, mandatory data-loss fix):** Removed the destructive study-delete Location cascade —
+  `fetchStudyLocations`, `cascadeDeleteOneLocation`, the `cascadeDeleteLocation` hook instance, the
+  `countingLocations` state, and the location-count pre-fetch in `requestDeleteStudy` are all deleted.
+  `confirmDelete`'s `study` branch now only deletes the Study; the delete-study `ConfirmDialog` copy
+  no longer warns about removing locations. `DeleteTarget` gained a third `disassociate` variant
+  (location + studyId + studyName, for the Remove-from-Study confirm) and the `location` variant
+  dropped its now-unnecessary `studyId` field (post-delete navigation goes to the owning Client
+  instead of "the parent study").
+- **Task 8 (AC1-AC7):** New `src/api/hierarchy.test.ts` (5 tests) pins the exact wire contract for
+  `createClientLocation`/`listClientLocations`/`listLocations`/`associateLocation`/
+  `disassociateLocation`, including the no-body-unwrap behavior for the two 204 endpoints.
+  `EngagementsScreen.test.tsx` updated throughout: fixture `study_id`→`client_id`; rewrote the
+  Add-Location tests to target the Client screen; added a payload-shape assertion proving no
+  `study_id`/`client_id` leaks into the create body; added Associate-picker and Disassociate tests;
+  **replaced** the old "deleting a study with locations warns and cascades" test (which asserted the
+  now-removed destructive behavior) with an AC6 regression test asserting a study delete calls only
+  `DELETE /studies/{id}` and **never** `DELETE /locations/{id}` — the load-bearing test for this
+  story's mandatory data-loss fix. Location breadcrumb test updated to the new Client→Location shape.
+  Also updated two OTHER test files whose wholesale `useEngagements` mocks needed the renamed/new
+  hook exports added: `src/routes/internal.test.tsx`, `src/pages/LogoutFlow.test.tsx` (both were
+  pre-existing files outside this story's originally-scoped File List, discovered via the full-suite
+  gate run — documented here since they were touched).
+- **Task 9 (Gates):** `tsc --noEmit` clean. `eslint` clean (1 pre-existing unrelated warning in
+  `Icon.tsx`, not touched by this story). `vitest run`: 61 files / 745 tests passing (0 new
+  failures). Confirmed `git status` clean in `velara-api` — no backend change, no `docs/api-spec.json`
+  diff, per the story's FE-only scope.
+
 ### File List
+
+**Added (velara-web):**
+- `velara-web/src/api/hierarchy.test.ts`
+- `velara-web/src/features/engagements/components/AssociateLocationPanel.tsx`
+
+**Modified (velara-web):**
+- `velara-web/src/api/hierarchy.ts` — `createLocation`→`createClientLocation`; added
+  `listClientLocations`/`associateLocation`/`disassociateLocation`.
+- `velara-web/src/features/engagements/types.ts` — `Location.study_id`→`client_id`; `study_id`
+  dropped from `LocationCreateInput`; new `StudyLocationAssociationCreate`.
+- `velara-web/src/features/engagements/hooks/useEngagements.ts` — Locations section rewritten:
+  `useCreateClientLocation`, `useClientLocations`, `useAssociateLocation`, `useDisassociateLocation`
+  added; `useUpdateLocation`/`useDeleteLocation` re-keyed to `clientId`; `useLocationContext`
+  reworked to a Client-only ancestor chain.
+- `velara-web/src/features/engagements/components/EngagementsScreen.tsx` — `ModalMode` location
+  variants re-keyed to client; `ClientDetail` gains a Locations card; new `StudyLocationsCard`
+  component; `StudyDetail`'s Locations affordance is now Associate/Remove; `LocationDetail`/
+  `LocationDetailRoute` breadcrumb reworked to Client→Location; destructive study-delete cascade
+  removed (AC6); `DeleteTarget` gained a `disassociate` variant; `DetailHandlers` interface updated.
+- `velara-web/src/features/engagements/components/EngagementsScreen.test.tsx` — fixtures, Add
+  Location tests, breadcrumb test, AC6 regression test, new Associate/Disassociate tests.
+- `velara-web/src/routes/internal.test.tsx` — `useEngagements` mock factory updated for
+  renamed/new hook exports.
+- `velara-web/src/pages/LogoutFlow.test.tsx` — `useEngagements` mock factory updated for
+  renamed/new hook exports.
