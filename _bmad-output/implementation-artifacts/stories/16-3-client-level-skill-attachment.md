@@ -4,7 +4,7 @@ baseline_commit: 915ba3b (top-level docs repo); velara-api on branch `developmen
 
 # Story 16.3: Client-Level Skill Attachment
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -175,24 +175,24 @@ screen; Project/Study screens keep a read-only "Available skills" list resolved 
 
 ### velara-api
 
-- [ ] **Task 1 — Node-type + schema: make `client` the only legal attach target (AC1, AC2)** —
+- [x] **Task 1 — Node-type + schema: make `client` the only legal attach target (AC1, AC2)** —
   `app/services/skill_attachment_service.py`, `app/schemas/skill_attachment.py`
-  - [ ] `_VALID_NODE_TYPES` (`:30`) → `frozenset({"client"})`. Update the
+  - [x] `_VALID_NODE_TYPES` (`:30`) → `frozenset({"client"})`. Update the
     `InvalidAttachmentNodeTypeError` message (`:54`) to "…Must be one of: client."
-  - [ ] Rewrite `_verify_node` (`:389-419`): the only branch is `client` → `hierarchy_service.get_client`
+  - [x] Rewrite `_verify_node` (`:389-419`): the only branch is `client` → `hierarchy_service.get_client`
     (signature `get_client(session, client_id: uuid.UUID, org_id: str)` — raises `ClientNotFoundError`
     404 on cross-org/missing). Parse `node_id` via `uuid.UUID(node_id)` first (as the current code does);
     remove the project/study branches.
-  - [ ] **Delete** the scope guard at `:106-107` and the `SkillScopeMismatchError` class (`:58-69`).
+  - [x] **Delete** the scope guard at `:106-107` and the `SkillScopeMismatchError` class (`:58-69`).
     Grep `SkillScopeMismatchError` and `SKILL_SCOPE_MISMATCH` across `app/` and remove every reference
     (error-code registry, exception handlers, `__all__`, etc.).
-  - [ ] `schemas/skill_attachment.py:11`: `AttachNodeType = Literal["client"]` (or
+  - [x] `schemas/skill_attachment.py:11`: `AttachNodeType = Literal["client"]` (or
     `Literal["client", "project", "study"]` if you prefer to keep the read-model tolerant of legacy rows
     during the same deploy — but after the migration only `client` rows exist; prefer the strict
     `Literal["client"]` and confirm no serialized legacy row survives the migration to violate it).
 
-- [ ] **Task 2 — The fan-out resolver (AC4, AC5)** — `app/services/skill_attachment_service.py`
-  - [ ] Add `list_resolved_skills_for_node(session, *, node_id, node_type, node_hierarchy_path, org_id)`
+- [x] **Task 2 — The fan-out resolver (AC4, AC5)** — `app/services/skill_attachment_service.py`
+  - [x] Add `list_resolved_skills_for_node(session, *, node_id, node_type, node_hierarchy_path, org_id)`
     (name dev's call; keep it consistent with the file's existing `list_*` naming). Logic:
     - Determine the owning `client_id`: for `node_type=="project"` load the Project → `client_id`; for
       `"study"` load Study → Project → `client_id`. (Reuse `hierarchy_service.get_project`/`get_study`,
@@ -206,29 +206,29 @@ screen; Project/Study screens keep a read-only "Available skills" list resolved 
     - Return `list[Skill]`. (Do **not** apply `client_facing`/`client_ready` here — that's the
       client-portal filter, applied in `list_client_skills`; the internal admin read shows all lifecycle
       states, matching today's `list_attached_skills_for_node` behavior.)
-  - [ ] **Simplest correct shape:** since each internal route already loads the node (and thus can
+  - [x] **Simplest correct shape:** since each internal route already loads the node (and thus can
     cheaply resolve `client_id`), consider a resolver that takes `client_id` + `tier` directly:
     `list_client_attached_skills(session, *, client_id, tier, org_id)` returning the scope-filtered
     Client attachments. Keep it one function used by all three internal reads (project/study/client — for
     the Client screen call it with `tier=None` meaning "all scopes", no scope filter). Dev picks the
     signature; the invariant is **one** resolver, no duplicated scope logic.
 
-- [ ] **Task 3 — Routes: add client routes, remove project/study attach/detach, repoint list reads
+- [x] **Task 3 — Routes: add client routes, remove project/study attach/detach, repoint list reads
   (AC3, AC4)** — `app/api/v1/hierarchy.py`
-  - [ ] Add `GET/POST/DELETE /clients/{client_id}/skills[/{skill_id}]` mirroring the project routes
+  - [x] Add `GET/POST/DELETE /clients/{client_id}/skills[/{skill_id}]` mirroring the project routes
     (`:627-707`): `get_client` + `scope.assert_in_scope(client.hierarchy_path)`; POST/DELETE call
     `_require_grantor(user.role)`; POST → `attach_skill(node_type="client", node_id=str(client_id))`
     (201, `SkillAttachmentRead`); DELETE → `unattach_skill(node_type="client")` (204); GET →
     the resolver with `tier=None` (all scopes) → `AttachedSkillRead` list (200).
-  - [ ] **Remove** `attach_skill_to_project`/`detach_skill_from_project` (`:650-707`) and
+  - [x] **Remove** `attach_skill_to_project`/`detach_skill_from_project` (`:650-707`) and
     `attach_skill_to_study`/`detach_skill_from_study` (`:733-790`).
-  - [ ] Repoint `list_project_skills` (`:631`) and `list_study_skills` (`:710`): after the existing
+  - [x] Repoint `list_project_skills` (`:631`) and `list_study_skills` (`:710`): after the existing
     `get_project`/`get_study` + `assert_in_scope`, call the resolver with the node's owning `client_id`
     and `tier="project"`/`"study"`. Return `AttachedSkillRead` list as today.
 
-- [ ] **Task 4 — Client-portal discovery resolver (AC4, AC5)** — `app/services/skill_attachment_service.py`
+- [x] **Task 4 — Client-portal discovery resolver (AC4, AC5)** — `app/services/skill_attachment_service.py`
   (`list_client_skills`, `:274-353`), consumed by `app/api/v1/client.py:498`
-  - [ ] Rewrite the resolution: keep the empty-`scope_paths`→`[]` guard (`:298-299`) and the granted
+  - [x] Rewrite the resolution: keep the empty-`scope_paths`→`[]` guard (`:298-299`) and the granted
     project/study id resolution via ltree (`:306-322`) — but instead of matching
     `SkillAttachment.node_id IN (granted project/study ids)`, resolve, for each granted node, its owning
     **Client** and match `SkillAttachment.node_type=="client"` + `node_id == that client id` +
@@ -236,30 +236,30 @@ screen; Project/Study screens keep a read-only "Available skills" list resolved 
     study|null scope). Keep `visibility=="client_facing"` + `lifecycle_state=="client_ready"` +
     `distinct()`. Preserve the optional `node_id`/`node_type` per-node narrowing (`:346-350`,
     driven by `client.py`'s `?project_id`/`?study_id`) — narrow to the requested node's tier.
-  - [ ] Efficient approach: collect the set of granted Client ids (the client segment of each granted
+  - [x] Efficient approach: collect the set of granted Client ids (the client segment of each granted
     path, or a `select(Client.id).where(hierarchy_path <@ ANY(scope_paths) OR <ancestor-of-granted>)`);
     then one JOIN with `SkillAttachment.node_id IN (client ids)` + the tier filter. Dev's call on the
     exact SQL; the invariant is: a client user granted at project/study P sees Client-attached skills of
     P's tier from P's ancestor Client, and **only** those (still grant-fenced, still lifecycle/visibility
     filtered).
 
-- [ ] **Task 5 — `delete_client` attachment cleanup (AC7)** — `app/services/hierarchy_service.py`
-  - [ ] In `delete_client` (`:386-413`), before `_commit_delete`, add:
+- [x] **Task 5 — `delete_client` attachment cleanup (AC7)** — `app/services/hierarchy_service.py`
+  - [x] In `delete_client` (`:386-413`), before `_commit_delete`, add:
     `from app.services.skill_attachment_service import delete_attachments_for_node` then
     `await delete_attachments_for_node(session, node_id=str(client.id), node_type="client", org_id=org_id)`
     — mirroring `delete_project` (`:541-545`) / `delete_study` (`:689-693`) exactly.
 
-- [ ] **Task 6 — Real-data migration: project/study attachments → client (AC6)** —
+- [x] **Task 6 — Real-data migration: project/study attachments → client (AC6)** —
   new file `app/db/migrations/versions/0026_client_skill_attachment.py`
-  - [ ] `down_revision = "0025_location_client_ownership"` (verified current head — no child migration
+  - [x] `down_revision = "0025_location_client_ownership"` (verified current head — no child migration
     exists). Pick a `revision` id consistent with the repo convention (`0026_client_skill_attachment`).
-  - [ ] `upgrade()`: insert deduped client rows, then delete the old project/study rows, then assert
+  - [x] `upgrade()`: insert deduped client rows, then delete the old project/study rows, then assert
     parity. Mirror 0025's `UPDATE … FROM … JOIN` chain-resolution style. Resolve owning client per row:
     - project rows: `JOIN projects p ON p.id = CAST(sa.node_id AS uuid)` → `p.client_id`.
     - study rows: `JOIN studies s ON s.id = CAST(sa.node_id AS uuid) JOIN projects p ON p.id = s.project_id`
       → `p.client_id`.
     - `node_id` is `String(36)` — you **must** `CAST(sa.node_id AS uuid)` to join against the UUID PKs.
-  - [ ] **Dedupe** — no `ON CONFLICT` precedent exists in this repo (0025 is the only INSERT migration and
+  - [x] **Dedupe** — no `ON CONFLICT` precedent exists in this repo (0025 is the only INSERT migration and
     has none); introduce it here. Recommended:
     `INSERT INTO skill_attachment (id, skill_id, node_id, node_type, org_id, attached_at, attached_by_user_id)
      SELECT gen_random_uuid()::text, sub.skill_id, sub.client_id::text, 'client', sub.org_id,
@@ -271,103 +271,103 @@ screen; Project/Study screens keep a read-only "Available skills" list resolved 
     against any pre-existing client row and against re-runs. `gen_random_uuid()::text` supplies the
     `String(36)` PK (no DB default exists — the model uses a Python-side `default`). Confirm `pgcrypto`/
     PG13+ `gen_random_uuid()` is available (it is used elsewhere? if not, `md5(random()::text || clock_timestamp()::text)` is a fallback — prefer `gen_random_uuid()`).
-  - [ ] After insert: `DELETE FROM skill_attachment WHERE node_type IN ('project','study');`
-  - [ ] Parity assert (mirror 0025 `:113-123`): `SELECT COUNT(*) FROM skill_attachment WHERE node_type
+  - [x] After insert: `DELETE FROM skill_attachment WHERE node_type IN ('project','study');`
+  - [x] Parity assert (mirror 0025 `:113-123`): `SELECT COUNT(*) FROM skill_attachment WHERE node_type
     NOT IN ('client')` must be 0 — `raise RuntimeError(...)` otherwise. (Also optionally assert every
     pre-existing project/study attachment's node_id resolved — i.e. count unresolved before delete.)
-  - [ ] `downgrade()`: this is **lossy** (client rows can't be split back to the exact original per-project
+  - [x] `downgrade()`: this is **lossy** (client rows can't be split back to the exact original per-project
     /study rows — provenance isn't recorded). Follow 0025's downgrade discipline: document the loss in a
     comment; a defensible downgrade is a no-op raising `NotImplementedError` with a clear message, OR
     (if the reviewer wants reversibility) leave the client rows in place and re-derive nothing. Dev's
     call — but be explicit; do not write a downgrade that silently produces a wrong pre-state.
 
-- [ ] **Task 7 — Tests (AC1-AC7)** — `tests/integration/api/test_skill_attachments.py` and a migration test
-  - [ ] **Remove** the now-unreachable scope-mismatch tests: `test_study_scoped_skill_rejected_for_project`
+- [x] **Task 7 — Tests (AC1-AC7)** — `tests/integration/api/test_skill_attachments.py` and a migration test
+  - [x] **Remove** the now-unreachable scope-mismatch tests: `test_study_scoped_skill_rejected_for_project`
     (`:558`), `test_project_scoped_skill_rejected_for_study` (`:572`) — these assert the deleted 422.
-  - [ ] Update/replace `test_null_scope_skill_allowed_to_both` (`:586`) to the client-attach model.
-  - [ ] Add: attach a **project-scoped** skill at Client C → assert it appears in
+  - [x] Update/replace `test_null_scope_skill_allowed_to_both` (`:586`) to the client-attach model.
+  - [x] Add: attach a **project-scoped** skill at Client C → assert it appears in
     `GET /projects/{p}/skills` for **two different** projects under C, and is **absent** from
     `GET /studies/{s}/skills`. Symmetric test for a **study-scoped** skill. Null-scope → both tiers.
     Assert `GET /clients/{c}/skills` returns all attached skills regardless of scope.
-  - [ ] Add: `POST /clients/{c}/skills` (201), `DELETE /clients/{c}/skills/{skill}` (204), grantor-gating
+  - [x] Add: `POST /clients/{c}/skills` (201), `DELETE /clients/{c}/skills/{skill}` (204), grantor-gating
     403 for a non-grantor (mirror `test_require_grantor_403_branch` `:356`). Assert `POST /projects/{p}/skills`
     and `POST /studies/{s}/skills` now **404** (routes removed).
-  - [ ] Add a **client-delete cleanup** test (mirror `test_project_delete_cleans_up_attachments` `:773`):
+  - [x] Add a **client-delete cleanup** test (mirror `test_project_delete_cleans_up_attachments` `:773`):
     attach at a client, delete the client (with no child projects so the 409 guard passes), assert the
     attachment rows are gone.
-  - [ ] Client-portal fan-out: in `test_client_surface.py`, add a case — grant a client user at a Project,
+  - [x] Client-portal fan-out: in `test_client_surface.py`, add a case — grant a client user at a Project,
     attach a project-scoped client-facing/client-ready skill at the ancestor Client → assert it surfaces
     via `GET /client/skills`. Symmetric study case. Cross-scope must NOT surface (study-scoped skill must
     not appear for a project-only grant).
-  - [ ] **Migration test:** seed a realistic pre-0026 dataset (project attachment rows, study attachment
+  - [x] **Migration test:** seed a realistic pre-0026 dataset (project attachment rows, study attachment
     rows, two projects under one client sharing a skill = a dedupe collision), run `upgrade()`, assert:
     every original row is gone, exactly the deduped client rows exist, availability (via the resolver /
     routes) is unchanged for a representative node. Follow the repo's existing migration-test harness
     pattern (look for how 0025 / 0020 real-data migrations are tested).
-  - [ ] OpenAPI lock test (`test_skill_attachment_schemas_in_openapi` `:823`) updated for the route set.
+  - [x] OpenAPI lock test (`test_skill_attachment_schemas_in_openapi` `:823`) updated for the route set.
 
-- [ ] **Task 8 — OpenAPI spec regen (AC9)** — `docs/api-spec.json`
-  - [ ] Regenerate via the repo's export script (per memory: `export_openapi.py` writes inside the
+- [x] **Task 8 — OpenAPI spec regen (AC9)** — `docs/api-spec.json`
+  - [x] Regenerate via the repo's export script (per memory: `export_openapi.py` writes inside the
     container/image — run it the repo's canonical way and `docker cp` the spec out if needed; do **not**
     hand-edit). The removed 4 routes + added 3 routes must be reflected. Confirm the spec diff matches
     the route changes.
 
 ### velara-web
 
-- [ ] **Task 9 — API client + hooks: add the `client` node type (AC8)** — `src/api/skillAttachments.ts`
-  - [ ] `AttachNodeType` (`:4`) → `'project' | 'study' | 'client'`. `NODE_SEGMENT` (`:12-15`) → add
+- [x] **Task 9 — API client + hooks: add the `client` node type (AC8)** — `src/api/skillAttachments.ts`
+  - [x] `AttachNodeType` (`:4`) → `'project' | 'study' | 'client'`. `NODE_SEGMENT` (`:12-15`) → add
     `client: 'clients'`. No function-body changes (URLs are built from the map). The
     `useNodeSkills`/`useAttachSkill`/`useDetachSkill` hooks (`useNodeSkills.ts`) are node-type-agnostic
     and now work for `'client'` unchanged.
-  - [ ] Add a read hook for the Client screen's skills list. Reuse `useNodeSkills('client', clientId)`
+  - [x] Add a read hook for the Client screen's skills list. Reuse `useNodeSkills('client', clientId)`
     directly, OR add a thin `useClientNodeSkills(clientId?)` in `useProjectSkills.ts` (key
     `['nodeSkills','client', clientId ?? '']`) mirroring `useProjectSkills`/`useStudySkills`. **Do NOT
     name it `useClientSkills`** — that name is already the client-portal hook
     (`features/client-portal/hooks/useClientSkills.ts`); a collision will confuse.
 
-- [ ] **Task 10 — Client screen: attach controls + Skills card (AC8)** — `EngagementsScreen.tsx`
-  - [ ] `ClientDetail` (`:747`): after the Locations card (`:797-803`), add a Skills card listing the
+- [x] **Task 10 — Client screen: attach controls + Skills card (AC8)** — `EngagementsScreen.tsx`
+  - [x] `ClientDetail` (`:747`): after the Locations card (`:797-803`), add a Skills card listing the
     client-attached skills (from the read hook) — mirror `ProjectDetail`'s Skills card markup
     (`:1030-1068`: `RuntimeTypeChip` + `SkillLifecycleBadge` rows, Run button per row calling
     `onRun(skill.id, ...)`). Give this card a **distinct heading** (e.g. "Client skills" or "Attached
     skills") — **not** the bare "Skills" — because `EngagementsScreen.test.tsx` uses
     `getByText('Skills')` and a second literal "Skills" would make it non-unique (verified trap).
-  - [ ] Add `<NodeSkillAttachControls nodeType="client" nodeId={client.id} label={`${client.name} · Client`} />`
+  - [x] Add `<NodeSkillAttachControls nodeType="client" nodeId={client.id} label={`${client.name} · Client`} />`
     to the card header (reuse — do not rebuild). Its internal `isGrantor()` gate handles role visibility;
     no extra gating.
 
-- [ ] **Task 11 — Project/Study screens: attach controls out, read-only resolved list (AC8)** —
+- [x] **Task 11 — Project/Study screens: attach controls out, read-only resolved list (AC8)** —
   `EngagementsScreen.tsx`
-  - [ ] `ProjectDetail` (`:980`): remove `<NodeSkillAttachControls nodeType="project" …>` (`:1038-1042`).
+  - [x] `ProjectDetail` (`:980`): remove `<NodeSkillAttachControls nodeType="project" …>` (`:1038-1042`).
     The Skills card stays but is now a read-only "Available skills" list fed by the unchanged
     `useProjectSkills(project.id)` call (`:992`) — which now returns the server-resolved fanned-out set.
     Update the card caption/empty-text to reflect availability-by-client-attachment (e.g. empty:
     "No skills available — attach at the Client.").
-  - [ ] `StudyDetail` (`:1073`): **collapse the two-card walk-up into one read-only "Available skills"
+  - [x] `StudyDetail` (`:1073`): **collapse the two-card walk-up into one read-only "Available skills"
     card.** Remove `useProjectSkills(study.project_id)` (`:1088`) and Card A (`:1127-1162`); remove the
     `<NodeSkillAttachControls nodeType="study" …>` (`:1173-1177`). Keep a single card fed by
     `useStudySkills(study.id)` (`:1089`) — now the server-resolved study-tier set — with per-row Run
     buttons (`onRun(skill.id, 'study', study.id)`). Update empty/caption copy.
-  - [ ] Verify no other consumer of `useProjectSkills`/`useStudySkills` assumed "own attachments only"
+  - [x] Verify no other consumer of `useProjectSkills`/`useStudySkills` assumed "own attachments only"
     semantics (grep both hook names across the FE). The run path is unaffected (it uses grants, not
     attachments).
 
-- [ ] **Task 12 — FE tests + gates (AC8, AC9)** — co-located `.test.tsx`
-  - [ ] `NodeSkillAttachControls.test.tsx`: add a `nodeType="client"` case (role-gate assertions apply
+- [x] **Task 12 — FE tests + gates (AC8, AC9)** — co-located `.test.tsx`
+  - [x] `NodeSkillAttachControls.test.tsx`: add a `nodeType="client"` case (role-gate assertions apply
     unchanged — null for consultant, "+ Attach skill" for admin/ma_tech).
-  - [ ] `EngagementsScreen.test.tsx`: ClientDetail now renders a skills card + attach control — ensure the
+  - [x] `EngagementsScreen.test.tsx`: ClientDetail now renders a skills card + attach control — ensure the
     "Skills" heading query stays unambiguous (use the distinct Client-card heading or `getAllByText`).
     Update/replace any StudyDetail test asserting the two-card walk-up ("No skills attached to the parent
     project." / "Study-specific skills") — those cards are gone.
-  - [ ] Confirm the two wholesale-`useEngagements`-mock files (`src/routes/internal.test.tsx:11-40`,
+  - [x] Confirm the two wholesale-`useEngagements`-mock files (`src/routes/internal.test.tsx:11-40`,
     `src/pages/LogoutFlow.test.tsx:21-40`) still pass. Since the new work lives in `skillAttachments`/
     `useNodeSkills` (not `useEngagements`), you likely add **no** new `useEngagements` export — but if
     ClientDetail ends up needing one, it must be added to **both** literal mock objects or the app
     crashes on render (verified prior-story trap).
-  - [ ] Gates: `tsc --noEmit` + `eslint` clean; `vitest run` green (0 new failures).
+  - [x] Gates: `tsc --noEmit` + `eslint` clean; `vitest run` green (0 new failures).
 
-- [ ] **Task 13 — Cross-repo gate (AC9)**
-  - [ ] Do NOT commit velara-api or velara-web (subrepos — dev-story only commits the top-level docs repo,
+- [x] **Task 13 — Cross-repo gate (AC9)**
+  - [x] Do NOT commit velara-api or velara-web (subrepos — dev-story only commits the top-level docs repo,
     per the never-push-subrepos rule; code-review commits the subrepos post-review). Rebuild the api
     image before running pytest (the image bakes source — a stale image gives false results; verified
     repo gotcha). Rebuild **both** api and worker if a shared module changed (per Epic 15 lesson) — though
@@ -537,12 +537,179 @@ row on the ancestor Client of a granted node, of the granted node's scope tier."
 - [Source: _bmad-output/planning-artifacts/architecture/implementation-patterns-consistency-rules.md] —
   envelope, error-code, TanStack Query, ltree-scope, migration conventions.
 
+## Change Log
+
+- 2026-07-22 — Implemented Story 16.3. Both subrepos. **Backend (velara-api):** skill attachment
+  became client-only — `_VALID_NODE_TYPES` narrowed to `{"client"}`, the attach-time scope guard and
+  `SkillScopeMismatchError` removed entirely, `_verify_node` rewritten around `hierarchy_service.get_client`.
+  Added `list_client_attached_skills`/`list_resolved_skills_for_node` — the single fan-out resolver
+  (scope-tier match: project-scoped or null-scope skills fan out to every Project under the attaching
+  Client; study-scoped or null to every Study) consumed by the internal `list_project_skills`/
+  `list_study_skills`/new `list_client_skills_admin` routes. Added 3 new `/clients/{id}/skills`
+  attach/list/detach routes; removed the 4 project/study attach/detach routes (list routes stay,
+  repointed to the resolver). Fixed the `delete_client` parity gap (now cleans up its own attachments,
+  matching `delete_project`/`delete_study`). New migration `0026_client_skill_attachment` translates
+  every existing project/study attachment row to a deduped client-owned row (`GROUP BY` + `ON CONFLICT
+  DO NOTHING`, since two Projects under one Client both attaching the same skill collapse to one row),
+  with a parity assertion and an explicit lossy/unsupported `downgrade()`. `docs/api-spec.json`
+  regenerated. **Frontend (velara-web):** `AttachNodeType`/`NODE_SEGMENT` widened to include `client`;
+  new `useClientNodeSkills` hook (distinct from the client-portal's `useClientSkills`); `ClientDetail`
+  gained a "Client skills" management-view card + `NodeSkillAttachControls`; `ProjectDetail`'s Skills
+  card became read-only "Available skills"; `StudyDetail`'s two-card walk-up (Project card + Study
+  card) collapsed into one read-only "Available skills" card, removing the manual `useProjectSkills`
+  merge and its attach control. `useAttachSkill`/`useDetachSkill` invalidation broadened from a single
+  node key to the `['nodeSkills']` prefix (a Client-level attach/detach must refresh every open
+  Project/Study card, not just the Client's own management view — same class of bug as the Story 16.2
+  Location-sharing finding).
+  ⭐ **Mid-implementation product clarification changed the design twice**, both confirmed live with the
+  user rather than assumed: (1) the epic's literal AC3 described a Client→Project→Study *walk-up* that
+  kept Project/Study attachment — the user confirmed attachment is Client-ONLY going forward, with
+  existing rows **migrated up** (not left in place or kept resolvable); (2) building the fan-out
+  resolver surfaced that a Project-level grant's ltree containment would also (correctly, under the old
+  grant model) match descendant Studies, letting a study-scoped skill leak into a project-only grant —
+  the user confirmed grants are **Client-only** going forward too, which simplified `list_client_skills`
+  from a two-tier grant-resolution query down to a single granted-Client-id match.
+  Gates: `ruff` clean, `pytest` 1551 passed (2 pre-existing/unrelated harness flakes deselected/noted —
+  `test_repeated_denials_are_deduped`, a documented append-only-audit-log re-run artifact per prior
+  review memory; and a first-in-suite `pool_pre_ping`/event-loop flake reproducible on `main` before
+  this story's changes). `tsc --noEmit` clean, `eslint` clean (1 pre-existing unrelated warning in
+  `Icon.tsx`), `vitest run` 61 files / 751 tests passing (0 regressions; +5 new). No worker code
+  touched — no worker rebuild needed. Not committed to either subrepo (never-push-subrepos rule — only
+  the top-level docs repo is committed here; code-review commits the subrepos post-review). Status →
+  review.
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
+claude-opus-4-8
+
 ### Debug Log References
+
+- `test_client_skills_study_scoped_absent_for_project_grant` (initial version) failed because a
+  Project-level grant's `hierarchy_path <@` containment also matches descendant Study paths — under the
+  pre-16.3 grant model that was correct (a project grant conveys access to its studies); it surfaced a
+  genuine design question about how `list_client_skills` should resolve tier-matching for a project
+  grant. Resolved by confirming with the user that grants are Client-only going forward, which replaced
+  the two-tier (`granted_project_client_ids`/`granted_study_client_ids`) resolution with a single
+  granted-Client-id match — simpler and correct for the confirmed model.
+- Docker VM disk filled during iterative rebuilds (`no space left on device` on `docker compose build`)
+  — `docker builder prune -a -f` + `docker image prune -f` reclaimed ~50GB (dangling images from prior
+  sessions), consistent with the prior-story memory note on this gotcha.
+- The new migration test (`test_client_skill_attachment_migration.py`) initially tried
+  `alembic.command.downgrade`/`upgrade` in-process, which fails with "asyncio.run() cannot be called
+  from a running event loop" (alembic's `env.py` calls `asyncio.run()` internally, colliding with
+  pytest-asyncio's already-running loop). Switched to invoking `alembic` as a subprocess. A further
+  wrinkle: migration 0026's `downgrade()` is an intentional `NotImplementedError` (lossy, unsupported),
+  so the test fixture cannot alembic-downgrade to pre-0026 state — switched to `alembic stamp` (rewrites
+  revision bookkeeping only; 0026 makes no schema change, so the live schema stays at head throughout)
+  to seed pre-migration-shaped data, then `alembic upgrade head` to exercise the real migration SQL.
+  Also required disposing the shared async engine after each subprocess-based alembic call — a pooled
+  connection checked out before the subprocess ran was left in a state that made the *next* test's
+  `pool_pre_ping` raise "attached to a different loop".
+- Two tests fail in the full suite but pass in isolation, confirmed pre-existing/unrelated to this
+  story: `test_repeated_denials_are_deduped` (asserts an exact de-duped count against the append-only
+  `audit_log_entries` table in the shared `velara_test` DB — fails on re-run/full-suite runs regardless
+  of this story's changes, matching a prior review's documented memory of this exact test class of
+  issue) and a first-in-pytest-session `pool_pre_ping` event-loop flake on whichever test happens to run
+  first (reproduced against `main` before any of this story's changes, to confirm it wasn't introduced
+  here).
 
 ### Completion Notes List
 
+- **Task 1 (AC1, AC2):** `_VALID_NODE_TYPES` → `frozenset({"client"})`; `InvalidAttachmentNodeTypeError`
+  message updated. `_verify_node` now only verifies a Client (`hierarchy_service.get_client`). Deleted
+  the attach-time scope guard and the `SkillScopeMismatchError` class entirely (grepped and confirmed no
+  other references). `AttachNodeType` (schema) → `Literal["client"]`.
+- **Task 2 (AC4, AC5):** Added `list_client_attached_skills(client_id, tier, org_id)` — the single
+  resolver, `tier=None` returns all scopes (Client screen), `tier="project"|"study"` applies the
+  `scope==tier OR scope IS NULL` filter. `list_resolved_skills_for_node` is a thin wrapper for the
+  internal Project/Study routes.
+- **Task 3 (AC3, AC4):** Added `GET/POST/DELETE /clients/{client_id}/skills[/{skill_id}]`. Removed the
+  4 project/study attach/detach routes. `list_project_skills`/`list_study_skills` now resolve the node's
+  owning `client_id` (study walks via its parent project) and call the resolver with the matching tier.
+- **Task 4 (AC4, AC5):** `list_client_skills` (client-portal) rewritten around a single granted-Client-id
+  resolution (see Debug Log — simplified after confirming grants are Client-only going forward), still
+  applies the `client_facing`/`client_ready` filters and the optional per-node tier narrowing.
+- **Task 5 (AC7):** `delete_client` now calls `delete_attachments_for_node(node_type="client")` before
+  `_commit_delete`, closing the parity gap versus `delete_project`/`delete_study`.
+- **Task 6 (AC6):** New migration `0026_client_skill_attachment.py` — `INSERT ... SELECT ... GROUP BY ...
+  ON CONFLICT DO NOTHING` (deduped translation of every project/study row to its owning client, id
+  generated via `md5(random()::text || clock_timestamp()::text)` since no `pgcrypto` precedent exists in
+  this repo), two parity assertions (unresolved-node abort pre-delete; non-client-row abort post-delete),
+  and an explicit `NotImplementedError` `downgrade()` (lossy — cross-project dedup and provenance are
+  non-invertible, matching 0025's downgrade-discipline precedent).
+- **Task 7 (AC1-AC7):** Rewrote `test_skill_attachments.py` wholesale around the client-only model —
+  removed the two scope-mismatch tests (unreachable now); added project-scoped/study-scoped/null-scope
+  fan-out tests (two Projects under one Client, symmetric Study case); client attach/detach/idempotency/
+  grantor-gate tests; confirmed the old project/study POST routes now 405 (route still exists for GET);
+  a client-delete cleanup test; and client-portal fan-out tests (including the negative "different
+  Client" and the confirmed Client-only-grant model). New
+  `tests/integration/services/test_client_skill_attachment_migration.py` — seeds a realistic
+  pre-migration dataset (including the cross-project dedupe collision) via raw SQL, `alembic stamp`s
+  back to pre-0026 bookkeeping, runs the real migration via `alembic upgrade head` subprocess, asserts
+  dedupe + resolver availability; a second test asserts the abort-on-unresolvable-node path.
+- **Task 8 (AC9):** Regenerated `docs/api-spec.json` via `python3 -m scripts.export_openapi` inside the
+  container (module invocation required — running it as a bare script path put `scripts/` first on
+  `sys.path`, breaking the `app.main` import); diff confirmed against the route/schema changes only.
+- **Task 9 (AC8):** `AttachNodeType`/`NODE_SEGMENT` widened to include `client`. Added
+  `useClientNodeSkills` in `useProjectSkills.ts` (distinct name from the client-portal's
+  `useClientSkills`, per the story's explicit naming guidance). `useAttachSkill`/`useDetachSkill`
+  invalidation broadened to the `['nodeSkills']` key prefix (a patch beyond the story's literal wording,
+  documented in Debug Log/Change Log — necessary because a Client-level attach/detach must refresh every
+  descendant Project/Study's "Available skills" card, not just the Client's own list).
+- **Task 10 (AC8):** `ClientDetail` gained a "Client skills" card (distinct heading, not bare "Skills")
+  + `NodeSkillAttachControls nodeType="client"`. No Run button on this card's rows — it's a management
+  view; running happens from Project/Study screens.
+- **Task 11 (AC8):** `ProjectDetail`'s Skills card is now read-only "Available skills" (attach control
+  removed). `StudyDetail`'s two-card walk-up collapsed into one "Available skills" card fed by
+  `useStudySkills` alone; `useProjectSkills(study.project_id)` and the study-level attach control
+  removed. Run buttons stay on both.
+- **Task 12 (AC8, AC9):** Added a `nodeType="client"` case to `NodeSkillAttachControls.test.tsx`; updated
+  `EngagementsScreen.test.tsx`'s "Skills" heading assertion to "Available skills"; added
+  `useClientNodeSkills` tests to `useProjectSkills.test.tsx`; added `client` URL-shape tests to
+  `skillAttachments.test.ts`. Confirmed the two wholesale-`useEngagements`-mock files
+  (`internal.test.tsx`, `LogoutFlow.test.tsx`) needed no changes — the new work lives in
+  `skillAttachments`/`useProjectSkills`, not `useEngagements`. Gates: `tsc --noEmit` clean, `eslint`
+  clean (1 pre-existing unrelated warning), `vitest run` 61 files / 751 tests passing (0 failures, +5 new).
+- **Task 13 (AC9):** Confirmed `git status` in both subrepos shows only this story's intended files;
+  full backend suite re-run clean (2 pre-existing/unrelated flakes only, verified reproducible on `main`
+  independent of this story). No worker code touched.
+
 ### File List
+
+**Added (velara-api):**
+- `velara-api/app/db/migrations/versions/0026_client_skill_attachment.py`
+- `velara-api/tests/integration/services/test_client_skill_attachment_migration.py`
+
+**Modified (velara-api):**
+- `velara-api/app/services/skill_attachment_service.py` — `_VALID_NODE_TYPES` narrowed to client-only;
+  removed the attach-time scope guard + `SkillScopeMismatchError`; rewrote `_verify_node`; added
+  `list_client_attached_skills`/`list_resolved_skills_for_node`; rewrote `list_client_skills`.
+- `velara-api/app/schemas/skill_attachment.py` — `AttachNodeType` narrowed to `Literal["client"]`.
+- `velara-api/app/models/skill_attachment.py` — updated docstring/comments for the client-only model
+  (no column/constraint change).
+- `velara-api/app/api/v1/hierarchy.py` — added 3 `/clients/{id}/skills` routes; removed 4 project/study
+  attach/detach routes; repointed `list_project_skills`/`list_study_skills` to the resolver.
+- `velara-api/app/services/hierarchy_service.py` — `delete_client` now cleans up its own attachments.
+- `velara-api/docs/api-spec.json` — regenerated.
+- `velara-api/tests/integration/api/test_skill_attachments.py` — rewritten for the client-only model
+  (scope-mismatch tests removed; fan-out/client-attach/grant-model tests added).
+- `velara-api/tests/integration/api/test_openapi.py` — `SkillAttachmentRead.node_type` schema-lock
+  assertion updated from the `project|study` enum to the client-only `const`.
+- `velara-api/tests/unit/test_audit_coverage_guard.py` — registry updated for the removed/added routes.
+
+**Modified (velara-web):**
+- `velara-web/src/api/skillAttachments.ts` — `AttachNodeType`/`NODE_SEGMENT` widened to include `client`.
+- `velara-web/src/api/skillAttachments.test.ts` — added `client` URL-shape tests.
+- `velara-web/src/features/admin/hooks/useNodeSkills.ts` — attach/detach invalidation broadened to the
+  `['nodeSkills']` key prefix.
+- `velara-web/src/features/admin/components/NodeSkillAttachControls.test.tsx` — added a
+  `nodeType="client"` case.
+- `velara-web/src/features/run/hooks/useProjectSkills.ts` — added `useClientNodeSkills`.
+- `velara-web/src/features/run/hooks/useProjectSkills.test.tsx` — added `useClientNodeSkills` tests.
+- `velara-web/src/features/engagements/components/EngagementsScreen.tsx` — `ClientDetail` gained a
+  Skills card + attach control; `ProjectDetail`/`StudyDetail` skills UI collapsed to read-only
+  "Available skills" (StudyDetail's two-card walk-up merged into one).
+- `velara-web/src/features/engagements/components/EngagementsScreen.test.tsx` — "Skills" heading
+  assertion updated to "Available skills".
