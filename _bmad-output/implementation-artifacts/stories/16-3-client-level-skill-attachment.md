@@ -4,7 +4,7 @@ baseline_commit: 915ba3b (top-level docs repo); velara-api on branch `developmen
 
 # Story 16.3: Client-Level Skill Attachment
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -681,6 +681,9 @@ claude-opus-4-8
 **Added (velara-api):**
 - `velara-api/app/db/migrations/versions/0026_client_skill_attachment.py`
 - `velara-api/tests/integration/services/test_client_skill_attachment_migration.py`
+- `velara-api/app/db/migrations/versions/0027_client_only_grants.py` — *(code review)* remap sub-Client
+  access grants up to their owning Client (deduped; intended auth widening; lossy downgrade).
+- `velara-api/tests/integration/services/test_client_only_grants_migration.py` — *(code review)*
 
 **Modified (velara-api):**
 - `velara-api/app/services/skill_attachment_service.py` — `_VALID_NODE_TYPES` narrowed to client-only;
@@ -699,7 +702,25 @@ claude-opus-4-8
   assertion updated from the `project|study` enum to the client-only `const`.
 - `velara-api/tests/unit/test_audit_coverage_guard.py` — registry updated for the removed/added routes.
 
+**Modified (velara-api — code review, Client-only grants):**
+- `velara-api/app/services/access_service.py` — `create_grant` rejects sub-Client tiers (new
+  `NonClientGrantTierError` / `NON_CLIENT_GRANT_TIER` 422).
+- `velara-api/app/api/v1/client.py` — engagement listing simplified to Client-path match (dead
+  parent-Client / Project-ancestor derivation removed); `/client/skills` narrowing resolves the queried
+  node's owning Client id (`narrow_client_id`/`narrow_tier`).
+- `velara-api/app/services/skill_attachment_service.py` — `list_client_skills` narrowing params renamed
+  to `narrow_client_id`/`narrow_tier` and honored (was ignoring `node_id`).
+- `velara-api/tests/unit/services/test_access_service.py`,
+  `velara-api/tests/integration/api/test_access_grants.py`,
+  `velara-api/tests/integration/api/test_client_surface.py`,
+  `velara-api/tests/integration/api/test_hierarchy.py` — grant-model tests updated to Client-only.
+
 **Modified (velara-web):**
+- `velara-web/src/features/admin/components/AccessControl.tsx` — *(code review)* skill attach/detach moved
+  to the Client node (Client-level attach control + management card + Client-level detach); Project/Study
+  skill lists read-only resolved; grant picker project cascade removed (Client-only grants).
+- `velara-web/src/features/admin/components/AccessControl.test.tsx` — *(code review)* re-modeled for
+  Client-level attach/detach.
 - `velara-web/src/api/skillAttachments.ts` — `AttachNodeType`/`NODE_SEGMENT` widened to include `client`.
 - `velara-web/src/api/skillAttachments.test.ts` — added `client` URL-shape tests.
 - `velara-web/src/features/admin/hooks/useNodeSkills.ts` — attach/detach invalidation broadened to the
@@ -713,3 +734,60 @@ claude-opus-4-8
   "Available skills" (StudyDetail's two-card walk-up merged into one).
 - `velara-web/src/features/engagements/components/EngagementsScreen.test.tsx` — "Skills" heading
   assertion updated to "Available skills".
+
+### Review Findings (code review 2026-07-22) — RESOLVED
+
+Three adversarial layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor) all ran and converged.
+Acceptance audit: all 9 ACs and 5 traps verified MET against source; File List matches reality (no
+drift). Two genuine regressions and one narrowing-contract break surfaced — all stemming from surfaces
+that assume the new client-only model but were not swept when the model changed (the same "sweep every
+path that assumed the old model" class as Story 16.1/16.2).
+
+**Resolution decision (operator-confirmed 2026-07-22): Option 2 — make grants Client-only across the
+whole platform + migrate existing sub-Client grants up.** Investigation showed the root cause of both the
+`list_client_skills` outage and the narrowing break was one unenforced assumption ("grants are
+Client-only") that the story asserted but never enforced — while the grant-creation UI actively created
+project-tier grants. Rather than paper over it in the resolver (Option 1), the operator confirmed
+enforcing the model, including the **intended authorization widening**: a client user previously granted
+at a single Project/Study/Location is remapped to their owning Client and gains client-wide access.
+
+- [x] [Review][Fixed] Client-portal `list_client_skills` returned ZERO skills for any client user granted
+  BELOW the Client tier. **Fixed by making grants Client-only:** `access_service.create_grant` now rejects
+  `node_type != "client"` with a new `NON_CLIENT_GRANT_TIER` (422) error; migration **0027** remaps every
+  existing project/study/location grant up to its owning Client (deduped `GROUP BY` + `ON CONFLICT DO
+  NOTHING`, parity asserts, lossy/unsupported `downgrade`). With every granted path now a Client path, the
+  resolver's `clients.hierarchy_path <@ ANY(scope_paths)` match is correct. [velara-api:
+  `app/services/access_service.py`, `app/db/migrations/versions/0027_client_only_grants.py`]
+- [x] [Review][Fixed] AccessControl admin screen still attached/detached skills at project & study level
+  → hit the removed routes. **Fixed:** the screen's skill attach/detach moved to the **Client** node — a
+  single Client-level "+ Attach skill" control + a "Client-attached skills" management card (with
+  Client-level detach); `ProjectCard`/`StudyRow` skill lists are now **read-only** server-resolved
+  "Available"/"Available project skills" views. The grant picker's project cascade was removed (Client-only
+  grants). [velara-web/src/features/admin/components/AccessControl.tsx]
+- [x] [Review][Fixed] Client-portal `?project_id`/`?study_id` narrowing ignored `node_id`. **Fixed:**
+  `list_client_skills` now takes `narrow_client_id` + `narrow_tier`; `client.py` resolves the queried
+  node's **owning Client id** (project → `client_id`; study → parent project → `client_id`) and passes it,
+  so narrowing constrains to that one Client's attachments AND the node's tier. The dead `node_id` param is
+  gone. [velara-api/app/services/skill_attachment_service.py, app/api/v1/client.py]
+- [x] [Review][Fixed] `client.py` engagement listing carried dead Project/Study-ancestor derivation for
+  sub-Client grants. **Fixed:** simplified to a direct Client-path match (every granted path is a Client
+  path now); a Client grant surfaces all its Projects. [velara-api/app/api/v1/client.py]
+- [x] [Review][Defer] `list_attached_skills_for_node` is now dead code (defined, never called after the
+  route repointing) [velara-api/app/services/skill_attachment_service.py] — deferred, cleanup nit, no
+  behavioral impact.
+
+**Tests added/updated (all green; 2 pre-existing flakes only — the first-in-suite `pool_pre_ping`
+event-loop artifact and `test_repeated_denials_are_deduped`'s append-only-audit re-run count, both
+documented pre-existing and reproduced independent of these changes):**
+- BE: `test_access_service.py` (+`NonClientGrantTierError` shape), `test_access_grants.py`
+  (+`test_sub_client_grant_tier_is_rejected`), `test_client_surface.py` (study→client grant model across
+  engagements + 3 non-LD invocation tests + 1 LD-invocation test; helper defaults flipped to Client),
+  `test_hierarchy.py` (study→client grant on the location-resolution guard), NEW
+  `test_client_only_grants_migration.py` (0027 dedupe/translate + abort-on-unresolvable). ruff clean;
+  affected suites green (122 + 173 passed, minus the 2 documented flakes).
+- FE: `AccessControl.test.tsx` (6 tests re-modeled to Client-level attach/detach; grant-form tests
+  already Client-scoped and pass). `tsc`/`eslint` clean (1 pre-existing Icon.tsx warning), full
+  `vitest run` 751 passed.
+- ⚠️ **Auth widening applied on live data via migration 0027** — operator-confirmed. Sub-Client grants
+  are remapped to their owning Client, broadening those users' scope to the whole Client. `downgrade()` is
+  intentionally `NotImplementedError` (non-invertible: dedup + widening).
