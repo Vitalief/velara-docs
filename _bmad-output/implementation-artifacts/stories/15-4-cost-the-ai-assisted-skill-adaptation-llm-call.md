@@ -4,7 +4,7 @@ baseline_commit: 26ea562 (velara-api, branch development) / eda4a2f (velara-web,
 
 # Story 15.4: Cost the AI-Assisted Skill-Adaptation LLM Call
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -193,6 +193,15 @@ Story 15.1/AC4 stores an explicit `cost_usd=0` for a genuine **code-runtime** in
 - [Source: velara-web/src/features/analytics/analyticsFormat.ts#L14-L22] — `fmtUsd(n: number, compact=false)` (no null guard — wrap defensively).
 - [Source: velara-web/src/features/run/components/JobsHistory.tsx#L23-L26 / RunConsole.tsx#L66-L69] — the `fmtCost`/`v == null ? '—' : fmtUsd(v)` null-guard idiom to mirror.
 - [Source: velara-web/src/features/audit/components/AuditLog.test.tsx#L86,#L347-L349] — the detail-panel test to extend (currently asserts no metadata content).
+
+### Review Findings
+
+3-layer adversarial code review (Blind Hunter + Edge Case Hunter + Acceptance Auditor, all Opus) on 2026-07-22. Acceptance Auditor confirmed all 5 ACs MET, File List exact, all AC4 negative-space invariants honored (no migration / no `pricing.py` / `execution_tasks.py` / `app/schemas/*` / `docs/api-spec.json` change). No `high`/`medium` findings. 0 patches, 4 deferred, 6 dismissed as noise.
+
+- [x] [Review][Defer] Cost helper guards `None` but not the numeric edge of tokens (zero-input→`$0.00`, negative→negative cost) [velara-api/app/api/v1/skills.py:73-96] — deferred, defensive-only. Blind Hunter (zero-token "fabricated $0") + Edge Case Hunter (negative-token) converge on the same root: `_adapter_cost_usd` gates on `is None`, not on value. **Verified unreachable via the real Anthropic path** — every propose call sends a non-empty `system`+`user_content` prompt, so `resp.usage.input_tokens` is structurally `> 0` on any billed call (a `$0.00` requires input AND output both 0), and the Anthropic API never returns negative usage. The design invariant ("never a fabricated `$0` for an *unpriceable* call") is not violated: a genuine `$0.00` here cannot occur. A future `input_tokens >= 0`/`output_tokens >= 0` guard (BE) + `value >= 0` narrow (FE `AuditDetailPanel.tsx`) would harden defensively but fixes no live path.
+- [x] [Review][Defer] `float()` cast reintroduces binary-float drift vs the execution path's exact-`Decimal` `Numeric(12,6)` column [velara-api/app/api/v1/skills.py:96] — deferred, spec-endorsed wire convention. JSONB `metadata` is JSON-serialized on the audit read path and a bare `Decimal` is not JSON-native; `float` is required here and matches the sibling ints in the same dict. This is the same numeric-fidelity class Story 15.2 deferred (typed-schema `field_serializer`→float). Only matters if adapter-propose spend is ever summed as money — not a current surface (AC4 defers aggregation).
+- [x] [Review][Defer] Sub-cent costs collapse to `$0.01`/`$0.00` in the UI (`fmtUsd` `maximumFractionDigits: 2`) [velara-web/src/features/audit/components/AuditDetailPanel.tsx:113] — deferred, platform-wide convention. Matches the existing `fmtCost`→`fmtUsd` rendering used for job costs (`JobsHistory.tsx`, `RunConsole.tsx`); full precision is retained in the API payload. Display-fidelity limitation, internally consistent.
+- [x] [Review][Defer] `admin.skill_adapter_proposed` metadata key asymmetry — the failure dict omits `proposal_non_conforming`; the success dict omits `outcome`/`error_code` [velara-api/app/api/v1/skills.py:498-535,559-568] — deferred, pre-existing (not introduced by this diff). Any future aggregate over this event type must treat every metadata key as optional. The diff adds `cost_usd` to both dicts without reconciling the pre-existing divergence, which is out of scope for this light story.
 
 ## Dev Agent Record
 

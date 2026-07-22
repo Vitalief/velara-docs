@@ -332,7 +332,7 @@ development_status:
   15-1-persist-structured-per-execution-cost: done
   15-2-surface-per-invocation-cost-job-api-ui: done
   15-3-per-skill-and-per-user-cost-analytics: done
-  15-4-cost-the-ai-assisted-skill-adaptation-llm-call: review
+  15-4-cost-the-ai-assisted-skill-adaptation-llm-call: done
   15-5-capture-code-driven-hybrid-sandbox-llm-usage: done
   15-6-verify-reports-usage-declaration-is-honored: done
 
