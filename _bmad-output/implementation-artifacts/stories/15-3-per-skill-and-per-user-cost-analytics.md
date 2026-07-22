@@ -4,7 +4,7 @@ baseline_commit: 118639a (velara-api, branch development) / 754dafa (velara-web,
 
 # Story 15.3: Per-Skill and Per-User Cost in Analytics
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -190,6 +190,14 @@ Story 15.2 established the FE null-safety idiom for cost rendering (`fmtCost` wr
 - [Source: velara-web/src/features/analytics/components/ByUserTab.tsx#L50-L70,#L196-L207] — `SkillsUsed`, user header metrics row.
 - [Source: velara-web/src/features/analytics/analyticsFormat.ts#L14-L22] — `fmtUsd` (no null guard — wrap defensively per Task 8/9 guidance).
 - [Source: velara-web/src/features/analytics/components/AnalyticsScreen.test.tsx#L16-L40] — existing fixtures to extend with `cost_usd`.
+
+### Review Findings
+
+Code review 2026-07-22 (3-layer: Blind Hunter + Edge Case Hunter + Acceptance Auditor). All 5 ACs verified MET, File List an exact match, every out-of-scope constraint honored, both emphasized invariants (no fan-out double-count, COALESCE on every SUM) confirmed in source. 0 high / 0 medium. No patches, no decision-needed — 3 deferred (all pre-existing, no live cost impact), 3 dismissed as noise.
+
+- [x] [Review][Defer] Fan-out parent audit row is `outcome="success"`, NOT `outcome=NULL` — `_invocation_where` docstring and the pre-existing `test_overview_excludes_admin_and_fan_out_parent_rows` both encode the wrong shape [app/services/analytics_service.py:66-71 + tests/integration/api/test_analytics.py:373] — deferred, pre-existing. This story's new cost sum joins over the same rows `runs` already counts; the real (`outcome="success"`) parent IS included, and cost double-counting is avoided ONLY because `execution_tasks.py:674-680` writes the parent's `InvocationResult.cost_usd=0` (terminal-guarded to exactly one parent row). Holds today, but the docstring actively misleads a future editor into thinking the parent is filtered out — if anyone later prices the parent roll-up, every fan-out job's cost double-counts silently. The test seeds `outcome=None` (a shape production never emits), so it gives false confidence.
+- [x] [Review][Defer] Retry/redelivery could double-count cost via `SUM` over a non-DISTINCT `InvocationResult` join [app/services/analytics_service.py:131-154, 173-190, 254-267] — deferred, pre-existing. Latent only: Celery autoretry is deliberately disabled (execution_tasks.py:20-22), and the identical join already backs `func.count()` (`runs`) in the same query — so any second-outcome-row-per-`job_id` duplication is a pre-existing audit-row-model property that `runs` shares equally; cost merely inherits it. Not introduced by 15.3.
+- [x] [Review][Defer] No test seeds a fan-out parent+children *cost* topology asserting the parent contributes $0 [tests/integration/api/test_analytics.py] — deferred, pre-existing. Folds into the first defer: the "no double-count" claim is asserted only in prose. A regression test seeding a priced-children + `cost_usd=0`-parent set would pin the invariant.
 
 ## Dev Agent Record
 
