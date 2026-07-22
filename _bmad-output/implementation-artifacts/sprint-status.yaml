@@ -351,7 +351,7 @@ development_status:
   epic-16: in-progress
   16-1-move-locations-to-client-ownership: done
   16-2-client-level-location-management-and-study-association-ui: done
-  16-3-client-level-skill-attachment: ready-for-dev
+  16-3-client-level-skill-attachment: in-progress
   16-4-study-creation-time-protocol-upload: backlog
   16-5-consolidate-engagement-screen-actions-into-single-menu: backlog
   16-6-hierarchy-scoped-run-history-on-project-study-screens: backlog
