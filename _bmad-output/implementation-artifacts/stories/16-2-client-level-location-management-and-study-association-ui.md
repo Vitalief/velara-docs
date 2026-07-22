@@ -4,7 +4,7 @@ baseline_commit: db04cef (top-level docs repo); velara-web working tree at HEAD 
 
 # Story 16.2: Client-Level Location Management + Study Association UI
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -296,6 +296,19 @@ these must be repaired or Location CRUD is dead in the internal UI.
   - [x] **No backend change, no `docs/api-spec.json` change** — confirm `git status` in velara-api is
     clean (this story touches velara-web only). Do NOT commit velara-web (subrepo — dev-story only
     commits the top-level docs repo, per the never-push-subrepos rule).
+
+### Review Findings
+
+Code review 2026-07-23 (3-layer: Blind Hunter + Edge Case Hunter + Acceptance Auditor).
+All 8 ACs and all 3 flagged traps verified MET (AC7 PARTIAL → patch below). 6 patches, 0 deferred,
+7 dismissed as noise/false-positive. No File-List drift.
+
+- [x] [Review][Patch] AC7 — associate `onError` uses a hardcoded string instead of reusing `friendlyError`/`getApiCode`; the 409 `LOCATION_STUDY_ASSOCIATION_EXISTS` race is not surfaced with the backend message [AssociateLocationPanel.tsx:73] — FIXED: imports `getApiCode`/`getApiMessage` from `@/shared/utils/errors`; new `associateErrorMessage` maps the 409 to friendly copy and falls back to the backend message.
+- [x] [Review][Patch] Location DELETE does not invalidate the per-study `['locations', studyId]` associated-lists → a Location shared across Studies leaves a phantom row (404 on click) in every other Study's card for up to the 30s staleTime [useEngagements.ts:162-173] — FIXED: `useDeleteLocation.onSuccess` now also invalidates the `['locations']` key prefix.
+- [x] [Review][Patch] Location EDIT (`useUpdateLocation`) does not invalidate `['locations', studyId]` → stale name/postal_code shown in every associated Study's card for up to 30s [useEngagements.ts:154-160] — FIXED: `useUpdateLocation.onSuccess` now also invalidates the `['locations']` key prefix.
+- [x] [Review][Patch] Associate button `disabled={associateLocation.isPending}` disables ALL rows during one in-flight request and there is no per-row in-flight guard → a slow associate blocks associating other rows and a rapid double-click can fire a duplicate POST [AssociateLocationPanel.tsx:151] — FIXED: tracks `pendingId`; only the in-flight row shows "Associating…", double-click guarded via early return in `handleAssociate`.
+- [x] [Review][Patch] Associate picker renders "No locations available. Add one at the Client screen first." while `useClientLocations` is still loading or has errored (no `isLoading`/`isError` state) → misleads the user and silently hides a fetch failure [AssociateLocationPanel.tsx:23,127-130] — FIXED: distinct "Loading locations…" and error states rendered from `isLoading`/`isError`.
+- [x] [Review][Patch] Cold deep-link to a Study detail: `onAssociateLocation` passes `client.data?.id ?? ''` before the ancestor client resolves → the picker opens against `useClientLocations('')` (`enabled:false`) and always shows "No locations available"; the Associate trigger is not gated on client load [EngagementsScreen.tsx:1462] — FIXED: `associateDisabled` threaded through `StudyDetail`→`StudyLocationsCard`, button disabled until `client.data?.id` resolves.
 
 ## Dev Notes
 
