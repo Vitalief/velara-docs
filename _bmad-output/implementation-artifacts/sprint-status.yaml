@@ -325,7 +325,7 @@ development_status:
   15-3-per-skill-and-per-user-cost-analytics: backlog
   15-4-cost-the-ai-assisted-skill-adaptation-llm-call: backlog
   15-5-capture-code-driven-hybrid-sandbox-llm-usage: done
-  15-6-verify-reports-usage-declaration-is-honored: ready-for-dev
+  15-6-verify-reports-usage-declaration-is-honored: in-progress
 
   # ─────────────────────────────────────────────────────────
   # Epic 16: Engagement Hierarchy, Attachment & Ingest Model Refinement
