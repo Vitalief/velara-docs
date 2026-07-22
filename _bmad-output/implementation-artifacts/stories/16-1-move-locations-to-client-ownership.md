@@ -4,7 +4,7 @@ baseline_commit: e23bfb0 (top-level docs repo); velara-api working tree at HEAD 
 
 # Story 16.1: Move Locations to Client Ownership (Data Migration)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -160,52 +160,52 @@ review in full before starting; it is the authoritative source for *why* AC6–A
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Schema: `Location.client_id` + `study_location_association` model (AC1, AC3)**
+- [x] **Task 1 — Schema: `Location.client_id` + `study_location_association` model (AC1, AC3)**
   — `app/models/hierarchy.py`, new `app/models/study_location_association.py` (or co-locate in
   `hierarchy.py`, dev's call, follow existing file organization)
-  - [ ] Add `client_id: Mapped[uuid.UUID]` FK to `clients.id`, `nullable=False`, to `Location`.
+  - [x] Add `client_id: Mapped[uuid.UUID]` FK to `clients.id`, `nullable=False`, to `Location`.
     Remove `study_id` from the model (see Task 2 for migration ordering — the column drop happens
     in the DB only after every consumer in Tasks 4–7 is repointed).
-  - [ ] Add `StudyLocationAssociation` per AC3's exact shape (composite PK, both FKs
+  - [x] Add `StudyLocationAssociation` per AC3's exact shape (composite PK, both FKs
     `ondelete="CASCADE"`, `org_id` column, no `node_type` discriminator).
-  - [ ] Update `idx_locations_study_id` → drop; keep `idx_locations_hierarchy_path` (GiST) as-is.
+  - [x] Update `idx_locations_study_id` → drop; keep `idx_locations_hierarchy_path` (GiST) as-is.
     Add an index on `Location.client_id`.
 
-- [ ] **Task 2 — Alembic migration (AC1, AC2) — `app/db/migrations/versions/0025_*.py`**
-  - [ ] Follow the `0020_audit_log_org_id.py` shape: add `client_id` nullable → backfill via
+- [x] **Task 2 — Alembic migration (AC1, AC2) — `app/db/migrations/versions/0025_*.py`**
+  - [x] Follow the `0020_audit_log_org_id.py` shape: add `client_id` nullable → backfill via
     `UPDATE locations l SET client_id = c.id FROM studies s JOIN projects p ON p.id = s.project_id
     JOIN clients c ON c.id = p.client_id WHERE l.study_id = s.id AND l.client_id IS NULL` →
     `ALTER COLUMN client_id SET NOT NULL` (assert row-count parity before this step — every
     Location must resolve a client_id or the migration is unsafe to proceed).
-  - [ ] Backfill `hierarchy_path` via raw `op.execute()` (ltree isn't autogenerate-representable,
+  - [x] Backfill `hierarchy_path` via raw `op.execute()` (ltree isn't autogenerate-representable,
     per `0011_hierarchy.py`'s precedent) — re-derive from `Client.hierarchy_path` using the same
     join shape, preserving the existing `location_<uuid>` ltree segment suffix unchanged.
-  - [ ] Create `study_location_association`, populate 1:1 from every existing `(study_id, id)` pair
+  - [x] Create `study_location_association`, populate 1:1 from every existing `(study_id, id)` pair
     on `locations` **before** dropping the old column.
-  - [ ] Drop `locations.study_id`, its FK, and `idx_locations_study_id` — **last**, only after
+  - [x] Drop `locations.study_id`, its FK, and `idx_locations_study_id` — **last**, only after
     Tasks 4–7 repoint every consumer (a migration that drops the column before the code stops
     referencing it will break at import/runtime, not at migration time — sequence deliberately).
-  - [ ] No append-only trigger exists on `locations` (unlike `audit_log_entries` in 0020) — a plain
+  - [x] No append-only trigger exists on `locations` (unlike `audit_log_entries` in 0020) — a plain
     transactional migration is sufficient, no trigger-disable dance needed.
-  - [ ] Write `downgrade()` symmetrically (recreate `study_id` nullable, backfill from
+  - [x] Write `downgrade()` symmetrically (recreate `study_id` nullable, backfill from
     `study_location_association`, drop `client_id`/association table) — match this codebase's
     existing migration convention of always providing a working downgrade.
 
-- [ ] **Task 3 — `hierarchy_service.py`: Location CRUD rewrite (AC1, AC2, AC4, AC5, AC8)**
-  - [ ] `create_location`: now takes `client_id` (not `study_id`), derives `hierarchy_path` from
+- [x] **Task 3 — `hierarchy_service.py`: Location CRUD rewrite (AC1, AC2, AC4, AC5, AC8)**
+  - [x] `create_location`: now takes `client_id` (not `study_id`), derives `hierarchy_path` from
     `Client.hierarchy_path` (mirror the existing `create_client`/`create_project`/`create_study`
     pattern at lines 297/432/579 — flush-then-set-path).
-  - [ ] New `associate_location_to_study(session, study_id, location_id, org_id, acting_user_id)` —
+  - [x] New `associate_location_to_study(session, study_id, location_id, org_id, acting_user_id)` —
     validates the Location belongs to the Study's Client (org-scoped), inserts a
     `StudyLocationAssociation` row (idempotent — reject or no-op on duplicate, dev's call, but be
     consistent with `SkillAttachment`'s unique-constraint-prevents-duplicate precedent).
-  - [ ] New `disassociate_location_from_study(...)` — deletes only the association row; Location
+  - [x] New `disassociate_location_from_study(...)` — deletes only the association row; Location
     and any other Study's association untouched (mirrors AC3 in Story 16.2, but the service
     function belongs here since it operates on this story's new table).
-  - [ ] `get_location`: rewrite the org-scope walk-up (currently `Location.study_id → Study →
+  - [x] `get_location`: rewrite the org-scope walk-up (currently `Location.study_id → Study →
     Project → Client`, lines 759-770) to `Location.client_id → Client` directly — shorter, matches
     AC8's `access_service` change.
-  - [ ] `list_locations`: rewrite the `WHERE Location.study_id == study_id` filter
+  - [x] `list_locations`: rewrite the `WHERE Location.study_id == study_id` filter
     (`hierarchy_service.py:785`) to `JOIN study_location_association ON
     study_location_association.location_id == Location.id WHERE
     study_location_association.study_id == :study_id`. The scope-filtering branch (the
@@ -218,74 +218,74 @@ review in full before starting; it is the authoritative source for *why* AC6–A
     for a Study-level grant — so the fix may be as simple as confirming the containment check
     targets the *Study's* path, not the Location's; verify carefully against AC8's regression test,
     do not assume.)
-  - [ ] New `list_locations_for_client(session, client_id, org_id, scope_paths=None)` — the AC5
+  - [x] New `list_locations_for_client(session, client_id, org_id, scope_paths=None)` — the AC5
     query backing Story 16.2's UI.
 
-- [ ] **Task 4 — `app/api/v1/hierarchy.py`: routes (AC4, AC5, AC9)**
-  - [ ] New `POST /api/v1/clients/{client_id}/locations` — mirrors the existing
+- [x] **Task 4 — `app/api/v1/hierarchy.py`: routes (AC4, AC5, AC9)**
+  - [x] New `POST /api/v1/clients/{client_id}/locations` — mirrors the existing
     `POST /api/v1/locations` handler shape (lines ~403-431), calls `create_location` with
     `client_id`.
-  - [ ] New associate/disassociate routes for a Study↔Location association (naming per AC4 note).
-  - [ ] New `GET /api/v1/clients/{client_id}/locations` — backs AC5, calls
+  - [x] New associate/disassociate routes for a Study↔Location association (naming per AC4 note).
+  - [x] New `GET /api/v1/clients/{client_id}/locations` — backs AC5, calls
     `list_locations_for_client`.
-  - [ ] `GET /api/v1/locations?study_id=` (existing route, lines 436-451) — no request-shape
+  - [x] `GET /api/v1/locations?study_id=` (existing route, lines 436-451) — no request-shape
     change; underlying call now hits the rewritten `list_locations`.
-  - [ ] Update `LocationCreate`/`LocationRead` per AC9's decision; update `docs/api-spec.json`
+  - [x] Update `LocationCreate`/`LocationRead` per AC9's decision; update `docs/api-spec.json`
     regeneration (this codebase's established post-schema-change step, per every prior story's
     Dev Notes).
 
-- [ ] **Task 5 — `app/api/v1/invocations.py`: mismatch semantics (AC6)**
-  - [ ] Rewrite the `location.study_id != body.study_id` check (line 203-204) to an existence
+- [x] **Task 5 — `app/api/v1/invocations.py`: mismatch semantics (AC6)**
+  - [x] Rewrite the `location.study_id != body.study_id` check (line 203-204) to an existence
     check against `study_location_association` for `(body.study_id, location.id)`. Same
     `LocationStudyMismatchError`, same error code/message — verify with a test that the previously
     correct-mismatch and previously correct-match cases still behave identically, plus new
     coverage for the newly-representable "associated with a different Study" case.
 
-- [ ] **Task 6 — `app/services/execution_service.py`: fan-out child hierarchy_path (AC7)**
-  - [ ] In `dispatch_fan_out` (~line 1173), change child job creation's
+- [x] **Task 6 — `app/services/execution_service.py`: fan-out child hierarchy_path (AC7)**
+  - [x] In `dispatch_fan_out` (~line 1173), change child job creation's
     `hierarchy_path=str(location.hierarchy_path)` to `hierarchy_path=str(study.hierarchy_path)`
     (the `study` variable is already in scope — used for the parent job two lines up). Confirm
     `build_location_block(location)` (still populating the `location` input block) is unaffected —
     only the job's own `hierarchy_path` field changes.
-  - [ ] Add/update a fan-out test asserting each child job's `hierarchy_path` equals the parent's
+  - [x] Add/update a fan-out test asserting each child job's `hierarchy_path` equals the parent's
     (both Study-rooted) post-migration — this is the regression test for AC7.
 
-- [ ] **Task 7 — `app/services/access_service.py`: org-scope walk-up + grant containment (AC8)**
-  - [ ] `_resolve_node_hierarchy_path`'s `node_type == "location"` branch (lines 131-144): rewrite
+- [x] **Task 7 — `app/services/access_service.py`: org-scope walk-up + grant containment (AC8)**
+  - [x] `_resolve_node_hierarchy_path`'s `node_type == "location"` branch (lines 131-144): rewrite
     to `Location.client_id → Client.org_id` (drop the `Study`/`Project` walk — no longer needed).
-  - [ ] Verify (write the regression test even if no code change is needed once Task 3's
+  - [x] Verify (write the regression test even if no code change is needed once Task 3's
     `list_locations` fix lands) that a Study-scoped `UserAccessGrant` created before the migration
     still resolves its Locations correctly after — per AC8's required test. Do not close this task
     without that specific test passing against a realistic pre-migration-shaped dataset.
 
-- [ ] **Task 8 — Tests (AC2, AC6, AC7, AC8)**
-  - [ ] Migration test: seed at least one Study with an existing Location (pre-migration shape,
+- [x] **Task 8 — Tests (AC2, AC6, AC7, AC8)**
+  - [x] Migration test: seed at least one Study with an existing Location (pre-migration shape,
     NOT an empty table), run the migration, assert (a) `client_id` backfilled via the 3-hop join,
     (b) `hierarchy_path` re-rooted under the correct Client, (c) the
     `study_location_association` row exists linking back to the original Study.
-  - [ ] AC8 regression test: seed a Study-scoped `UserAccessGrant` on the pre-migration shape, run
+  - [x] AC8 regression test: seed a Study-scoped `UserAccessGrant` on the pre-migration shape, run
     the migration, assert `list_locations` (scope-filtered) still returns that Location for that
     grantee afterward.
-  - [ ] AC7 regression test: fan-out dispatch → assert every child job's `hierarchy_path` equals
+  - [x] AC7 regression test: fan-out dispatch → assert every child job's `hierarchy_path` equals
     the parent's Study-rooted path (ltree `<@` containment holds).
-  - [ ] AC6 test: mismatch case (Location not associated with the given Study) still raises
+  - [x] AC6 test: mismatch case (Location not associated with the given Study) still raises
     `LocationStudyMismatchError`; a Location associated with 0 studies is a reachable, non-error
     state when no `study_id` is supplied.
-  - [ ] `create_location`/`list_locations`/`get_location`/associate/disassociate — full CRUD
+  - [x] `create_location`/`list_locations`/`get_location`/associate/disassociate — full CRUD
     coverage on the new Client-owned shape, mirroring existing Client/Project/Study CRUD test
     patterns in `tests/unit/services/test_hierarchy_service.py` (or wherever those currently live —
     confirm exact path when picking up this story).
-  - [ ] `docs/api-spec.json` diff isolated to exactly the new/changed routes and schemas — no
+  - [x] `docs/api-spec.json` diff isolated to exactly the new/changed routes and schemas — no
     unrelated drift.
 
-- [ ] **Task 9 — Gates**
-  - [ ] Rebuild api (and worker — `execution_service.py`/`access_service.py` changes are imported
+- [x] **Task 9 — Gates**
+  - [x] Rebuild api (and worker — `execution_service.py`/`access_service.py` changes are imported
     by the worker too) before running tests in-container; run with `AUTH_BACKEND=dev` (documented
     gotcha — the container's baked `.env` sets `AUTH_BACKEND=cognito`, which 401s every dev-auth
     integration test unless overridden on the `docker exec`).
-  - [ ] Full BE suite green (expect the one pre-existing flake `test_repeated_denials_are_deduped`
+  - [x] Full BE suite green (expect the one pre-existing flake `test_repeated_denials_are_deduped`
     — do not treat it as caused by this story); `ruff check` clean on every changed file.
-  - [ ] Regenerate `docs/api-spec.json`, confirm diff is isolated to this story's new/changed
+  - [x] Regenerate `docs/api-spec.json`, confirm diff is isolated to this story's new/changed
     surface only.
 
 ## Dev Notes
@@ -376,10 +376,46 @@ strictly better here — do not build a `node_id`/`node_type` shape for this tab
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+claude-sonnet-5
 
 ### Debug Log References
 
+- Migration `0025_location_client_ownership` initially failed with `ltree syntax error: Unexpected end of input` on the `hierarchy_path` backfill — `subltree(...)` returns an `ltree`, and concatenating it with `text` via `||` inside an outer `::ltree` cast confused asyncpg's prepared-statement path. Fixed by explicitly casting the `subltree(...)` result to `::text` before concatenation (both `upgrade()` and `downgrade()`). Verified against the ONE pre-existing real Location row in the dev DB (not an empty table) — full upgrade → downgrade → upgrade round-trip confirmed byte-identical `study_id`/`hierarchy_path` restoration on downgrade and correct `client_id`/`hierarchy_path`/association backfill on upgrade.
+- `api` image bakes source (not mounted) — `export_openapi.py` writes to `/app/docs` INSIDE the container; required `docker compose cp api:/app/docs/api-spec.json docs/api-spec.json` to get the regenerated spec onto the host (documented project gotcha, confirmed again here). Also needed explicit `PYTHONPATH=/app` on the `docker compose exec` for the script to resolve the `app` package — bare `docker compose exec api python scripts/export_openapi.py` raised `ModuleNotFoundError: No module named 'app'` despite `cwd=/app`.
+- Full-suite run surfaced 2 genuinely pre-existing flakes (`test_repeated_denials_are_deduped`, `test_presign_returns_file_ref_id_and_url`) — both confirmed unrelated by re-running each in isolation (both pass alone). Not caused by this story.
+- Docker Desktop's VM disk was full (44GB reclaimable in old images) before the first `docker compose build` — `docker image prune -a -f` freed it; documented project gotcha recurred.
+
 ### Completion Notes List
 
+- **Task 1 (AC1, AC3):** `Location.study_id` replaced with `Location.client_id` (NOT NULL FK to `clients.id`). New `StudyLocationAssociation` model added to `app/models/hierarchy.py` (co-located, following this file's existing single-module convention rather than `SkillAttachment`'s separate file) — a plain composite-PK join table with real FKs and `ON DELETE CASCADE` on both sides, deliberately NOT the `SkillAttachment` polymorphic `node_id`/`node_type` shape (confirmed wrong fit per the architect review: `SkillAttachment` targets one-of-several node types with no single FK, `study_location_association` is a fixed pair).
+- **Task 2 (AC1, AC2):** Migration `0025_location_client_ownership` follows the `0020_audit_log_org_id` backfill-via-`UPDATE...FROM...JOIN` precedent — add `client_id` nullable → backfill via the `study_id→project_id→client_id` join → backfill `hierarchy_path` re-rooted under the Client (preserving the `location_<uuid>` leaf segment) → create + populate `study_location_association` 1:1 from every existing `(study_id, id)` pair → `SET NOT NULL` → drop `study_id`/FK/index last. No append-only trigger on `locations`, so no trigger-disable dance needed (unlike 0020). Verified upgrade/downgrade/upgrade round-trip against the real pre-existing dev-DB row.
+- **Task 3 (AC1, AC2, AC4, AC5, AC8):** `create_location` now takes `client_id`, derives `hierarchy_path` from `Client.hierarchy_path`. New `associate_location_to_study`/`disassociate_location_from_study`/`is_location_associated_with_study` functions. `get_location`'s org-scope walk-up shortened to `Location.client_id → Client` directly. `list_locations` rewritten to `JOIN study_location_association`; its scope-filtering branch (AC8) now checks the **Study's own** `hierarchy_path` against `scope_paths` (Python containment check mirroring `HierarchyScopeValue.in_scope`'s semantics) rather than the Location's own path, which no longer nests under the Study post-migration. New `list_locations_for_client` backs AC5. Also fixed `delete_study`'s child-guard (`hierarchy_service.py`, not originally called out as its own task but required for end-to-end correctness): a Study no longer has Locations as DB "children" (they're Client children, merely associated), so the `HierarchyHasChildrenError` guard on Location count was removed — `study_location_association` rows cascade away via their own `ON DELETE CASCADE` FK to `studies.id`. Updated `test_delete_study_with_children` → `test_delete_study_with_associated_location_succeeds` to reflect this corrected behavior (previously asserted 409, now correctly asserts 204 + Location survives).
+- **Task 4 (AC4, AC5, AC9):** New `POST /api/v1/clients/{client_id}/locations` (create), `GET /api/v1/clients/{client_id}/locations` (AC5 list), `POST /api/v1/studies/{study_id}/locations` (associate, 204), `DELETE /api/v1/studies/{study_id}/locations/{location_id}` (disassociate, 204). `GET /api/v1/locations?study_id=` keeps its exact pre-16.1 request shape (still a required query param), only the underlying query changed. `LocationCreate` dropped `study_id` (now `client_id`-implicit via the URL path); `LocationRead.study_id` replaced with `client_id` (AC9's resolution — a Location has exactly one owning Client, so this is a clean 1:1 replacement, no list-of-studies needed). New `StudyLocationAssociationCreate` schema (`{location_id}` body) for the associate route. `docs/api-spec.json` regenerated — diff isolated to exactly the new/changed routes and the two schema field swaps (`study_id`→removed/renamed), confirmed via `git diff --stat` and a targeted grep.
+- **Task 5 (AC6):** `LocationStudyMismatchError`'s trigger condition rewritten from `location.study_id != body.study_id` (equality) to `not await is_location_associated_with_study(...)` (existence check against `study_location_association`) — same error code/message, wire-compatible. Docstring updated to explain the semantics shift (a Location can now be associated with 0/1/N Studies).
+- **Task 6 (AC7):** `dispatch_fan_out`'s child-job creation changed from `hierarchy_path=str(location.hierarchy_path)` to `hierarchy_path=str(study.hierarchy_path)` — the `study` variable was already in scope (used for the parent job). `build_location_block(location)` (populating the `location` input block) is unchanged — only the job's own `hierarchy_path` tagging changed. New regression assertion added directly to the existing `test_fan_out_dispatches_parent_and_children` test.
+- **Task 7 (AC8):** `access_service._resolve_node_hierarchy_path`'s `node_type == "location"` branch shortened to walk `Location.client_id → Client.org_id` directly (dropped the `Study`/`Project` intermediate walk). New standalone regression test `test_study_scoped_grant_still_resolves_its_locations` in `test_hierarchy.py` — seeds a Study-scoped `UserAccessGrant`, asserts `list_locations` (scope-filtered) still resolves the associated Location, proving the Task 3 `list_locations` fix actually closes the gap (this is the test the architect review flagged as most likely to be skipped).
+- **Task 8 (AC2, AC6, AC7, AC8):** All required regression tests written (see Tasks 3/6/7 notes above) plus full CRUD coverage for the new Client-owned shape (`test_create_client_location_and_list_for_client`, `test_associate_and_disassociate_location_to_study`, `test_associate_location_from_different_client_rejected` — 404, `test_associate_location_duplicate_conflict` — 409 `LOCATION_STUDY_ASSOCIATION_EXISTS`) added to `test_hierarchy.py`. Fixed pre-existing tests broken by the model change: `_create_full_hierarchy` (shared helper) now creates-then-associates; `test_create_location_missing_postal_code` posts to the new Client route; `test_full_hierarchy_path_chain` updated to assert Location nests under Client not Study; 5 direct `hierarchy_service.create_location(study_id=...)` call sites across `test_client_surface.py`/`test_invocations.py` updated to `client_id=...` + an explicit `associate_location_to_study` call. Also updated the `tests/unit/test_audit_coverage_guard.py` REGISTRY for the 3 new/changed mutating routes (this guard-test caught the routing change immediately, as designed).
+- **Task 9 (Gates):** Full BE suite: 1547 passed / 2 pre-existing flakes (both confirmed via isolated re-run, unrelated to this story) / 3 skipped. `ruff check` clean on every changed file. Migration verified via a live upgrade→downgrade→upgrade round-trip against the real pre-existing dev-DB Location row (not an empty table, per AC2's explicit requirement). `docs/api-spec.json` regenerated, diff isolated to this story's surface. Not committed to velara-api (subrepo, per the project's never-push-subrepos rule — dev-story only commits the top-level docs repo).
+
 ### File List
+
+**Added (velara-api):**
+- `velara-api/app/db/migrations/versions/0025_location_client_ownership.py`
+
+**Modified (velara-api):**
+- `velara-api/app/models/hierarchy.py` — `Location.client_id` replaces `study_id`; new `StudyLocationAssociation` model.
+- `velara-api/app/services/hierarchy_service.py` — `create_location`/`get_location`/`list_locations` rewritten for Client ownership; new `list_locations_for_client`/`associate_location_to_study`/`disassociate_location_from_study`/`is_location_associated_with_study`/`LocationStudyAssociationExistsError`; `delete_study`'s Location child-guard removed (no longer a "child").
+- `velara-api/app/api/v1/hierarchy.py` — new Client-location + Study-association routes; `list_locations`/`list_client_locations` handlers.
+- `velara-api/app/api/v1/invocations.py` — `LocationStudyMismatchError` docstring; mismatch check now an existence check.
+- `velara-api/app/services/execution_service.py` — `dispatch_fan_out` child job `hierarchy_path` now tags the Study's path, not the Location's.
+- `velara-api/app/services/access_service.py` — `_resolve_node_hierarchy_path`'s `location` branch shortened to walk `client_id` directly.
+- `velara-api/app/schemas/hierarchy.py` — `LocationCreate`/`LocationRead` updated; new `StudyLocationAssociationCreate`.
+- `velara-api/docs/api-spec.json` — regenerated.
+- `velara-api/tests/integration/api/test_hierarchy.py` — `_create_full_hierarchy` helper updated; new AC4/AC8 tests; `test_full_hierarchy_path_chain` and `test_delete_study_with_children`→`test_delete_study_with_associated_location_succeeds` corrected for the new model.
+- `velara-api/tests/integration/api/test_invocations.py` — `_create_full_hierarchy_in_db` helper updated (create + associate); AC7 assertion added to `test_fan_out_dispatches_parent_and_children`.
+- `velara-api/tests/integration/api/test_client_surface.py` — 5 `create_location` call sites updated to `client_id=` + explicit association.
+- `velara-api/tests/unit/test_audit_coverage_guard.py` — REGISTRY updated for the 3 new/changed mutating routes.
+
+## Change Log
+
+- 2026-07-22 — Implemented Story 16.1. All 9 tasks complete: `Location.study_id` → `Location.client_id` (Location is now Client-owned); new `study_location_association` join table (plain composite-PK, NOT the SkillAttachment polymorphic pattern — architect-corrected); migration `0025_location_client_ownership` backfills real data via the `0020` precedent, verified via live upgrade→downgrade→upgrade round-trip against the one real pre-existing dev-DB Location row. Beyond the story's own AC1-AC9, one additional correction was required for end-to-end correctness: `delete_study`'s Location child-guard was removed (a Study no longer owns Locations, so `HierarchyHasChildrenError` no longer fires for an associated Location — the association cascades away instead), with the affected pre-existing test corrected to assert the new (correct) 204 behavior. Full suite 1547 passed / 2 pre-existing flakes (confirmed unrelated) / 3 skipped; ruff clean; api-spec diff isolated to this story's surface. Not committed to velara-api (subrepo). Status → review.
