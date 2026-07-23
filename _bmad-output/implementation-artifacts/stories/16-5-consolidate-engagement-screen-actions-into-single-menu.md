@@ -4,7 +4,7 @@ baseline_commit: 8bcdb35 (top-level docs repo); velara-web on branch `developmen
 
 # Story 16.5: Consolidate Engagement-Screen Actions into a Single Menu
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -119,19 +119,19 @@ them exactly this way, do not re-litigate):**
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Build the shared `Menu` component (AC1)** — new file
+- [x] **Task 1 — Build the shared `Menu` component (AC1)** — new file
       `src/shared/components/Menu.tsx`
-  - [ ] Design as a generic trigger+popup: `<Menu trigger={<button>...</button>} items={[{label, icon?, onClick, variant?, disabled?}]} />`
+  - [x] Design as a generic trigger+popup: `<Menu trigger={<button>...</button>} items={[{label, icon?, onClick, variant?, disabled?}]} />`
     or a compound-component form (`<Menu><Menu.Trigger/><Menu.Item/></Menu>`) — dev's call; prefer
     the flatter `items` prop shape to match this codebase's existing preference for plain props over
     compound-component patterns (no compound components exist elsewhere in `shared/components/`).
-  - [ ] **Trigger button**: renders `<Icon name="dots" size={13} />` (`Icon.tsx:36` — the only
+  - [x] **Trigger button**: renders `<Icon name="dots" size={13} />` (`Icon.tsx:36` — the only
     overflow-menu-shaped glyph in the set; it is a vertical 3-dot "kebab," confirmed no horizontal
     variant exists — do not invent a new icon or use emoji, HARD rule, see `Icon.tsx:1-4`). Style to
     match the existing icon-button footprint used by `DetailActions`'s buttons (`rounded-md border
     border-line-2 bg-surface px-2.5 py-1.5`, `EngagementsScreen.tsx:927-933`) so it doesn't look out
     of place next to `NodeSkillAttachControls`'s own trigger on the Client header.
-  - [ ] **Dismiss behavior** — follow the established idiom from the three existing hand-rolled
+  - [x] **Dismiss behavior** — follow the established idiom from the three existing hand-rolled
     implementations (do not add a 4th divergent one, do not pull in a new npm dependency):
     - Escape closes the menu (see `ConfirmDialog.tsx:32-39`, `AssociateLocationPanel.tsx:56-88` for
       the `useEffect` + `keydown` listener pattern to mirror).
@@ -147,58 +147,68 @@ them exactly this way, do not re-litigate):**
       overlays blocking the whole page), this is a small anchored popup; Escape + click-outside +
       focus-restore is sufficient and matches the weight of what's being built. Do not over-build a
       full modal-grade trap for a menu of 1-2 items.
-  - [ ] Each item: `role="menuitem"`, the trigger `aria-haspopup="menu"` + `aria-expanded`. Delete-type
+  - [x] Each item: `role="menuitem"`, the trigger `aria-haspopup="menu"` + `aria-expanded`. Delete-type
     items render with `variant="danger"` → the same `text-danger` styling `DetailActions`'s Delete
     button uses today (`EngagementsScreen.tsx:930`), so the visual weight of a destructive action is
     preserved inside the menu, not flattened to look identical to Edit.
 
-- [ ] **Task 2 — Replace `DetailActions` internals with `Menu` (AC2, AC4)** —
+- [x] **Task 2 — Replace `DetailActions` internals with `Menu` (AC2, AC4)** —
       `EngagementsScreen.tsx:919-941`
-  - [ ] Keep the `DetailActions` component (same name, same call sites, same props —
+  - [x] Keep the `DetailActions` component (same name, same call sites, same props —
     `onEdit`/`onDelete`/`deleteLabel`) so none of its 4 call sites (`:851`, `:1186`, `:1281`, `:1383`)
     need to change — only its **internals** change from a `<div>` of buttons to a single `<Menu>`
     with 1 or 2 items (Edit always; Delete only when `onDelete` is passed — mirror the existing
     `{onDelete && (...)}` conditional, now as a conditional item in the `items` array instead of a
     conditional `<button>`).
-  - [ ] Delete item: `label: 'Delete'`, `icon: 'trash'`, `variant: 'danger'`, `onClick: onDelete`,
+  - [x] Delete item: `label: 'Delete'`, `icon: 'trash'`, `variant: 'danger'`, `onClick: onDelete`,
     and thread `deleteLabel` through as the item's `aria-label` (tests assert on
     `getByRole('button', { name: /Delete study .../i })` today — see Task 4; decide whether the new
     menu item itself carries that aria-label, or whether it's only meaningful on the old top-level
     button — **the item needs an accessible name a test can still target**, so keep `deleteLabel` as
     the item's title/aria-label, not just visible text).
-  - [ ] Edit item: `label: 'Edit'`, `icon: 'edit'`, `onClick: onEdit`.
+  - [x] Edit item: `label: 'Edit'`, `icon: 'edit'`, `onClick: onEdit`.
 
-- [ ] **Task 3 — Decide + implement card-header consolidation scope (AC2)**
-  - [ ] Per the Scope decision above: audit each of `ChildListCard` (`:946-1013`, "Add" button
-    `:967-971`), `StudyLocationsCard` (`:1015-1086`, "Associate Location" button `:1037-1042`), and
-    `StudyProtocolCard` (`:1094-1148`, "Add Protocol" button `:1109-1114`) — confirm each header has
+- [x] **Task 3 — Decide + implement card-header consolidation scope (AC2)**
+  - [x] Per the Scope decision above: audit each of `ChildListCard` (`:940-1002`, "Add" button
+    `:961-965`), `StudyLocationsCard` (`:1009-1082`, "Associate Location" button `:1031-1036`), and
+    `StudyProtocolCard` (`:1088-1142`, "Add Protocol" button `:1102-1108`) — confirm each header has
     **exactly one** action button today (no Edit/Delete alongside the Add/Associate button at that
-    card's own header — those live on the *parent* `DetailActions`, a separate header). If confirmed
-    (expected outcome, verify against current source before writing code), **leave these three
-    "Add X" buttons as plain buttons, unchanged** — do not wrap a single action in a menu. Only the 4
-    `DetailActions` sites (Task 2) get the new `Menu`.
-  - [ ] If the audit finds a header that in fact has 2+ actions today (i.e. this story's own
+    card's own header — those live on the *parent* `DetailActions`, a separate header). CONFIRMED
+    against current source (line numbers shifted slightly after Task 2's `DetailActions` internals
+    shrank, but the structure is unchanged): all three headers still render exactly one action
+    button; Remove/row actions remain nested inside each card's `.map()`/conditional item render, not
+    the header. **Left all three "Add X" buttons as plain buttons, unchanged** — only the 4
+    `DetailActions` sites (Task 2) got the new `Menu`. No correction needed.
+  - [x] If the audit finds a header that in fact has 2+ actions today (i.e. this story's own
     understanding above is wrong against current `development` HEAD), consolidate that header's
     actions into a `Menu` the same way as Task 2, and note the correction in the Dev Agent Record.
+    N/A — audit confirmed the story's original understanding; no header needed correction.
 
-- [ ] **Task 4 — Update tests (AC4)** — `EngagementsScreen.test.tsx`
-  - [ ] Every test that queries a now-menu-nested action must open the menu first, then query the
+- [x] **Task 4 — Update tests (AC4)** — `EngagementsScreen.test.tsx`
+  - [x] Every test that queries a now-menu-nested action must open the menu first, then query the
     item. Representative sites needing this change (not exhaustive — grep the full file for every
     `getByRole('button', ...)` against Edit/Delete text before considering this done):
-    - `:481` — `Edit` button query.
-    - `:714` — `Delete study {name}` query (opens menu, was a direct click before).
+    - `:481` — `Edit` button query. FIXED: now opens `'Open actions menu'` then clicks
+      `getByRole('menuitem', { name: 'Edit' })`.
+    - `:714` — `Delete study {name}` query (opens menu, was a direct click before). FIXED: now opens
+      `'Open actions menu'` then clicks `getByRole('menuitem', { name: /Delete study .../i })`.
     - `:720` — `^Delete study$` confirm-button query (inside `ConfirmDialog` — unaffected, this is
       the dialog's own confirm button, not a menu item; only the trigger sequence before it changes).
-  - [ ] `StudyLocationsCard`'s `:783` (`Associate Location`) and `StudyProtocolCard`'s `:751`
-    (`Remove protocol from this study`) queries are **unaffected** if Task 3's audit confirms those
-    stay plain buttons — do not touch these tests unless Task 3 finds otherwise.
-  - [ ] Add new `Menu.test.tsx` (co-located, `src/shared/components/Menu.test.tsx`): trigger opens
+      CONFIRMED unaffected, no change needed.
+    - Full-file grep for `getByRole('button', ...)`/`getAllByRole('button', ...)` against
+      Edit/Delete found no other affected sites — only the 2 above needed the open-menu-first change.
+  - [x] `StudyLocationsCard`'s `:783` (`Associate Location`) and `StudyProtocolCard`'s `:751`
+    (`Remove protocol from this study`) queries are **unaffected** — Task 3's audit confirmed those
+    stay plain buttons; verified still passing unchanged.
+  - [x] Add new `Menu.test.tsx` (co-located, `src/shared/components/Menu.test.tsx`): trigger opens
     the menu, Escape closes it, click-outside closes it, item click fires its `onClick` and closes
-    the menu, focus returns to the trigger on close.
-  - [ ] Gates: `tsc --noEmit` + `eslint` clean; `vitest run` green (0 regressions). Both wholesale
-    `useEngagements`-mock files (`src/routes/internal.test.tsx`, `src/pages/LogoutFlow.test.tsx`) are
-    **not** affected by this story (no new hooks added — this is a pure presentation change with zero
-    API-layer surface), but re-run them anyway as part of the full suite to confirm.
+    the menu, focus returns to the trigger on close. 7 tests, all passing (also covers danger-variant
+    accessible-name preservation and disabled-item no-op, beyond the story's minimum list).
+  - [x] Gates: `tsc --noEmit` clean; `eslint src --ext .ts,.tsx` clean (0 errors, 1 pre-existing
+    unrelated warning in `Icon.tsx`); `vitest run` green — 62 test files, 766 tests, 0 regressions.
+    Both wholesale `useEngagements`-mock files (`src/routes/internal.test.tsx`,
+    `src/pages/LogoutFlow.test.tsx`) re-ran clean as part of the full suite, confirming no new hooks
+    were needed.
 
 ## Dev Notes
 
@@ -388,11 +398,28 @@ already do.
 
 ### Agent Model Used
 
+Claude Sonnet 5
+
 ### Debug Log References
+
+None — no failures requiring debug beyond the two anticipated test breakages (Task 4), both fixed as designed by the story.
 
 ### Completion Notes List
 
+- Built `src/shared/components/Menu.tsx` — a generic trigger+`items`-array overflow menu, hand-rolled (no new dependency) per Trap 6, mirroring the Escape/click-outside/focus-restore idiom from `ConfirmDialog.tsx`/`AssociateLocationPanel.tsx`/`AccessControl.tsx`. No Tab-focus-trap (intentional, per Task 1 — a small anchored popup, not a full modal).
+- Rewrote `DetailActions`'s internals (`EngagementsScreen.tsx`) to render a single `<Menu>` instead of a button row; all 4 call sites (Client/Project/Study/Location headers) unchanged externally — same props, same behavior.
+- Task 3 audit (re-verified against current source, not just the story's snapshot): `ChildListCard`, `StudyLocationsCard`, and `StudyProtocolCard` headers each confirmed to still have exactly one action button — all three correctly left as plain, unwrapped buttons. No correction to the story's scope decision was needed.
+- Fixed the 2 anticipated `EngagementsScreen.test.tsx` breakages (Edit button at old `:481`, Delete study button at old `:714`) to open the menu first, then query the `menuitem`. The `ConfirmDialog` confirm-button assertion (`:720`-equivalent) was correctly unaffected, as predicted.
+- One lint warning surfaced during Task 1 (`react-hooks/exhaustive-deps` on a ref read inside a `useEffect` cleanup) — fixed by capturing `triggerRef.current` into a local variable at effect-setup time before the cleanup closure reads it.
+- Full regression suite: 62 files / 766 tests, 0 regressions, including both wholesale `useEngagements`-mock files (`internal.test.tsx`, `LogoutFlow.test.tsx`) — unaffected as predicted (no new hooks introduced).
+- Zero backend surface touched — confirmed via `git status` in `velara-api`, untouched throughout.
+
 ### File List
+
+- `src/shared/components/Menu.tsx` (new)
+- `src/shared/components/Menu.test.tsx` (new)
+- `src/features/engagements/components/EngagementsScreen.tsx` (modified — `DetailActions` internals only)
+- `src/features/engagements/components/EngagementsScreen.test.tsx` (modified — 2 test call sites updated to open-menu-first)
 
 ## Change Log
 
@@ -405,3 +432,17 @@ already do.
   `DetailActions` sites (Client/Project/Study/Location headers) are confirmed to have 2+ actions
   worth consolidating; every other header's lone "Add X" button is confirmed single-action and
   explicitly kept as a plain button rather than wrapped in a one-item menu.
+- 2026-07-23 — Implemented Story 16.5 (dev-story). Frontend-only, zero backend surface (confirmed via
+  `git status` in velara-api throughout). Built the codebase's first shared `Menu` overflow primitive
+  (`src/shared/components/Menu.tsx`, hand-rolled, no new dependency) and rewrote `DetailActions`'s
+  internals to render it — all 4 call sites (Client/Project/Study/Location headers) unchanged
+  externally. Task 3's re-audit against current source confirmed the story's scope decisions held
+  exactly: `ChildListCard`/`StudyLocationsCard`/`StudyProtocolCard` headers each still have exactly
+  one action button and correctly stayed plain buttons; `NodeSkillAttachControls` and all row-level
+  Remove/Run actions were untouched. Fixed the 2 `EngagementsScreen.test.tsx` assertions the menu
+  change broke (Edit, Delete study) to open the menu first, then query the menu item — both
+  anticipated exactly by the story's Task 4. Gates: `tsc --noEmit` clean, `eslint` clean (0 errors, 1
+  pre-existing unrelated warning), `vitest run` 62 files / 766 tests, 0 regressions (including both
+  wholesale `useEngagements`-mock files). File List matches the story's predicted change surface
+  exactly (2 new files, 2 modified) — no scope creep. Not committed to velara-web (subrepo,
+  never-push-subrepos rule).
