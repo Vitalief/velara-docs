@@ -60,6 +60,28 @@ them exactly this way, do not re-litigate):**
    actions that consolidate into the new menu are the 4 `DetailActions` sites (Client/Project/Study/
    Location), because those are the only headers with 2+ actions today (Edit alone, or Edit+Delete).
 
+## ⚠️ AMENDMENT (post-draft, during implementation) — supersedes AC2/AC4/Scope-decision-#2 below
+
+The operator reviewed the running app after the initial (as-drafted) implementation and requested a
+**wider** consolidation than the AC text below describes, plus a layout fix:
+
+1. **Every page-level action folds into ONE menu per screen**, not just Edit/Delete. On a Study
+   screen this means Edit, Delete, Associate Location, and Add Protocol (when no protocol exists) all
+   live in a single "⋯" trigger in the page header — not Edit/Delete in one menu and Associate
+   Location/Add Protocol left as separate always-visible buttons on their own cards, as the original
+   AC2 and "Scope decision #2" below specified.
+2. **Row-level actions (Location Remove, Protocol Remove) stay as plain, visible inline buttons** —
+   confirmed explicitly by the operator, NOT folded into any menu. This one part of the original scope
+   decision held.
+3. **The detail-panel layout was widened** (`max-w-[900px]` → `max-w-[1280px]`) to remove excess
+   white space — a new requirement not in the original story at all.
+
+The AC text, Scope decisions, and Tasks below are the **original, as-drafted** contract and are
+**partially superseded** by the above — read them for context on what was tried first and why, but
+the actually-shipped behavior is: one page-level menu per screen (Edit/Delete/Add/Associate/Add
+Protocol combined), row-level Remove buttons unchanged. See Dev Agent Record → Completion Notes for
+the full implementation account of both passes.
+
 ## Acceptance Criteria
 
 1. **AC1 — A shared `Menu`/dropdown component is introduced.** New file
@@ -402,24 +424,41 @@ Claude Sonnet 5
 
 ### Debug Log References
 
-None — no failures requiring debug beyond the two anticipated test breakages (Task 4), both fixed as designed by the story.
+None. Post-review-style scope correction mid-implementation (see Completion Notes) — no failed gates, only rework driven by direct operator feedback after the first pass shipped.
 
 ### Completion Notes List
 
-- Built `src/shared/components/Menu.tsx` — a generic trigger+`items`-array overflow menu, hand-rolled (no new dependency) per Trap 6, mirroring the Escape/click-outside/focus-restore idiom from `ConfirmDialog.tsx`/`AssociateLocationPanel.tsx`/`AccessControl.tsx`. No Tab-focus-trap (intentional, per Task 1 — a small anchored popup, not a full modal).
-- Rewrote `DetailActions`'s internals (`EngagementsScreen.tsx`) to render a single `<Menu>` instead of a button row; all 4 call sites (Client/Project/Study/Location headers) unchanged externally — same props, same behavior.
-- Task 3 audit (re-verified against current source, not just the story's snapshot): `ChildListCard`, `StudyLocationsCard`, and `StudyProtocolCard` headers each confirmed to still have exactly one action button — all three correctly left as plain, unwrapped buttons. No correction to the story's scope decision was needed.
-- Fixed the 2 anticipated `EngagementsScreen.test.tsx` breakages (Edit button at old `:481`, Delete study button at old `:714`) to open the menu first, then query the `menuitem`. The `ConfirmDialog` confirm-button assertion (`:720`-equivalent) was correctly unaffected, as predicted.
-- One lint warning surfaced during Task 1 (`react-hooks/exhaustive-deps` on a ref read inside a `useEffect` cleanup) — fixed by capturing `triggerRef.current` into a local variable at effect-setup time before the cleanup closure reads it.
-- Full regression suite: 62 files / 766 tests, 0 regressions, including both wholesale `useEngagements`-mock files (`internal.test.tsx`, `LogoutFlow.test.tsx`) — unaffected as predicted (no new hooks introduced).
-- Zero backend surface touched — confirmed via `git status` in `velara-api`, untouched throughout.
+**Initial pass (matched the story as originally written):**
+- Built `src/shared/components/Menu.tsx` — a generic trigger+`items`-array overflow menu, hand-rolled (no new dependency) per Trap 6, mirroring the Escape/click-outside/focus-restore idiom from `ConfirmDialog.tsx`/`AssociateLocationPanel.tsx`/`AccessControl.tsx`. No Tab-focus-trap (intentional — a small anchored popup, not a full modal).
+- Rewrote `DetailActions`'s internals to render a single `<Menu>` instead of a button row (Edit/Delete only); all 4 call sites unchanged externally.
+
+**Scope correction (operator feedback, same session, before code review):** The operator viewed the running app and asked for two changes beyond the story's original scope: (1) widen the detail-panel layout (excess white space), (2) fold **every** action on a detail screen — not just Edit/Delete — into **one single "⋯" menu per screen**. Clarified via AskUserQuestion: page-level actions (Add Project/Study/Location, Associate Location, Add Protocol) join Edit/Delete in the one page-level menu; per-row actions (Location Remove, Protocol Remove) stay as visible inline buttons, not folded in (they act on one list item, not the page).
+
+Implementation of the correction:
+- Widened the detail-panel container: `max-w-[900px]` → `max-w-[1280px]` (`EngagementsScreen.tsx`, the `<Routes>` wrapper div).
+- Renamed `DetailActions` → `HeaderMenu`, now a thin wrapper taking a full `items: MenuItem[]` array (no longer builds its own Edit/Delete-only list internally).
+- Each of the 4 Detail components (`ClientDetail`, `ProjectDetail`, `StudyDetail`, `LocationDetail`) now assembles its own combined `menuItems` array — Edit/Delete plus every page-level "Add"/"Associate" action previously scattered across card headers — and passes it to one `<HeaderMenu>` in the page header. `StudyDetail`'s array conditionally includes "Add Protocol" only when no protocol is currently attached (mirroring the prior card's own conditional).
+- `ChildListCard`, `StudyLocationsCard`, `StudyProtocolCard` lost their `addLabel`/`onAdd` (or `onAssociate`) props and header buttons entirely — those actions now live only in the page-level menu. Their row-level Remove buttons were correctly **left as plain buttons** per the operator's explicit clarification (not folded into any menu).
+- `NodeSkillAttachControls.tsx` was touched, reverted, then touched again (see next section) — the first attempt to fold its "+ Attach skill" trigger into a per-card menu was part of an earlier, over-fragmented (one-menu-per-card) approach the operator explicitly rejected in favor of one-menu-per-screen, and was reverted at that point. It was correctly folded into the single Client-screen menu in the follow-up round below.
+- Fixed all 11 `EngagementsScreen.test.tsx` sites broken by the consolidation (Edit, Delete study, Add Project, Add Study ×2, Add Location ×3, Add Protocol, Associate Location) to open the single `'Open actions menu'` trigger first, then query the `menuitem` by its label. Row-level Remove tests (Location, Protocol) were correctly **unaffected** — verified still passing unchanged, since those stayed plain buttons.
+- Full regression suite re-run after the correction: 62 files / 766 tests, 0 regressions.
+
+**Follow-up fixes (same session, operator live-reviewed the running app):**
+1. **Invisible menu-trigger icon.** The `dots` glyph in `Icon.tsx` (pre-existing, added at create-story time, never actually rendered by any component until this story used it) drew as three zero-length round-capped strokes (`M12 6h.01M12 12h.01M12 18h.01`) — at `stroke-width=1.7`/`size=13` this is a barely-visible pinprick, not a genuine rendering/color bug (confirmed via the operator's DevTools inspection: `stroke: currentcolor` was correctly applied). Fixed by rendering `dots` filled (three real `<circle>` elements) instead of stroked, gated by a small `FILLED_ICONS` set in `Icon.tsx` so every other stroke-based icon is untouched.
+2. **Trigger sizing/styling passes.** Iterated on the trigger button and icon size per direct operator feedback: removed the bordered/background box around the trigger (`border border-line-2 bg-surface` → none, hover-highlight only), sized the icon up then back down to `size={17}` (tried 13 → 22 → 17) with dot radius `r={2}` (tried 1.6 → 2.4 → 2) as a middle ground between "invisible" and "too big."
+3. **Stray "Attach skill" button + duplicate skill list.** The operator caught that (a) `NodeSkillAttachControls`'s "+ Attach skill" trigger was still a standalone button outside the single page-level menu (missed in the first consolidation pass — it lives on the Client skills card, a different header than the page's `HeaderMenu`, but per the "one menu per screen" rule it still belongs there), and (b) the Client skills card was rendering the SAME attached-skill list **twice** — once as `EngagementsScreen.tsx`'s own read-only `clientSkills.map(...)` row list, and again inside `NodeSkillAttachControls`'s own separate detach-chip list underneath it. Fixed by: refactoring `NodeSkillAttachControls` into a pure controller (no visible rows of its own — only renders `AttachPanel`/`DetachDialog`, both now driven by props lifted to the parent: `attachOpen`/`onAttachOpenChange` for attach, new `detachTarget`/`onDetachTargetChange` for detach); adding "Attach skill" as a `ClientDetail` menu item wired to the lifted `attachSkillOpen` state; adding a "Remove" button directly to `EngagementsScreen.tsx`'s single `clientSkills.map(...)` row, styled to match the `StudyLocationsCard`/`StudyProtocolCard` row+Remove pattern (`rounded-md border border-line-2 bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink-2 hover:bg-surface-2`) instead of the prior pill-with-x-icon chip style. `NodeSkillAttachControls.test.tsx` rewritten accordingly (role-gate + attach-panel-open + detach-dialog-open assertions; the stale "+ Attach skill button" assertions removed since that trigger no longer lives in this component).
+4. Full regression suite re-run after all follow-up fixes: 62 files / **768** tests (+2 from the rewritten `NodeSkillAttachControls.test.tsx`), 0 regressions. `tsc --noEmit` and `eslint` both clean throughout every round.
+- Zero backend surface touched throughout the entire session (confirmed via `git status` in `velara-api`).
 
 ### File List
 
 - `src/shared/components/Menu.tsx` (new)
 - `src/shared/components/Menu.test.tsx` (new)
-- `src/features/engagements/components/EngagementsScreen.tsx` (modified — `DetailActions` internals only)
-- `src/features/engagements/components/EngagementsScreen.test.tsx` (modified — 2 test call sites updated to open-menu-first)
+- `src/shared/components/Icon.tsx` (modified — `dots` glyph renders filled circles instead of zero-length strokes, via a new `FILLED_ICONS` set; every other icon unchanged)
+- `src/features/engagements/components/EngagementsScreen.tsx` (modified — layout width; `DetailActions`→`HeaderMenu`; all 4 Detail components assemble combined menu items incl. "Attach skill" on Client; `ChildListCard`/`StudyLocationsCard`/`StudyProtocolCard` lose header Add/Associate buttons, keep row-level Remove as plain buttons; Client skills row gains its own "Remove" button, duplicate list removed)
+- `src/features/engagements/components/EngagementsScreen.test.tsx` (modified — 11 test call sites updated to open the single page-level menu first, then query the menu item)
+- `src/features/admin/components/NodeSkillAttachControls.tsx` (modified — refactored to a pure attach/detach controller; no longer renders its own trigger button or attached-skill row list; `attachOpen`/`onAttachOpenChange` and new `detachTarget`/`onDetachTargetChange` are both now controlled by the parent)
+- `src/features/admin/components/NodeSkillAttachControls.test.tsx` (modified — rewritten for the controller-only API; role-gate assertions target the AttachPanel/DetachDialog instead of a trigger button that no longer exists in this component)
 
 ## Change Log
 
@@ -445,4 +484,39 @@ None — no failures requiring debug beyond the two anticipated test breakages (
   pre-existing unrelated warning), `vitest run` 62 files / 766 tests, 0 regressions (including both
   wholesale `useEngagements`-mock files). File List matches the story's predicted change surface
   exactly (2 new files, 2 modified) — no scope creep. Not committed to velara-web (subrepo,
+  never-push-subrepos rule).
+- 2026-07-23 — Scope correction (dev-story, same session, before code review). Operator reviewed the
+  running app and requested a wider consolidation than originally drafted: ONE menu per detail screen
+  holding every page-level action (Edit, Delete, Add Project/Study/Location, Associate Location, Add
+  Protocol), not just Edit/Delete with card-header "Add"/"Associate" buttons left separate. Clarified
+  via AskUserQuestion that row-level actions (Location Remove, Protocol Remove) stay as plain visible
+  buttons, not folded in — only page-level entity-management actions consolidate. Also widened the
+  detail-panel layout (`max-w-[900px]` → `max-w-[1280px]`) per operator request (excess white space).
+  `DetailActions` renamed to `HeaderMenu` (now a thin `items: MenuItem[]` wrapper); each of the 4
+  Detail components assembles its own combined item list. `ChildListCard`/`StudyLocationsCard`/
+  `StudyProtocolCard` lost their header Add/Associate buttons (moved to the page menu) but kept
+  row-level Remove as plain buttons. `NodeSkillAttachControls` was touched then reverted — an earlier,
+  rejected one-menu-per-card attempt — and remains unchanged from before this story. Fixed all 11
+  affected test sites (up from 2). Gates re-run clean: `tsc --noEmit` clean, `eslint` clean, `vitest
+  run` 62 files / 766 tests, 0 regressions. File List unchanged in file count (2 new, 2 modified) but
+  substantially larger diff within those files than the first pass. Not committed to velara-web
+  (subrepo, never-push-subrepos rule).
+- 2026-07-23 — Follow-up fixes (dev-story, same session, live operator review of the running app).
+  (1) Fixed a genuinely invisible menu-trigger icon — the pre-existing `dots` glyph in `Icon.tsx` used
+  three zero-length round-capped strokes, imperceptible at small size; never actually exercised by any
+  component before this story adopted it. Rendered filled instead (real `<circle>`s), gated by a new
+  `FILLED_ICONS` set so no other icon changed. (2) Iterated trigger/icon sizing per direct feedback:
+  removed the trigger's border/background box, settled icon size at 17px / dot radius 2 after trying
+  13px/1.6 (too small, the original bug) and 22px/2.4 (too big). (3) Fixed a real duplication bug the
+  operator caught: the Client skills card rendered its attached-skill list TWICE (once in
+  `EngagementsScreen.tsx`'s own read-only row list, again inside `NodeSkillAttachControls`'s separate
+  detach-chip list) and that component's "+ Attach skill" trigger was still a stray standalone button
+  outside the single page-level menu. Fixed by refactoring `NodeSkillAttachControls` into a pure
+  attach/detach controller (no visible rows of its own; `attachOpen` and new `detachTarget` are both
+  now lifted to and controlled by the parent), adding "Attach skill" to `ClientDetail`'s single
+  `HeaderMenu`, and adding a "Remove" button directly to the one remaining skill row list, styled to
+  match `StudyLocationsCard`/`StudyProtocolCard`'s row+Remove pattern instead of the old pill-with-x
+  chip style. `NodeSkillAttachControls.test.tsx` rewritten for the controller-only API. Gates re-run
+  clean throughout every round: `tsc --noEmit` clean, `eslint` clean (0 errors), `vitest run` 62 files
+  / 768 tests (+2 from the rewritten test file), 0 regressions. Not committed to velara-web (subrepo,
   never-push-subrepos rule).
