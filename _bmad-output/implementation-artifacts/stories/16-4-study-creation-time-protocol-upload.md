@@ -4,7 +4,7 @@ baseline_commit: d104ab1 (top-level docs repo); velara-api on branch `developmen
 
 # Story 16.4: Study-Creation-Time Protocol Upload
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -597,6 +597,18 @@ without adding them to **both** `src/routes/internal.test.tsx` (`:11-40`) and `s
 - [Source: velara-web/src/shared/components/Icon.tsx#L43] — `doc2` icon for the Protocol card (no emoji).
 - [Source: _bmad-output/planning-artifacts/architecture/implementation-patterns-consistency-rules.md] —
   envelope, error-code, TanStack Query, ltree-scope, migration conventions.
+
+### Review Findings
+
+- [x] [Review][Decision] Run Console upload label doesn't say "Additional Documents (optional)" as the operator specified — `velara-web/src/features/run/components/DocumentUploadCard.tsx:68-70`. Resolved: heading now reads "Additional Documents (optional)" when `optionalHint` is passed (Run Console only), else "Document" as before. Study-creation EntityModal upload label unchanged ("Protocol (optional)").
+- [x] [Review][Patch] `check_duplicate` no longer matches what `queue_invocation` actually queues [velara-api/app/api/v1/invocations.py:568-573] — fixed: protocol resolution factored into shared `_resolve_protocol_file_ref_ids`, called by both endpoints.
+- [x] [Review][Patch] `add-study`: failed protocol attach after a successful create can produce a duplicate Study on retry [velara-web/src/features/engagements/components/EngagementsScreen.tsx:336-347] — fixed: new `createdStudyId` state guards against re-creating the Study; a retry after attach failure only retries the attach.
+- [x] [Review][Patch] Unhandled `IntegrityError` on concurrent protocol attach [velara-api/app/services/hierarchy_service.py:996-1012] — fixed: commit wrapped in try/except IntegrityError → `StudyProtocolAttachConflictError` (409), mirroring `associate_location_to_study`'s existing TOCTOU pattern.
+- [x] [Review][Patch] Protocol-not-ready-at-run-time silently drops the document with no user-facing signal [velara-api/app/api/v1/invocations.py:328-343] — fixed: skip reason now recorded as `protocol_skipped_reason` in the job's persisted `inputs`, not just a backend log line.
+- [x] [Review][Patch] RunConsole optional-hint can flicker on mount while `useStudyProtocol` is loading [velara-web/src/features/run/components/RunConsole.tsx:518-519,853-854] — fixed: `protocolCoversNeed` now gates on `!isLoading` in both context-first and skill-first modes.
+- [x] [Review][Defer] `add-study`'s protocol attach bypasses React Query cache invalidation [velara-web/src/features/engagements/components/EngagementsScreen.tsx:336-347] — deferred, masked by immediate modal close; revisit if create flow stops closing on success
+- [x] [Review][Defer] `detach_study_protocol` / `attach_study_protocol` can race each other [velara-api/app/services/hierarchy_service.py:1071-1084] — deferred, same root cause/fix as the concurrent-attach patch; covered once that lock is added
+- [x] [Review][Defer] `get_active_study_protocol` re-queried redundantly after `attach_study_protocol` [velara-api/app/api/v1/hierarchy.py] — deferred, efficiency-only, no correctness impact
 
 ## Change Log
 
