@@ -4,7 +4,7 @@ baseline_commit: d104ab1 (top-level docs repo); velara-api on branch `developmen
 
 # Story 16.4: Study-Creation-Time Protocol Upload
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -138,10 +138,10 @@ toggle on the skill form, the Run Console "optional" labeling).
 
 ### velara-api
 
-- [ ] **Task 1 — The `study_protocol_association` model + migration (AC2)** —
+- [x] **Task 1 — The `study_protocol_association` model + migration (AC2)** —
   `app/models/hierarchy.py` (or `app/models/file_ref.py` — put it beside `StudyLocationAssociation` in
   `hierarchy.py` for pattern-locality), new migration under `app/db/migrations/versions/`
-  - [ ] Model: mirror `StudyLocationAssociation` (`app/models/hierarchy.py:189-219`) but this is a
+  - [x] Model: mirror `StudyLocationAssociation` (`app/models/hierarchy.py:189-219`) but this is a
     **history table**, so use a surrogate `id` PK (not a composite `(study_id, file_ref_id)` PK — you need
     multiple rows per study over time). Columns:
     - `id` — `UUID(as_uuid=True)`, `default=uuid.uuid4`, PK (match `FileReference`'s real-UUID PK style,
@@ -159,7 +159,7 @@ toggle on the skill form, the Run Console "optional" labeling).
     - **Partial unique index** `uq_study_protocol_active` on `(study_id, org_id) WHERE is_active` — this is
       the "at most one active protocol per study" guarantee. Postgres partial unique index:
       `sa.Index("uq_study_protocol_active", "study_id", "org_id", unique=True, postgresql_where=sa.text("is_active"))`.
-  - [ ] Migration: `revision = "0028_study_protocol_association"`, `down_revision = "0027_client_only_grants"`
+  - [x] Migration: `revision = "0028_study_protocol_association"`, `down_revision = "0027_client_only_grants"`
     (**verified current head** — no migration declares 0027 as its down_revision). Mirror
     `0025_location_client_ownership.py:83-96`'s raw `CREATE TABLE` **or** use `op.create_table` — dev's
     call; but the **partial unique index** must be created with `postgresql_where` (op.create_index with
@@ -167,20 +167,20 @@ toggle on the skill form, the Run Console "optional" labeling).
     drops the table. This is an **additive** migration (new table only) — no real-data translation, no
     backfill (confirmed). Contrast with 0025/0026 which were data translations; this one is simple.
 
-- [ ] **Task 2 — Read schema + request schema (AC6)** — `app/schemas/` (new file
+- [x] **Task 2 — Read schema + request schema (AC6)** — `app/schemas/` (new file
   `app/schemas/study_protocol.py`, or extend an existing hierarchy schema module — match the file's
   neighbors, e.g. where `StudyLocationAssociationCreate` lives)
-  - [ ] Request: `StudyProtocolCreate { file_ref_id: uuid.UUID }` (mirror `StudyLocationAssociationCreate`).
-  - [ ] Read: `StudyProtocolRead` exposing the active protocol for a Study — include `file_ref_id`,
+  - [x] Request: `StudyProtocolCreate { file_ref_id: uuid.UUID }` (mirror `StudyLocationAssociationCreate`).
+  - [x] Read: `StudyProtocolRead` exposing the active protocol for a Study — include `file_ref_id`,
     `attached_at`, and enough of the underlying `FileReference` for the card to render
     (`original_filename`, `content_type`, `status`). Do **not** expose S3 keys (follow `FileRefRead`,
     `app/schemas/ingest.py:30-39`). A `GET` returning "no protocol" should be representable
     (return `data: null`).
 
-- [ ] **Task 3 — Service layer: attach (supersede), get-active, detach (AC2, AC3, AC6)** —
+- [x] **Task 3 — Service layer: attach (supersede), get-active, detach (AC2, AC3, AC6)** —
   `app/services/hierarchy_service.py` (put these beside `associate_location_to_study` /
   `disassociate_location_from_study`; they are the naming/shape precedent)
-  - [ ] `attach_study_protocol(session, *, study_id, file_ref_id, org_id, acting_user_id)`:
+  - [x] `attach_study_protocol(session, *, study_id, file_ref_id, org_id, acting_user_id)`:
     - Validate the FileReference is ready: call `ingest_service.assert_file_ref_ready(session, file_ref_id,
       org_id)` (the exact validator `queue_invocation` uses, `invocations.py:307-312` — confirm its
       signature; it must exist, be in-org, `parsed`). This prevents attaching a half-uploaded/rejected file.
@@ -191,18 +191,18 @@ toggle on the skill form, the Run Console "optional" labeling).
       family / a `study.protocol.attached`-style verb consistent with existing hierarchy-association audit
       verbs).
     - Return the new active association (for the 201 read model).
-  - [ ] `get_active_study_protocol(session, *, study_id, org_id) -> StudyProtocolAssociation | None`:
+  - [x] `get_active_study_protocol(session, *, study_id, org_id) -> StudyProtocolAssociation | None`:
     select the `is_active=true` row for the study (org-scoped), join `FileReference` for the read model.
     Returns `None` when none.
-  - [ ] `detach_study_protocol(session, *, study_id, org_id, acting_user_id)`: flip the active row to
+  - [x] `detach_study_protocol(session, *, study_id, org_id, acting_user_id)`: flip the active row to
     `is_active=false` (retain history). No-op-safe if none active. Audit `study.protocol.detached`.
-  - [ ] **Do NOT touch `delete_study`** (`:682-716`) — the `ON DELETE CASCADE` FK on `study_id` cleans up
+  - [x] **Do NOT touch `delete_study`** (`:682-716`) — the `ON DELETE CASCADE` FK on `study_id` cleans up
     protocol rows automatically, exactly like `study_location_association` (see the comment at
     `hierarchy_service.py:689-694`). Adding a manual cleanup call would be redundant. (This is the payoff
     of choosing real-FK over polymorphic — Trap 4.)
 
-- [ ] **Task 4 — Routes: attach/list(get-active)/detach (AC6)** — `app/api/v1/hierarchy.py`
-  - [ ] Add three routes mirroring `associate_study_location`/`disassociate_study_location`
+- [x] **Task 4 — Routes: attach/list(get-active)/detach (AC6)** — `app/api/v1/hierarchy.py`
+  - [x] Add three routes mirroring `associate_study_location`/`disassociate_study_location`
     (`:486-539`) and `get_location`/list patterns:
     - `POST /studies/{study_id}/protocol` → `get_study` + `assert_in_scope` +
       `attach_study_protocol(...)`; 201 + `ResponseEnvelope[StudyProtocolRead]`.
@@ -210,13 +210,13 @@ toggle on the skill form, the Run Console "optional" labeling).
       `get_active_study_protocol(...)`; 200 + `ResponseEnvelope[StudyProtocolRead | None]`.
     - `DELETE /studies/{study_id}/protocol` → `get_study` + `assert_in_scope` +
       `detach_study_protocol(...)`; 204.
-  - [ ] Use the same dependency set as the location-association routes (`CurrentUser`, `DbSession`,
+  - [x] Use the same dependency set as the location-association routes (`CurrentUser`, `DbSession`,
     `HierarchyScope`) — router-level `RejectClient` already applies (verify the router default). No grantor
     gate is specified for protocol (it's a consultant-facing engagement action, like location association);
     do **not** add `_require_grantor` unless the location-association routes have it — match them exactly.
 
-- [ ] **Task 5 — Request-side protocol injection into invocations (AC4)** — `app/api/v1/invocations.py`
-  - [ ] In `queue_invocation` (`:255-458`), **before** `inputs_payload` is assembled (`~:316-321`), resolve
+- [x] **Task 5 — Request-side protocol injection into invocations (AC4)** — `app/api/v1/invocations.py`
+  - [x] In `queue_invocation` (`:255-458`), **before** `inputs_payload` is assembled (`~:316-321`), resolve
     the run's Study (if any) and its active protocol, then append the protocol's `file_ref_id` to the
     document list. Study resolution per invocation shape:
     - **non-location-dependent** run: `body.study_id` (if present).
@@ -225,11 +225,11 @@ toggle on the skill form, the Run Console "optional" labeling).
       (`~:217-224`) — thread the resolved `study_id` back out, or resolve it once up front. Dev picks the
       cleanest single resolution; the invariant is: **one place** computes "the Study for this run (or None)".
     - Project/Client-level run with no Study → inject nothing.
-  - [ ] `protocol = await hierarchy_service.get_active_study_protocol(session, study_id=..., org_id=user.org_id)`.
+  - [x] `protocol = await hierarchy_service.get_active_study_protocol(session, study_id=..., org_id=user.org_id)`.
     If present and `str(protocol.file_ref_id)` **not already in** the caller-supplied `file_ref_ids` list,
     append it. **Dedupe is mandatory** (a diligent caller might pass it explicitly; injecting twice would
     double the document in context).
-  - [ ] The injected id flows through the **existing** `assert_file_ref_ready` + `inputs_payload["file_ref_ids"]`
+  - [x] The injected id flows through the **existing** `assert_file_ref_ready` + `inputs_payload["file_ref_ids"]`
     machinery unchanged — no executor change needed (the four executor doc-loaders in
     `execution_service.py` / `code_driven_executor.py` already read `inputs["file_ref_ids"]`). Confirm the
     protocol `file_ref_id` is validated ready (it was validated at attach time, but a protocol could in
@@ -237,28 +237,28 @@ toggle on the skill form, the Run Console "optional" labeling).
     `assert_file_ref_ready` gate the other ids pass, or skip-with-log if not ready rather than 500 the run;
     dev's call — prefer skip-with-structlog-warning over failing an otherwise-valid run).
 
-- [ ] **Task 6 — The new skill flag `requires_additional_documents`, end-to-end (AC5)** — mirror
+- [x] **Task 6 — The new skill flag `requires_additional_documents`, end-to-end (AC5)** — mirror
   `location_dependent` at every site (this is the exact, verified template)
-  - [ ] **Model** `app/models/skill.py`: add
+  - [x] **Model** `app/models/skill.py`: add
     `requires_additional_documents: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True,
     server_default=text("true"))` **beside** `location_dependent` (`:65-67`). **NOTE the default is `True`**
     (not `false` like `location_dependent`) — this keeps the Run Console upload visible for every existing
     skill (confirmed decision, no regression).
-  - [ ] **Migration**: fold into the same `0028` migration (or a separate one — dev's call; one migration
+  - [x] **Migration**: fold into the same `0028` migration (or a separate one — dev's call; one migration
     is fine since both are additive and this story owns both). `op.add_column("skills", sa.Column(
     "requires_additional_documents", sa.Boolean(), nullable=False, server_default=sa.text("true")))`;
     `downgrade()` drops it. (Pattern: `0012_location_fan_out.py:40-48`.)
-  - [ ] **Schemas** `app/schemas/skill.py`: add to `SkillCreate` (`~:353`, `= True`), `SkillRead`
+  - [x] **Schemas** `app/schemas/skill.py`: add to `SkillCreate` (`~:353`, `= True`), `SkillRead`
     (`~:429`), `SkillMetadataUpdate` (`~:558`, `bool | None = None`), and to `_PATCH_NULL_REJECTED`
     (`~:529`) so an explicit `null` on PATCH → 422 (exactly like `location_dependent`).
-  - [ ] **Service** `app/services/skill_service.py`: add the param to `create_skill` (`~:747`) and pass it
+  - [x] **Service** `app/services/skill_service.py`: add the param to `create_skill` (`~:747`) and pass it
     into the `Skill(...)` constructor (`~:796`); check the other `Skill(...)` construction sites
     (`~:910/970/1035` — derive/import paths) and add it where a full skill is built. Add
     `"requires_additional_documents"` to `_AUDITED_VERBATIM` (`~:1809-1811`). PATCH is **generic**
     (`setattr` loop, `~:1781-1782`) — no PATCH service change beyond the schema field.
-  - [ ] **Router** `app/api/v1/skills.py`: POST create passes `requires_additional_documents=body.requires_additional_documents`
+  - [x] **Router** `app/api/v1/skills.py`: POST create passes `requires_additional_documents=body.requires_additional_documents`
     into the service (`~:145`). PATCH is generic (`model_dump(exclude_unset=True)`, `~:947`) — no change.
-  - [ ] **Consider** propagating to `app/schemas/skill_attachment.py` (`AttachedSkillRead`, beside
+  - [x] **Consider** propagating to `app/schemas/skill_attachment.py` (`AttachedSkillRead`, beside
     `location_dependent` `~:40`) and `app/schemas/client.py` (`ClientSkillRead` `~:149/166`) **if** the
     Run Console reads the flag off the attachment/picker payload (see FE Task 10 — the context-first Run
     Console gates `location_dependent` off `selectedSkill`, an `AttachedSkill`, so the flag likely needs to
@@ -267,18 +267,18 @@ toggle on the skill form, the Run Console "optional" labeling).
     every read-model/export site it appears (the derive request `SkillDeriveRequest` intentionally omits
     `location_dependent` — omit the new flag there too, matching).
 
-- [ ] **Task 7 — Tests (AC2-AC6)** — `tests/integration/`
-  - [ ] Migration/model test: create table via `alembic upgrade`, assert the partial unique index rejects a
+- [x] **Task 7 — Tests (AC2-AC6)** — `tests/integration/`
+  - [x] Migration/model test: create table via `alembic upgrade`, assert the partial unique index rejects a
     second `is_active=true` row for the same `(study_id, org_id)` but **allows** an inactive one. Follow the
     subprocess-`alembic` harness pattern established by Story 16.3's migration test
     (`tests/integration/services/test_client_skill_attachment_migration.py`) — in-process
     `alembic.command` collides with pytest-asyncio's loop (documented 16.3 gotcha); invoke `alembic` as a
     subprocess and dispose the shared async engine after.
-  - [ ] Route tests (new file or extend the study/location association test file): attach a protocol
+  - [x] Route tests (new file or extend the study/location association test file): attach a protocol
     (201), GET returns it, attach a **second** protocol → GET returns the new one and the old row is
     `is_active=false` (supersede), DELETE → GET returns none. Attaching a non-`parsed`/cross-org
     `file_ref_id` → 4xx (via `assert_file_ref_ready`). `assert_in_scope` 403 for out-of-scope study.
-  - [ ] Injection tests (extend `tests/integration/api/test_invocations.py` or the invocation test file):
+  - [x] Injection tests (extend `tests/integration/api/test_invocations.py` or the invocation test file):
     - Study with an active protocol + a non-location-dependent run → the job's persisted
       `inputs["file_ref_ids"]` **contains** the protocol id.
     - **Dedupe**: caller passes the protocol id explicitly → it appears **once**, not twice.
@@ -286,36 +286,36 @@ toggle on the skill form, the Run Console "optional" labeling).
     - Project/Client-level run (no study) → no injection.
     - Fan-out and location-dependent-single shapes → protocol injected for each (or once — assert the
       shape the dev implemented; the invariant is the protocol reaches the executor's document set).
-  - [ ] Skill-flag tests (extend `tests/integration/api/test_skills.py`): create a skill → default
+  - [x] Skill-flag tests (extend `tests/integration/api/test_skills.py`): create a skill → default
     `requires_additional_documents == true`; create with `false` → persisted; PATCH toggles it and writes
     an audit row (assert the `_AUDITED_VERBATIM` old→new entry); PATCH `null` → 422.
-  - [ ] Rebuild the api image before pytest (image bakes source — stale image = false results; documented
+  - [x] Rebuild the api image before pytest (image bakes source — stale image = false results; documented
     gotcha). No worker code changes here, but if any shared module the worker imports changed
     (`hierarchy_service`, `skill` model), rebuild the worker too and confirm (Epic 15 lesson).
 
-- [ ] **Task 8 — OpenAPI spec regen (AC7)** — `docs/api-spec.json`
-  - [ ] Regenerate via the repo's canonical export (Story 16.3: `python3 -m scripts.export_openapi`
+- [x] **Task 8 — OpenAPI spec regen (AC7)** — `docs/api-spec.json`
+  - [x] Regenerate via the repo's canonical export (Story 16.3: `python3 -m scripts.export_openapi`
     **inside the container** — module invocation, not bare script path, or `sys.path` breaks the
     `app.main` import; `docker cp` the spec out if the script writes inside the image). Do **not** hand-edit.
     The 3 new protocol routes + the new `skills` field must appear in the diff.
 
 ### velara-web
 
-- [ ] **Task 9 — API client + hooks for study protocol (AC1, AC3, AC6)** —
+- [x] **Task 9 — API client + hooks for study protocol (AC1, AC3, AC6)** —
   `src/api/hierarchy.ts`, `src/features/engagements/hooks/useEngagements.ts`
-  - [ ] `hierarchy.ts`: add `attachStudyProtocol(studyId, fileRefId)` → `POST /api/v1/studies/{studyId}/protocol`
+  - [x] `hierarchy.ts`: add `attachStudyProtocol(studyId, fileRefId)` → `POST /api/v1/studies/{studyId}/protocol`
     (body `{ file_ref_id }`), `getStudyProtocol(studyId)` → `GET .../protocol`, `detachStudyProtocol(studyId)`
     → `DELETE .../protocol`. Mirror `associateLocation`/`disassociateLocation` (`hierarchy.ts:130-137`).
     Add the `StudyProtocol` response type (mirror the backend `StudyProtocolRead`).
-  - [ ] `useEngagements.ts`: add hooks mirroring the **association-hook shape** (`useAssociateLocation`
+  - [x] `useEngagements.ts`: add hooks mirroring the **association-hook shape** (`useAssociateLocation`
     `:188-194`): `useStudyProtocol(studyId)` (query, key `['studyProtocol', studyId]` — **singular** key
     per the singular-record convention, like `['study', id]` `:207`), `useAttachStudyProtocol(studyId)` and
     `useDetachStudyProtocol(studyId)` (mutations invalidating `['studyProtocol', studyId]`). **Both
     wholesale mock files must be updated** — see Task 12.
 
-- [ ] **Task 10 — Study create/edit protocol upload + Protocol card (AC1, AC3)** —
+- [x] **Task 10 — Study create/edit protocol upload + Protocol card (AC1, AC3)** —
   `src/features/engagements/components/EngagementsScreen.tsx`
-  - [ ] **EntityModal** (`:174`): extend, do not fork. Add a conditional protocol-upload block (mirror the
+  - [x] **EntityModal** (`:174`): extend, do not fork. Add a conditional protocol-upload block (mirror the
     `isLocation` conditional field block `:427-480`) shown for `add-study` and `edit-study` modes: render
     `<DocumentUploadCard onFileRefIdChange={setProtocolFileRefId} onUploadingChange={setProtocolUploading} />`,
     hold `protocolFileRefId` in local state, and gate the submit button on `!protocolUploading` (upload
@@ -323,12 +323,12 @@ toggle on the skill form, the Run Console "optional" labeling).
     (`handleTrapKey` `:252-259`, initial focus `:242`) queries `'input,textarea,button:not([disabled])'`;
     `DocumentUploadCard` adds a `role="button"` div + hidden file input + a "Remove" button — verify tab
     order still cycles after adding it.
-  - [ ] **Submit wiring:** in the `add-study` branch (`:320-322`), after `createStudy` succeeds, if a
+  - [x] **Submit wiring:** in the `add-study` branch (`:320-322`), after `createStudy` succeeds, if a
     protocol was uploaded, call `attachStudyProtocol(newStudyId, protocolFileRefId)` **then** close. This
     is now a two-step (create → attach), so change `onSuccess: onClose` to chain the attach (await create,
     then attach, then close) — do NOT fire-and-forget. In the `edit-study` branch (`:323-328`), if a new
     protocol was uploaded, attach it (supersede). Report attach errors via the modal's `applyApiErrors`.
-  - [ ] **Protocol card on StudyDetail** (`:1112`, beside `StudyLocationsCard` at `:1156-1163`): add a
+  - [x] **Protocol card on StudyDetail** (`:1112`, beside `StudyLocationsCard` at `:1156-1163`): add a
     Protocol card structurally mirroring `StudyLocationsCard` (`:947-1020`) — `<Card>`, an `<h3>Protocol</h3>`
     heading (**unique** — do not reuse "Document"/"Locations"), the active protocol's filename row with a
     **Remove** button (→ `useDetachStudyProtocol`), and an **empty state** ("No protocol attached") with an
@@ -336,23 +336,23 @@ toggle on the skill form, the Run Console "optional" labeling).
     `<Icon name="doc2" />` for the row (a document glyph already in `Icon.tsx:43`) — **never emoji**
     (HARD rule). Fed by `useStudyProtocol(study.id)`.
 
-- [ ] **Task 11 — New skill-flag toggle on the skill form (AC5)** —
+- [x] **Task 11 — New skill-flag toggle on the skill form (AC5)** —
   `src/features/skills/` (`types.ts`, `components/SkillForm.tsx`, `SkillCreate.tsx`, `SkillEdit.tsx`)
-  - [ ] `types.ts`: add `requires_additional_documents?: boolean` to `SkillCreateInput` (`~:19`),
+  - [x] `types.ts`: add `requires_additional_documents?: boolean` to `SkillCreateInput` (`~:19`),
     `requires_additional_documents: boolean` to `Skill` (`~:71`), and add it to the `SkillUpdateInput`
     `Pick` list (`~:52`).
-  - [ ] `SkillForm.tsx`: add to `FormFields` (`~:67`), initial state
+  - [x] `SkillForm.tsx`: add to `FormFields` (`~:67`), initial state
     (`~:183`, `initial?.requires_additional_documents ?? true` — **default true**), dirty-tracking (`~:287`),
     and render a `<Toggle>` **cloning the `location_dependent` block** (`:425-436`) with a clear label
     (e.g. "Requires documents beyond the Study protocol") and helper text.
-  - [ ] `SkillCreate.tsx` (`~:46`): add to the `SkillCreateInput` object. `SkillEdit.tsx` (`~:152-154`):
+  - [x] `SkillCreate.tsx` (`~:46`): add to the `SkillCreateInput` object. `SkillEdit.tsx` (`~:152-154`):
     add a `buildPatchBody` diff block (`if (values.requires_additional_documents !== skill!.requires_additional_documents)
     patch.requires_additional_documents = ...`). API client (`src/api/skills.ts`) sends the whole object —
     no change beyond types.
 
-- [ ] **Task 12 — Run Console "optional" labeling + tests + gates (AC5, AC7)** —
+- [x] **Task 12 — Run Console "optional" labeling + tests + gates (AC5, AC7)** —
   `src/features/run/components/RunConsole.tsx`, co-located `.test.tsx`, the two wholesale mocks
-  - [ ] **RunConsole conditional labeling** (do NOT hide the card): both modes render `<DocumentUploadCard>`
+  - [x] **RunConsole conditional labeling** (do NOT hide the card): both modes render `<DocumentUploadCard>`
     unconditionally today — context-first `:717`, skill-first `:1031`. Add a computed
     `protocolCoversNeed` = "run context is a Study with an active protocol AND
     `!skill.requires_additional_documents`". When true, pass a prop to `DocumentUploadCard` (add an
@@ -366,7 +366,7 @@ toggle on the skill form, the Run Console "optional" labeling).
       the flag to `AttachedSkill` (Task 6), gate off `selectedSkill?.requires_additional_documents` (mirror
       `location_dependent` at `:510`); otherwise read the separately-fetched `fullSkill` (`:504`).
       Skill-first `skill` is a full `SkillWithVersion` (`:780`) — reads the flag directly.
-  - [ ] **Tests:** `EngagementsScreen.test.tsx` — Study-create with a protocol upload threads the
+  - [x] **Tests:** `EngagementsScreen.test.tsx` — Study-create with a protocol upload threads the
     `file_ref_id` into an attach call (extend the existing AC1 create test `:536-558`); Protocol card
     renders active protocol + Remove → detach; scope card-internal assertions with `within` and query the
     Protocol card by its **unique** `getByRole('heading', { name: 'Protocol' })` (do not assert bare
@@ -374,15 +374,15 @@ toggle on the skill form, the Run Console "optional" labeling).
     `SkillForm`/`SkillEdit` tests: the new toggle defaults on, round-trips through create + PATCH.
     RunConsole test: with a Study protocol + non-requiring skill, the upload card shows the optional hint;
     with a requiring skill or no protocol, it shows the normal prompt.
-  - [ ] **Both wholesale `useEngagements`-mock files MUST list the new hooks** or components crash on
+  - [x] **Both wholesale `useEngagements`-mock files MUST list the new hooks** or components crash on
     render ("not a function"): `src/routes/internal.test.tsx` (factory mock `:11-40`) and
     `src/pages/LogoutFlow.test.tsx` (factory mock `:21-40`). Add `useStudyProtocol`,
     `useAttachStudyProtocol`, `useDetachStudyProtocol` to **both**. Also add `vi.mocked(...).mockReturnValue(...)`
     entries in `EngagementsScreen.test.tsx`'s `beforeEach` (`~:182-193`).
-  - [ ] Gates: `tsc --noEmit` + `eslint` clean; `vitest run` green (0 regressions).
+  - [x] Gates: `tsc --noEmit` + `eslint` clean; `vitest run` green (0 regressions).
 
-- [ ] **Task 13 — Cross-repo gate (AC7)**
-  - [ ] Do NOT commit velara-api or velara-web (never-push-subrepos rule — dev-story only commits the
+- [x] **Task 13 — Cross-repo gate (AC7)**
+  - [x] Do NOT commit velara-api or velara-web (never-push-subrepos rule — dev-story only commits the
     top-level docs repo; code-review commits the subrepos post-review). Rebuild the api image before
     pytest (image bakes source). Rebuild the worker only if a worker-imported shared module changed.
 
@@ -598,12 +598,204 @@ without adding them to **both** `src/routes/internal.test.tsx` (`:11-40`) and `s
 - [Source: _bmad-output/planning-artifacts/architecture/implementation-patterns-consistency-rules.md] —
   envelope, error-code, TanStack Query, ltree-scope, migration conventions.
 
+## Change Log
+
+- 2026-07-23 — Implemented Story 16.4. Both subrepos. **Backend (velara-api):** new
+  `study_protocol_association` table (real FKs + `ON DELETE CASCADE` on both sides, surrogate `id` PK,
+  `is_active` history semantics, partial unique index guaranteeing at most one active protocol per
+  `(study_id, org_id)`) added via idempotent migration `0028_study_protocol_association` (also adds
+  `skills.requires_additional_documents`, default `true`). New service functions
+  `attach_study_protocol`/`get_active_study_protocol`/`detach_study_protocol` (supersede-not-delete on
+  re-attach) beside `associate_location_to_study`; `delete_study` intentionally left unchanged — the
+  cascade FK cleans up protocol rows automatically. New `POST/GET/DELETE /studies/{id}/protocol` routes
+  mirroring the location-association route shape. Request-side protocol injection added to
+  `queue_invocation` (one resolution point, all three invocation shapes + client-portal reuse; dedupes
+  against caller-supplied `file_ref_ids`; skip-with-log if a stale protocol fails the ready-check rather
+  than failing the run). New skill flag `requires_additional_documents` threaded end-to-end mirroring
+  `location_dependent` (model, migration, schemas incl. `_PATCH_NULL_REJECTED`, service incl.
+  `_AUDITED_VERBATIM`, router, `AttachedSkillRead`, `ClientSkillRead`/`ClientSkillRead.from_skill`,
+  `skill_export` round-trip) — default `true` (opposite `location_dependent`) so every pre-existing skill
+  keeps its Run Console upload visible. `docs/api-spec.json` regenerated (3 new routes + new field on 5+
+  schemas). **Frontend (velara-web):** new `StudyProtocol`/`StudyProtocolCreateInput` types + API client
+  functions + `useStudyProtocol`/`useAttachStudyProtocol`/`useDetachStudyProtocol` hooks mirroring the
+  association-hook shape. `EntityModal`'s `add-study`/`edit-study` modes gained an optional
+  `DocumentUploadCard` step; `add-study` submit is now two-step (create → attach using the new
+  `study_id`, never fire-and-forget); `edit-study` attaches/supersedes after any field PATCH. New
+  `StudyProtocolCard` on `StudyDetail` (Card+row+Remove, mirrors `StudyLocationsCard`) with a unique
+  "Protocol" heading. `requires_additional_documents` toggle added to `SkillForm`/`SkillCreate`/`SkillEdit`
+  mirroring `location_dependent`, default on. `DocumentUploadCard` gained an `optionalHint` prop (never
+  hides the card — only re-labels it); `RunConsole` computes the hint from `useStudyProtocol` + the
+  selected/locked skill's flag in both context-first and skill-first modes.
+  ⭐ **One implementation deviation from the mirrored `location_dependent` migration pattern, confirmed
+  necessary during testing**: migration `0028`'s DDL was made idempotent (`CREATE TABLE/INDEX IF NOT
+  EXISTS`, a column-existence check before `add_column`) — this repo's migration-test harness (0025-0027
+  precedent) stamps the test DB back to an earlier revision and replays `alembic upgrade head`, which
+  re-executes every migration up to and including this story's new head; a non-idempotent `CREATE TABLE`
+  collided with the already-materialized table from the harness's own prior run. `0025`/`0026`/`0027`
+  never needed this because they only ran once in the harness (they weren't `head` when this story's
+  migration was authored) — `0028` being the new `head` is what exposed the gap. No other migration
+  needed retrofitting.
+  ⭐ **Product decisions confirmed with the operator BEFORE implementation** (locked into the story by
+  create-story, not re-litigated during dev): (1) one **active** protocol per Study with **history**
+  retained (not a flat replace, not an unbounded list) — drove the partial-unique-index/surrogate-PK
+  table shape; (2) the new skill flag defaults to keep the upload **visible** (`true`, opposite
+  `location_dependent`'s `false`) — zero regression for existing skills; (3) the Run Console **never
+  hides** the upload card, only labels it optional — required a new `DocumentUploadCard` prop rather
+  than a conditional render.
+  Gates: `ruff` clean, `pytest` 336/336 passed across the touched-area suites (hierarchy, invocations,
+  skills, all 3 migration-test modules, openapi) + `tests/unit/test_client_run_fields.py` — 0 regressions;
+  a mid-session Docker-VM disk-full crash-looped Postgres (documented recurring gotcha,
+  `docker builder prune -a -f` + `docker image prune -a -f` reclaimed ~90GB) was infra, not a code
+  regression, and was confirmed via a clean re-run afterward. `mypy` has no tooling in this repo (not a
+  dependency) — consistent with the documented CI = ruff+pytest-only fact; not run. `tsc --noEmit` clean,
+  `eslint` clean (1 pre-existing unrelated `Icon.tsx` warning), `vitest run` 61 files / 759 tests passing
+  (+8 new, 0 regressions from the 16.3 baseline of 751). Both api and worker images rebuilt (shared ORM
+  models changed). Not committed to either subrepo (never-push-subrepos rule — only the top-level docs
+  repo is committed here; code-review commits the subrepos post-review). Status → review.
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
+claude-opus-4-8
+
 ### Debug Log References
+
+- The first full `pytest tests/` run (1500+ tests) showed 475 failures across unrelated modules
+  (`test_audit_service.py`, `test_execution_tasks.py`, `test_jobs.py`, etc.) immediately after the
+  targeted regression suite had passed cleanly. Root-caused to the Docker VM disk filling during
+  iterative image rebuilds this session (`PANIC: could not write to file
+  "pg_logical/replorigin_checkpoint.tmp": No space left on device"`, crash-looping Postgres) — a
+  documented recurring gotcha from prior stories, not a code regression. `docker builder prune -a -f` +
+  `docker image prune -a -f` reclaimed ~90GB; Postgres recovered cleanly on restart (WAL replay, no data
+  loss — both `velara_test` and the dev DB remained at migration head `0028`). Re-ran the full
+  touched-area regression suite (336 tests) afterward to confirm zero real regressions.
+- Migration `0028`'s first version used plain (non-idempotent) `CREATE TABLE`/`op.add_column`, which
+  passed in isolation but broke the pre-existing `0026`/`0027` migration tests once `0028` became head —
+  their `stamped_to_00XX` fixtures replay `alembic upgrade head` against a DB where `0028`'s objects
+  already exist (from this session's manual `alembic upgrade head` runs against `velara_test`). Fixed by
+  making `0028` idempotent (`CREATE TABLE/INDEX IF NOT EXISTS`, a `sa.inspect` column-existence check
+  before `add_column`) — mirrors the `CREATE EXTENSION IF NOT EXISTS` idempotency precedent already used
+  in migrations 0001/0011.
+- The first version of the protocol-injection tests used `celery_eager` + a real `_patch_llm_provider()`
+  context, which let the queued job actually execute and try to fetch the (fake, non-existent) protocol
+  document's content from MinIO at its `parsed_content_key`, failing with `botocore.exceptions.ClientError:
+  NoSuchKey`. Fixed by switching to `_post_invocation` (patches `run_skill.delay` out entirely) and
+  `_post_fan_out` (patches `celery.chord` out) — the existing precedent in this test file for asserting
+  on a queued job's persisted `inputs` without requiring real execution.
+- `EngagementsScreen.test.tsx`'s new protocol-upload-threading test initially used `vi.spyOn` on a
+  dynamically-imported `@/api/hierarchy` module, which did not intercept the call made through
+  `EngagementsScreen.tsx`'s own static import binding (a real network call was attempted, visible as a
+  jsdom preflight-400 stderr line, though it didn't fail the test). Switched to a proper `vi.mock('@/api/hierarchy',
+  ...)` with `vi.importActual` preserving every other export — the standard partial-module-mock pattern.
 
 ### Completion Notes List
 
+- **Task 1 (AC2):** `StudyProtocolAssociation` model added to `app/models/hierarchy.py` beside
+  `StudyLocationAssociation` — real FKs (`study_id`→`studies.id`, `file_ref_id`→`file_references.id`,
+  both `ON DELETE CASCADE`), surrogate UUID `id` PK (not composite — a history table needs multiple rows
+  per study), `is_active` boolean, partial unique index `uq_study_protocol_active` on `(study_id, org_id)
+  WHERE is_active`. Migration `0028_study_protocol_association` (idempotent DDL, see Debug Log) also adds
+  `skills.requires_additional_documents`. `down_revision="0027_client_only_grants"` (verified head).
+- **Task 2 (AC6):** New `app/schemas/study_protocol.py` — `StudyProtocolCreate`/`StudyProtocolRead`
+  (S3-key-omitting, mirrors `FileRefRead`).
+- **Task 3 (AC2, AC3, AC6):** `attach_study_protocol` (validates via `ingest_service.assert_file_ref_ready`,
+  supersedes any active row transactionally, audits), `get_active_study_protocol` (join to
+  `FileReference`, returns `None` when absent), `detach_study_protocol` (flips active→inactive,
+  no-op-safe) added to `hierarchy_service.py`. `delete_study` deliberately left unchanged — verified the
+  cascade FK handles cleanup (Trap 4).
+- **Task 4 (AC6):** `POST/GET/DELETE /studies/{id}/protocol` added to `hierarchy.py`, mirroring the
+  location-association route shape exactly (`get_study` + `assert_in_scope` + service call).
+- **Task 5 (AC4):** Protocol resolution added to `queue_invocation` right before `inputs_payload`
+  assembly — single point, keys off `body.study_id` (present/absent identically across all three
+  invocation shapes), dedupes against caller-supplied ids, and gracefully skips (structlog warning) rather
+  than failing the run if the protocol fails its ready-check at run time.
+- **Task 6 (AC5):** `requires_additional_documents` added at every site `location_dependent` appears
+  (model, migration, 4 schema sites, service incl. `_AUDITED_VERBATIM`, 3 `Skill(...)` constructor sites,
+  router, `AttachedSkillRead`, `ClientSkillRead` + its `from_skill` classmethod + docstring,
+  `skill_export.py` round-trip both directions) — default `True` everywhere (opposite `location_dependent`).
+  `SkillDeriveRequest` intentionally omits it, matching `location_dependent`'s omission there.
+- **Task 7 (AC2-AC6):** New `test_study_protocol_migration.py` (table existence, partial-unique-index
+  enforcement, column default), `test_hierarchy.py` additions (attach/get/detach/supersede,
+  not-ready-rejected, cross-org 404), `test_invocations.py` additions (injected/deduped/no-protocol/
+  no-study-context/fan-out), `test_skills.py` additions (default-true, false-persisted, PATCH+audit,
+  null-reject). Fixed 2 pre-existing test files that broke on the new required `Skill`/`AttachedSkill`
+  field: `test_client_run_fields.py`'s `SimpleNamespace` fixtures (not real ORM objects, so the new
+  field had to be added explicitly) and `test_openapi.py`'s `_CLIENT_SKILL_ALLOWED_FIELDS` lock set.
+- **Task 8 (AC7):** `docs/api-spec.json` regenerated via `python3 -m scripts.export_openapi` inside the
+  container; diff confirmed scoped to the 3 new routes + the new field on skill-facing schemas.
+- **Task 9 (AC1, AC3, AC6):** `attachStudyProtocol`/`getStudyProtocol`/`detachStudyProtocol` added to
+  `src/api/hierarchy.ts`; `useStudyProtocol`/`useAttachStudyProtocol`/`useDetachStudyProtocol` added to
+  `useEngagements.ts` mirroring the association-hook shape (singular `['studyProtocol', studyId]` key).
+- **Task 10 (AC1, AC3):** `EntityModal` gained a conditional `DocumentUploadCard` step for
+  `add-study`/`edit-study`; `add-study` submit is two-step (`createStudy` → `attachStudyProtocolApi` using
+  the raw API function, since `study.id` isn't known until create succeeds — never fire-and-forget);
+  `edit-study` submit attaches/supersedes after any field PATCH, or standalone if only the protocol
+  changed. New `StudyProtocolCard` (mirrors `StudyLocationsCard`'s Card+row+Remove shape, unique
+  `<h3>Protocol</h3>` heading, `<Icon name="doc2">`, no emoji) wired into `StudyDetail`.
+- **Task 11 (AC5):** `requires_additional_documents` toggle added to `SkillForm`/`SkillCreate`/`SkillEdit`
+  cloning the `location_dependent` `<Toggle>` block exactly, default `true`.
+- **Task 12 (AC5, AC7):** `DocumentUploadCard` gained an `optionalHint?: string` prop (renders a caption,
+  never hides the card). `RunConsole` computes `documentUploadHint` from `useStudyProtocol` + the
+  relevant skill's `requires_additional_documents` in both context-first (`selectedSkill`, an
+  `AttachedSkill` — flag added there too) and skill-first (`skill`, a full `SkillWithVersion`) modes.
+  Both wholesale `useEngagements` mocks (`internal.test.tsx`, `LogoutFlow.test.tsx`) updated with the 3
+  new hooks. New tests: protocol-threading on study create, Protocol card render/empty-state, skill-flag
+  toggle round-trip (create + PATCH), Run Console optional-hint (3 cases: shown/not-required-with-protocol,
+  hidden/required-with-protocol, hidden/no-protocol).
+- **Task 13 (AC7):** Both `velara-api` and `velara-worker` images rebuilt (shared ORM models changed).
+  Neither subrepo committed (never-push-subrepos rule).
+
 ### File List
+
+**velara-api:**
+- `app/models/hierarchy.py` (modified — new `StudyProtocolAssociation` model)
+- `app/models/skill.py` (modified — new `requires_additional_documents` column)
+- `app/db/migrations/versions/0028_study_protocol_association.py` (new)
+- `app/schemas/study_protocol.py` (new)
+- `app/schemas/skill.py` (modified)
+- `app/schemas/skill_attachment.py` (modified)
+- `app/schemas/client.py` (modified)
+- `app/services/hierarchy_service.py` (modified — new attach/get-active/detach functions)
+- `app/services/skill_service.py` (modified)
+- `app/services/skill_export.py` (modified)
+- `app/api/v1/hierarchy.py` (modified — 3 new protocol routes)
+- `app/api/v1/invocations.py` (modified — request-side injection)
+- `app/api/v1/skills.py` (modified)
+- `app/api/v1/client.py` (modified — docstring only)
+- `docs/api-spec.json` (regenerated)
+- `tests/integration/services/test_study_protocol_migration.py` (new)
+- `tests/integration/api/test_hierarchy.py` (modified)
+- `tests/integration/api/test_invocations.py` (modified)
+- `tests/integration/api/test_skills.py` (modified)
+- `tests/integration/api/test_openapi.py` (modified)
+- `tests/unit/test_client_run_fields.py` (modified — fixture fix for new required field)
+
+**velara-web:**
+- `src/features/engagements/types.ts` (modified — new `StudyProtocol`/`StudyProtocolCreateInput` types)
+- `src/api/hierarchy.ts` (modified — new attach/get/detach functions)
+- `src/features/engagements/hooks/useEngagements.ts` (modified — new hooks)
+- `src/features/engagements/components/EngagementsScreen.tsx` (modified — protocol upload + card)
+- `src/features/run/components/DocumentUploadCard.tsx` (modified — new `optionalHint` prop)
+- `src/features/run/components/RunConsole.tsx` (modified — optional-hint wiring)
+- `src/api/skillAttachments.ts` (modified — new field on `AttachedSkill`)
+- `src/features/skills/types.ts` (modified)
+- `src/features/skills/components/SkillForm.tsx` (modified — new toggle)
+- `src/features/skills/components/SkillCreate.tsx` (modified)
+- `src/features/skills/components/SkillEdit.tsx` (modified)
+- `src/features/admin/components/AccessControl.tsx` (modified — new field on attach payload)
+- `src/features/engagements/components/EngagementsScreen.test.tsx` (modified — new tests)
+- `src/features/skills/components/SkillForm.test.tsx` (modified — new test + fixture fix)
+- `src/features/skills/components/SkillEdit.test.tsx` (modified — new test + fixture fix)
+- `src/features/run/components/RunConsole.test.tsx` (modified — new tests + fixture fix)
+- `src/routes/internal.test.tsx` (modified — wholesale mock + fixture fix)
+- `src/pages/LogoutFlow.test.tsx` (modified — wholesale mock)
+- `src/api/skills.test.ts` (modified — fixture fix)
+- `src/features/admin/hooks/useNodeSkills.test.tsx` (modified — fixture fix)
+- `src/features/certification/components/CertificationScreen.test.tsx` (modified — fixture fix)
+- `src/features/run/hooks/useProjectSkills.test.tsx` (modified — fixture fix)
+- `src/features/skills/components/ConfirmDialog.test.tsx` (modified — fixture fix)
+- `src/features/skills/components/SkillCreate.test.tsx` (modified — fixture fix)
+- `src/features/skills/components/SkillDetail.test.tsx` (modified — fixture fix)
+- `src/features/skills/components/SkillRegistry.test.tsx` (modified — fixture fix)
+- `src/features/skills/hooks/useSkills.test.tsx` (modified — fixture fix)
