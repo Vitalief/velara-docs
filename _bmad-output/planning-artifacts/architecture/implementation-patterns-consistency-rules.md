@@ -145,3 +145,19 @@ Celery workers: every task emits `task.started` and `task.completed`/`task.faile
 7. Co-locate tests with source files
 8. Sentry `before_send` hook runs the same PHI sanitizer as the logging middleware — one shared sanitizer, two consumers
 9. Sentry DSNs stored in AWS Secrets Manager, injected via ECS task environment — never hardcoded
+10. **CI must be green before a push to `development`, no exceptions.** *(Added 2026-07-24 — GitHub Actions
+    CI failed on push after Story 16.6's code-review patches: `ruff check .` failed on `scripts/demo_seed_hierarchy.py`
+    (2 pre-existing E501 lines, never linted before landing on the branch), and `pytest` failed
+    `test_every_mutating_route_is_registered` because Story 16.4's `/studies/{study_id}/protocol` routes were
+    never added to the audit-coverage registry — a gap Story 16.6's own Dev Agent Record had already logged as
+    a known "pre-existing failure," which is not the same as safe-to-push.)*
+    - Run `ruff check .` (backend) and `tsc --noEmit && eslint` (frontend) **in the same environment CI uses**
+      — not just inside a possibly-stale local Docker container — before every push to a subrepo's tracked branch.
+      Run the full test suite the same way; a "gates green" claim in a story's Dev Agent Record is not a
+      substitute for actually re-running them against the exact commit being pushed.
+    - A test failure logged as "pre-existing, unrelated to this story" in a Dev Agent Record is a note for the
+      reviewer, not a license to push. Fix it or get explicit sign-off to defer it (recorded in
+      `deferred-work.md` or the story's Review Findings) BEFORE it reaches `origin/<branch>` — CI failing on
+      `development` blocks Deploy for everyone, not just the story that introduced the gap.
+    - Whoever pushes (`code-review`, per the never-push-subrepos rule) owns confirming CI is green on that push
+      — checking `gh run watch` or the Actions tab is part of "push," not a separate follow-up step.

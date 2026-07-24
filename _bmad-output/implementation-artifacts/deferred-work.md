@@ -2,6 +2,32 @@
 
 Items deferred during reviews — real but not actionable in their originating story.
 
+## CI failure on push to velara-api/development (2026-07-24) — pushed without re-verifying gates
+
+Pushing Story 16.6's already-committed code-review-patch commit to `origin/development` triggered a CI
+failure — `gh run watch` on run `30102992989` confirmed **both** `lint` and `test` jobs failed:
+
+- **`lint` — `ruff check .` — 2 pre-existing E501 (line too long) violations in `scripts/demo_seed_hierarchy.py`**
+  (lines 32 and 212, both >100 chars). Unrelated to Story 16.6's actual diff — this script was apparently
+  never linted before its own introduction. Needs a follow-up fix (wrap the two long lines) and, going
+  forward, `ruff check .` must be run and confirmed clean before any push (see the new Enforcement Rule #10
+  in `architecture/implementation-patterns-consistency-rules.md`).
+- **`test` — `pytest` — `test_every_mutating_route_is_registered` fails**: Story 16.4's
+  `POST`/`DELETE /api/v1/studies/{study_id}/protocol` routes were never added to the audit-coverage
+  registry (`tests/unit/test_audit_coverage_guard.py`). Story 16.6's own Dev Agent Record already named
+  this exact failure as "pre-existing/unrelated," confirmed reproducible on a clean pre-16.6 baseline — but
+  it was carried forward through 16.4, 16.5, and 16.6 without ever being fixed or given an explicit
+  `exempt=` registry entry with a documented reason. Needs a follow-up story/patch: either add proper
+  `audited` registry entries for both routes (with real audit events, matching the pattern Story 13.6 used
+  to close the equivalent 12.5 gap), or an explicit `exempt="..."` entry with a stated reason — whichever is
+  correct is a judgment call for whoever picks this up, but "silently failing in CI" is not an acceptable
+  resting state.
+
+**Process fix applied:** added Enforcement Rule #10 to
+`architecture/implementation-patterns-consistency-rules.md` — CI must be green before any push to a
+subrepo's tracked branch; a Dev Agent Record noting a failure as "pre-existing" is not a license to push
+without fixing or explicitly deferring it here first.
+
 ## Deferred from: code review of 16-4-study-creation-time-protocol-upload (2026-07-23)
 
 - **`add-study`'s protocol attach bypasses React Query cache invalidation.** `EntityModal`'s `add-study` submit branch (`velara-web/src/features/engagements/components/EngagementsScreen.tsx:336-347`) calls the raw `attachStudyProtocolApi` function imported directly from `@/api/hierarchy`, not the `useAttachStudyProtocol` hook — so no `['studyProtocol', studyId]` React Query cache entry is invalidated on a successful attach. Currently masked because the modal calls `onClose()` immediately after, so nothing re-reads the stale/missing cache entry before a fresh fetch would occur anyway. Two different code paths exist for conceptually the same "attach" operation (`edit-study` correctly uses the hook). Revisit if the create flow ever stops closing the modal immediately on success (e.g. an inline success state).
