@@ -527,3 +527,9 @@ Items deferred during reviews — real but not actionable in their originating s
 ## Deferred from: code review of 16-3-client-level-skill-attachment (2026-07-22)
 
 - `list_attached_skills_for_node` is now dead code — defined in `velara-api/app/services/skill_attachment_service.py` but no longer called after the list routes were repointed to the new `list_resolved_skills_for_node` resolver. Cleanup nit, no behavioral impact; safe to remove in a future pass.
+
+## Deferred from: code review of 16-6-hierarchy-scoped-run-history-on-project-study-screens (2026-07-24)
+
+- Location-dependent runs launched without a `study_id` never appear in any Project/Study "Recent Runs" panel: the job is stamped with the Location's Client-rooted `hierarchy_path` (Story 16.1), not a descendant of any Project/Study path, so the `<@` filter never matches — visible only in global Jobs History [velara-api/app/api/v1/invocations.py:226]. BY DESIGN per AC1 and the story's Out-of-scope (Location-level run history not in scope); recorded as a known boundary.
+- Reused `JobDetailPanel` "Open in Run Console →" navigates the user out of `/internal/engagements/...` to the Run Console, losing project/study origin context [velara-web/src/features/run/components/JobsHistory.tsx:183-184]. Inherited from AC2's row-rendering reuse; UX follow-up, not a defect.
+- `RecentRunsPanel` error state is a terminal dead-end with no retry affordance [velara-web/src/features/engagements/components/RecentRunsPanel.tsx:508-510]. Minor UX polish.

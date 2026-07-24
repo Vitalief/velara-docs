@@ -4,7 +4,7 @@ baseline_commit: e6ded75 (velara-api, development, story 16.4 code review); vela
 
 # Story 16.6: Hierarchy-Scoped Run History on Project/Study Screens
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -394,6 +394,40 @@ skills" `Card`'s closing tag in each component rather than trusting line numbers
   ltree hierarchy storage decision; `path <@ :scope_path` as the standing access-control pattern
   applied via FastAPI dependency, not per-route hand-rolling.
 
+## Review Findings
+
+_Code review 2026-07-24 (bmad-code-review). Three layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor), all completed. 12 raw findings → 1 decision-needed, 2 patch, 3 defer, 6 dismissed as noise._
+
+### Decision needed — RESOLVED
+
+- [x] [Review][Decision→Patch] **AC2 "View all in Jobs History" overflow affordance is missing** — RESOLVED: operator chose the **pre-filtered link** (option b). Applied as a patch (see Patch list). NOTE: this deliberately extends beyond the drafted "do NOT touch JobsHistory.tsx" out-of-scope line — a pre-filtered link requires `JobsHistory` to read the `?project_id=`/`?study_id=` query params (which `ListJobsParams`/`useJobs`/the backend already accept from this story) and forward them to `useJobs`. Operator authorized this scope extension by choosing the pre-filtered option over the plain `/internal/jobs` link. — the panel caps at `_RECENT_RUNS_PAGE_SIZE = 5` (`useJob.ts`) but `RecentRunsPanel.tsx` has NO View-all link and no total count; runs 6+ on a busy Project/Study are unreachable from the panel, partially defeating the story's stated purpose ("so I don't have to search the global Jobs History"). AC2 names this link explicitly as the mechanism that makes the small page size acceptable ("a 'View all in Jobs History' link (optionally pre-filtered, dev's call) covers anything beyond that"). Confirmed absent (only comment references at lines 20/23). The header's empty `justify-between` div is a tell a right-side element was intended and omitted — and Completion Notes never document dropping it. Flagged by Auditor + Edge Hunter. **Decision:** (a) add a plain `View all in Jobs History →` link → `/internal/jobs`, or (b) add a pre-filtered link (needs a Jobs History query-param filter that does not exist today — larger), or (c) accept the 5-row cap and document the deliberate omission in Completion Notes.
+
+### Patch — ALL APPLIED (2026-07-24)
+
+- [x] [Review][Patch] **AC2 pre-filtered "View all in Jobs History" link** — `RecentRunsPanel.tsx` now renders a `View all in Jobs History →` link (shown only when runs exist), pre-filtered to the same entity via `/internal/jobs?project_id=<id>` or `?study_id=<id>`. `JobsHistory.tsx` now reads those params with `useSearchParams` (study_id wins if both, mirroring the server's mutual-exclusion), forwards them to `useJobs`, shows a "Runs scoped to this project/study…" subtitle, and a "Clear filter" button back to the unfiltered view. Tests: 3 new in `RecentRunsPanel.test.tsx` (link present + correct href for project/study, hidden when empty; test render now wraps in `MemoryRouter`), 3 new in `JobsHistory.test.tsx` (param forwarding, study_id-wins, unfiltered default).
+
+- [x] [Review][Patch] **AND-composition docstrings + flagship test over-claim a protection that is unreachable and untested** [velara-api/app/services/job_service.py:299-307, tests/integration/api/test_jobs.py:306-359] — every reachable caller of `GET /api/v1/jobs` is `unrestricted=True` (router `RejectClient` + all internal roles), so `scope_paths` is always `None` at the call site and `node_path` is the sole fence; the docstrings' "a scoped caller cannot use this filter to see outside their own granted scope" describes no reachable request. Worse, `test_list_jobs_node_path_and_scope_paths_are_and_composed` uses two DISJOINT chains, so the out-of-scope job is excluded by `scope_paths` ALONE — the assertion passes even if the `node_path` predicate is deleted, so it does not prove AND-composition. Fix: make the test non-tautological (a job matching `node_path` but excluded only because it ALSO fails `scope_paths`, plus a control showing it present when only `node_path` is applied), and soften the docstring to state the composition is defensive-for-a-future-scoped-internal-role (matching `dependencies.py`'s REVISIT TRIGGER) rather than an active live protection. Code behavior is correct; this is a truth-in-documentation + real-coverage fix.
+  APPLIED: both docstrings reworded to state the composition is a defensive service-layer guarantee for a future scoped-internal-role (RejectClient + all-internal-unrestricted means no reachable HTTP caller exercises it today); test rewritten with a `node_path`-alone control (`node_only_total == 1`) proving non-tautology; `docs/api-spec.json` regenerated. 49/49 `test_jobs.py` pass.
+
+- [x] [Review][Patch] **Selected job detail can orphan after a background refetch** [velara-web/src/features/engagements/components/RecentRunsPanel.tsx] — APPLIED: added `selectedStillListed = !!selectedJobId && !!data?.items.some(j => j.id === selectedJobId)`; the inline `JobDetailPanel` renders only when the selected job is still in the current page, so a background refetch dropping it no longer orphans the detail.
+
+### Deferred (pre-existing or out-of-scope)
+
+- [x] [Review][Defer] **Location-dependent runs launched without a `study_id` never appear in any Project/Study panel** [velara-api/app/api/v1/invocations.py:226] — such a job is stamped with the Location's Client-rooted `hierarchy_path` (Story 16.1), which is NOT a descendant of any Project/Study path, so the `<@` filter never matches it. It shows only in global Jobs History. Confirmed by Edge Hunter — but this is BY DESIGN per AC1 ("Locations aren't ltree-nested under Study") and the story's explicit Out-of-scope ("Any Location-level run history … not in scope for this story's panel"). Deferred — documented known boundary, not this story's job.
+
+- [x] [Review][Defer] **Reused `JobDetailPanel` "Open in Run Console →" navigates the user out of the engagement screen** [velara-web/src/features/run/components/JobsHistory.tsx:183-184] — the inherited button does `navigate('/internal/skills/:skillId/run')`, yanking the user from `/internal/engagements/...` to the Run Console and losing the project/study origin context the engagement "Run" buttons thread through. Route is reachable (no crash), so this is a UX seam inherited wholesale by AC2's "reuse the row rendering" directive, not a defect. Deferred — worth a follow-up UX pass, out of scope here.
+
+- [x] [Review][Defer] **Panel error state is a terminal dead-end with no retry** [velara-web/src/features/engagements/components/RecentRunsPanel.tsx:508-510] — on `isError` it renders a static "Failed to load recent runs." with no retry, and since nothing invalidates the query there's no path back short of a route remount. Sibling cards on the same screen recover better. Low-impact UX polish, deferred.
+
+### Dismissed as noise (recorded, not actioned)
+
+- **Run-store desync** — `RecentRunsPanel` not calling `setActiveJobId` is CORRECT: `activeJobId` only drives `RunConsole`'s poll/restore state; syncing it from an engagement panel would pollute the Run Console's restore. False positive.
+- **Both-keys / empty prop-union runtime states** — the `{projectId} | {studyId}` union is enforced at every (both) call sites; reaching a both/empty state requires deliberately defeating the type. Theoretical.
+- **`AmbiguousJobHierarchyFilterError` unreachable from shipped FE** — correct defensive coding; AC1 mandates the 422; the shipped client structurally can't send both params, but a hand-crafted request can. Working as intended.
+- **Empty-state text doesn't mirror the exact "No skills available — attach at the Client." idiom** — "No runs yet." is a valid empty state; the style-mirror was a soft suggestion. Cosmetic.
+- **Backend tests are integration (`test_jobs.py`) not co-located `job_service_test.py`** — coverage is real and complete (8 tests, AC1/AC3); placement-wording drift only, File List reflects reality.
+- **4 symbols promoted to `export` couples engagements→run internals** — AC2 explicitly directed this reuse ("add `export` to each — smallest diff"). Working as designed.
+
 ## Dev Agent Record
 
 ### Agent Model Used
@@ -441,6 +475,16 @@ None. No failed gates requiring iteration beyond the two setup issues below (bot
 - `src/features/engagements/components/RecentRunsPanel.test.tsx` (new — co-located tests)
 - `src/features/engagements/components/EngagementsScreen.tsx` (modified — imports `RecentRunsPanel`; `ProjectDetail`/`StudyDetail` each render it after their "Available skills" card)
 - `src/features/engagements/components/EngagementsScreen.test.tsx` (modified — 2 new tests confirming the panel renders on Project/Study detail)
+
+**Code-review patches (2026-07-24, applied post-review):**
+- `src/features/engagements/components/RecentRunsPanel.tsx` (patch — added pre-filtered "View all in Jobs History" link (AC2 overflow affordance) + orphaned-detail-on-refetch guard)
+- `src/features/engagements/components/RecentRunsPanel.test.tsx` (patch — `MemoryRouter` wrapper; +3 tests for the View-all link)
+- `src/features/run/components/JobsHistory.tsx` (patch — reads `?project_id=`/`?study_id=` via `useSearchParams`, forwards to `useJobs`, scoped subtitle + "Clear filter"; this extends the drafted "do NOT touch JobsHistory.tsx" line per the operator's pre-filtered-link decision)
+- `src/features/run/components/JobsHistory.test.tsx` (patch — +3 tests: param forwarding, study_id-wins, unfiltered default)
+- `app/api/v1/jobs.py` (patch — route docstring reworded: AND-composition is a defensive service-layer guarantee, not a live HTTP protection)
+- `app/services/job_service.py` (patch — `list_jobs` docstring reworded to match)
+- `tests/integration/api/test_jobs.py` (patch — `test_list_jobs_node_path_and_scope_paths_are_and_composed` rewritten non-tautologically with a node_path-alone control)
+- `docs/api-spec.json` (regenerated — reflects the reworded route docstring)
 
 ## Change Log
 
