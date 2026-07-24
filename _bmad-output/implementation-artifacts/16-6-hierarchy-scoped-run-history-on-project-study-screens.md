@@ -4,7 +4,7 @@ baseline_commit: e6ded75 (velara-api, development, story 16.4 code review); vela
 
 # Story 16.6: Hierarchy-Scoped Run History on Project/Study Screens
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -77,36 +77,36 @@ Locations/Skill-Attachment/Protocol-Upload/Menu-consolidation. Do not wait on or
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Backend: add `project_id`/`study_id` filter to `GET /api/v1/jobs` (AC1, AC3)**
-  - [ ] `app/api/v1/jobs.py` (route, currently lines 79-121): add `project_id: Annotated[UUID | None,
+- [x] **Task 1 — Backend: add `project_id`/`study_id` filter to `GET /api/v1/jobs` (AC1, AC3)**
+  - [x] `app/api/v1/jobs.py` (route, currently lines 79-121): add `project_id: Annotated[UUID | None,
     Query()] = None` and `study_id: Annotated[UUID | None, Query()] = None`. Reject both-provided with
     a 422 (use the existing domain-exception → error-envelope pattern, not a bare `HTTPException`, per
     the "Error handling" architecture rule — check `app/api/v1/` for the codebase's existing "mutually
     exclusive params" validation idiom before inventing one; if none exists, a simple `if project_id and
     study_id: raise ...` with a typed error is fine).
-  - [ ] When `project_id` is set: call `hierarchy_service.get_project(session, project_id, org_id)` to
+  - [x] When `project_id` is set: call `hierarchy_service.get_project(session, project_id, org_id)` to
     resolve + org/existence-check it (already 404s appropriately — mirrors `list_studies`'s own
     call to `get_project` first, `hierarchy_service.py:633-641`), then read its `hierarchy_path`.
     Same for `study_id` via `get_study`.
-  - [ ] `app/services/job_service.py`: extend `list_jobs(...)` (currently lines 270-333) with a new
+  - [x] `app/services/job_service.py`: extend `list_jobs(...)` (currently lines 270-333) with a new
     optional `node_path: str | None = None` param (a single ltree path, not a list — distinct from the
     existing `scope_paths: list[str] | None`). Add the single-path predicate `text("hierarchy_path <@
     :node_path").bindparams(node_path=node_path)` **AND**-ed with the existing `scope_paths <@ ANY(...)`
     clause when both are present — mirror `audit_service.py:261-264`'s precedent for AND-ing an
     ANY-based scope fence with a second, narrower single-path `<@` clause (that file's `client_path`
     fence is the closest existing analog to what this story needs).
-  - [ ] Preserve every existing behavior: the `scope_paths is not None and len == 0` short-circuit
+  - [x] Preserve every existing behavior: the `scope_paths is not None and len == 0` short-circuit
     (job_service.py:300-301), the `parent_job_id IS NULL` top-level-only filter, the outer-join-for-
     summary pattern (do NOT switch to `selectinload`), the `ORDER BY created_at DESC, id DESC`
     tiebreaker, and the two-query (count + rows) pagination shape.
-  - [ ] Update the route docstring (lines 89-99) to document the new params and their AND-composition
+  - [x] Update the route docstring (lines 89-99) to document the new params and their AND-composition
     with hierarchy scope.
 
-- [ ] **Task 2 — Frontend: extend the jobs API client + add a hierarchy-scoped hook (AC2)**
-  - [ ] `src/api/jobs.ts`: add `project_id?: string` and `study_id?: string` to `ListJobsParams`
+- [x] **Task 2 — Frontend: extend the jobs API client + add a hierarchy-scoped hook (AC2)**
+  - [x] `src/api/jobs.ts`: add `project_id?: string` and `study_id?: string` to `ListJobsParams`
     (currently lines 133-137); `listJobs()` (line 162) already spreads `params` into axios params, no
     change needed there beyond the type.
-  - [ ] `src/features/run/hooks/useJob.ts`: add `useProjectRuns(projectId: string)` and
+  - [x] `src/features/run/hooks/useJob.ts`: add `useProjectRuns(projectId: string)` and
     `useStudyRuns(studyId: string)` — **do not** copy `useJobs`'s loose `['jobs', params]` query-key
     shape (a pre-existing minor inconsistency in this codebase, not this story's job to fix elsewhere).
     Instead follow the `[entity, parentId]` convention already used by sibling engagement hooks
@@ -116,12 +116,12 @@ Locations/Skill-Attachment/Protocol-Upload/Menu-consolidation. Do not wait on or
     `listJobs({ study_id: studyId, per_page: <panel page size> })`. Reuse the `staleTime: 30_000`
     convention from `useJobs`.
 
-- [ ] **Task 3 — Frontend: build the "Recent Runs" panel component (AC2)**
-  - [ ] New component (suggest `src/features/engagements/components/RecentRunsPanel.tsx` — feature-
+- [x] **Task 3 — Frontend: build the "Recent Runs" panel component (AC2)**
+  - [x] New component (suggest `src/features/engagements/components/RecentRunsPanel.tsx` — feature-
     first placement per architecture conventions; co-locate its test file). Props: `projectId?: string`
     XOR `studyId?: string` (dev's call on exact prop shape — a single `entityType`/`entityId` pair is
     also fine, match whichever reads cleaner against the two call sites below).
-  - [ ] Render as a `Card` (matching `ChildListCard`'s visual idiom, per AC2), listing rows built from
+  - [x] Render as a `Card` (matching `ChildListCard`'s visual idiom, per AC2), listing rows built from
     `JobRow`'s markup (`src/features/run/components/JobsHistory.tsx:197-233`) — skill name (with the
     existing "Deleted skill" italic fallback for a null joined skill), `JobStatusBadge`, cost via
     `fmtCost`, timestamp via `formatTs`. **Confirmed: `formatTs`, `fmtCost`, `JobRow`, and
@@ -129,40 +129,40 @@ Locations/Skill-Attachment/Protocol-Upload/Menu-consolidation. Do not wait on or
     — reuse requires either adding `export` to each (smallest diff; check for naming collisions at the
     new import site first) or extracting them to a shared module. Do not assume they're importable
     as-is; verify the compile error is expected, not a sign something else is wrong.
-  - [ ] "View full result": reuse the existing `JobDetailPanel`/`useJob(jobId)` slide-in pattern
+  - [x] "View full result": reuse the existing `JobDetailPanel`/`useJob(jobId)` slide-in pattern
     (`JobsHistory.tsx:31-193`) if it can be reasonably lifted into this panel without duplicating major
     logic; otherwise a simple "View all in Jobs History" link is an acceptable AC2 fallback for the
     per-row "link to full result" requirement — dev's call, document the choice in Completion Notes.
-  - [ ] Empty state: no runs yet for this entity — a plain, unobtrusive empty message (mirror the
+  - [x] Empty state: no runs yet for this entity — a plain, unobtrusive empty message (mirror the
     existing "No skills available — attach at the Client." empty-state text style used elsewhere in
     this file).
 
-- [ ] **Task 4 — Wire the panel into `ProjectDetail` and `StudyDetail` (AC2)**
-  - [ ] `EngagementsScreen.tsx`: `ProjectDetail` (currently lines 1129-1220) — insert
+- [x] **Task 4 — Wire the panel into `ProjectDetail` and `StudyDetail` (AC2)**
+  - [x] `EngagementsScreen.tsx`: `ProjectDetail` (currently lines 1129-1220) — insert
     `<RecentRunsPanel projectId={project.id} />` as a new sibling `Card` after the "Available skills"
     card closes (after line 1217's `</Card>`), before the component's closing `</div>`.
-  - [ ] `StudyDetail` (currently lines 1222-1331) — insert `<RecentRunsPanel studyId={study.id} />` the
+  - [x] `StudyDetail` (currently lines 1222-1331) — insert `<RecentRunsPanel studyId={study.id} />` the
     same way, after line 1328's `</Card>`.
-  - [ ] **Verify these line numbers against the current working tree before editing** — they reflect
+  - [x] **Verify these line numbers against the current working tree before editing** — they reflect
     16.5's uncommitted changes (`HeaderMenu`/`Menu` refactor) already in the working tree as of this
     story's drafting; if the tree has moved further since, re-locate by searching for the "Available
     skills" `Card` closing tag in each component, not by trusting these numbers blindly.
 
-- [ ] **Task 5 — Tests**
-  - [ ] Backend: `job_service_test.py` (or equivalent, co-located) — new tests for `list_jobs` with
+- [x] **Task 5 — Tests**
+  - [x] Backend: `job_service_test.py` (or equivalent, co-located) — new tests for `list_jobs` with
     `node_path` set: (a) filters to only jobs under that path, (b) AND-composes correctly with
     `scope_paths` (a job under the requested path but outside the caller's scope is excluded), (c) a
     Project-level filter includes a descendant Study's jobs, (d) `project_id`+`study_id` both provided
     → 422. Route-level test for the new query params + the org/existence 404 via `get_project`/
     `get_study`.
-  - [ ] Frontend: `RecentRunsPanel.test.tsx` (co-located) — renders rows from a mocked hook response,
+  - [x] Frontend: `RecentRunsPanel.test.tsx` (co-located) — renders rows from a mocked hook response,
     empty state when no runs, skill-name fallback for a deleted skill. `EngagementsScreen.test.tsx`:
     confirm `ProjectDetail`/`StudyDetail` render the new panel (mock `useProjectRuns`/`useStudyRuns`
     the same way sibling hooks are already mocked in this file's existing wholesale `useEngagements`
     mock — check whether the new hooks need adding to that mock file, per Story 16.5's Dev Notes
     reminder to re-run `src/routes/internal.test.tsx`/`src/pages/LogoutFlow.test.tsx` after any new
     hook is introduced).
-  - [ ] Gates: `pytest` (velara-api) green; `tsc --noEmit` + `eslint` clean + `vitest run` green, 0
+  - [x] Gates: `pytest` (velara-api) green; `tsc --noEmit` + `eslint` clean + `vitest run` green, 0
     regressions (velara-web) — including the two wholesale `useEngagements`-mock files per the Story
     16.5 precedent.
 
@@ -398,11 +398,49 @@ skills" `Card`'s closing tag in each component rather than trusting line numbers
 
 ### Agent Model Used
 
+Claude Sonnet 5
+
 ### Debug Log References
+
+None. No failed gates requiring iteration beyond the two setup issues below (both environment/tooling, not implementation bugs):
+- The running `velara-api` Docker container has no volume mount — it was built from an older image and had to be rebuilt (`docker compose build api && docker compose up -d api`) before test runs would see this story's source changes at all. Root-caused via `docker compose config` showing no `volumes:` entry.
+- The `api` container's default `.env` sets `AUTH_BACKEND=cognito` (correct for real local dev), which 401s a `DevAuthProvider`-minted test JWT. Integration tests must override with `-e AUTH_BACKEND=dev -e DATABASE_URL=postgresql+asyncpg://velara:velara@postgres:5432/velara_test` on the `docker compose exec` invocation (Pydantic settings read real env vars over `.env` file values). Confirmed this 401 also reproduces identically on a clean pre-story baseline (`git stash` + rerun), so it is a pre-existing environment quirk, not something this story introduced or broke.
 
 ### Completion Notes List
 
+**Backend (`velara-api`):**
+- `GET /api/v1/jobs` gained optional `project_id`/`study_id` query params (mutually exclusive — both provided is a 422 `JOB_AMBIGUOUS_HIERARCHY_FILTER`, modeled on the existing `AmbiguousLocationError` idiom in `invocations.py`, the only prior "mutually exclusive params" precedent in this codebase). Each resolves via the existing org-scoped `hierarchy_service.get_project`/`get_study` (404 on not-found/cross-org, reused verbatim — no new lookup).
+- `job_service.list_jobs` gained an optional `node_path: str | None` param — a single ltree path, AND-composed with the existing `scope_paths <@ ANY(...)` fence via a second `text("hierarchy_path <@ CAST(:node_path AS ltree)")` clause, mirroring `audit_service.py`'s `client_path` fence precedent exactly (same `.where(*where)` splat-AND idiom). Every existing behavior (empty-scope short-circuit, `parent_job_id IS NULL` filter, outer-join-for-summary pattern, tiebreaker ordering, two-query pagination) preserved unchanged — confirmed by re-reading the full function before and after the edit.
+- **AND-composition reachability note** (worth flagging for future readers, not a defect): every role that can currently reach `GET /api/v1/jobs` (`ma_tech`/`consultant`/`admin`) is always `unrestricted=True`, and the one role `scope_paths` would apply to (`client`) is blocked by the router's own `RejectClient` dependency before scope resolution even runs. So the AND-composition this story adds is real, correct, and exercised by a direct service-layer test (`test_list_jobs_node_path_and_scope_paths_are_and_composed`) — but has no currently-reachable end-to-end HTTP path. This matches `dependencies.py`'s own documented "REVISIT TRIGGER" for a future scoped-internal-role; AC3 explicitly asked for defensive implementation now rather than waiting for that trigger to fire, which is what was built.
+- `docs/api-spec.json` regenerated via `scripts/export_openapi.py` (run inside the `api` container, since the local `.venv` didn't have the package installed; the container's `/app` has no host volume mount, so the generated file had to be `docker cp`'d out and copied over the host copy — documented as a Debug Log item, not repeated here).
+
+**Frontend (`velara-web`):**
+- `ListJobsParams` gained `project_id?`/`study_id?`; `listJobs()` needed no change (already spreads params).
+- Two new hooks, `useProjectRuns`/`useStudyRuns` in `useJob.ts`, using the `['jobs', 'project'|'study', id]` query-key shape (matching `useEngagements.ts`'s sibling-hook convention) rather than `useJobs`'s own loose `['jobs', params]` key, per the story's explicit instruction.
+- New `RecentRunsPanel.tsx` component (feature-first, co-located test) reuses `JobRow`/`JobDetailPanel`/`formatTs`/`fmtCost` from `JobsHistory.tsx` — all four were module-private (no `export`) as the story's Dev Notes anticipated exactly; added `export` to each (smallest-diff option the story called out), no naming collisions at the new import site. `JobDetailPanel`'s existing slide-in pattern was reused directly (not the "View all in Jobs History" link fallback) since it lifted in cleanly with a `useState<string|null>` toggle, mirroring `JobsHistory`'s own `selectedJobId` state shape.
+- **Trap 6 resolved as recommended (option b):** the Project-level panel shows skill+outcome+timestamp only, with no per-row Study attribution for descendant-Study jobs — `JobSummary` was not extended with a new field, matching AC2's literal scope and the story's explicit recommendation.
+- Card styling: `EngagementsScreen.tsx`'s `Card` primitive is module-private, so `RecentRunsPanel.tsx` replicates its one-line className (`rounded-lg border border-line bg-surface px-[22px] py-5 shadow-sm`) rather than reaching into that file's internals for a single trivial wrapper div — documented inline as a comment so a future reader doesn't mistake it for accidental drift.
+- `EngagementsScreen.tsx`: `ProjectDetail`/`StudyDetail` line numbers (1129-1220 / 1222-1331) matched the story's working-tree-verified numbers exactly — no drift since drafting, both insertions landed exactly where the story specified.
+- Fast-refresh eslint warnings: exporting `formatTs`/`fmtCost` (non-component helpers) from `JobsHistory.tsx` adds 2 new `react-refresh/only-export-components` warnings (0 errors) — same category as the 1 pre-existing warning in `Icon.tsx` from Story 16.5. Gate is 0 errors, not 0 warnings; left as-is rather than over-engineering a helpers-only file split for two trivial re-exports.
+
+**Test results:**
+- Backend: 8 new tests (7 integration in `test_jobs.py` covering AC1/AC3's project/study filter, sibling-study exclusion, 422 on both-provided, 404 on unknown project/study, bad-UUID 422; 1 service-layer AND-composition test using a real Client-tier grant per Story 16.3's grant-tier constraint). Full suite: 1580 passed, 3 skipped, 2 pre-existing failures unrelated to this story (confirmed identical on a clean pre-story baseline via `git stash`): `test_audit_coverage_guard.py::test_every_mutating_route_is_registered` (flags Story 16.4's protocol routes, predates this story) and `test_auth_and_authz_auditing.py::test_repeated_denials_are_deduped`.
+- Frontend: 8 new tests (6 in `RecentRunsPanel.test.tsx`, 2 in `EngagementsScreen.test.tsx`). Full suite: 63 files / 776 tests, 0 regressions (up from 62/768 at Story 16.5's baseline). `tsc --noEmit` clean; `eslint src --ext .ts,.tsx` clean (0 errors, 3 warnings — 1 pre-existing + 2 new, both explained above).
+- Zero `velara-api`/`velara-web` commits made by this story (never-push-subrepos rule) — only the top-level docs repo is committed by dev-story.
+
 ### File List
+
+- `app/api/v1/jobs.py` (modified — `project_id`/`study_id` query params, `AmbiguousJobHierarchyFilterError`, docstring update)
+- `app/services/job_service.py` (modified — `list_jobs` gains `node_path` param, AND-composed with `scope_paths`)
+- `tests/integration/api/test_jobs.py` (modified — `_create_job_in_db` gains optional `hierarchy_path` param; new `_create_hierarchy_chain` helper; 8 new tests)
+- `docs/api-spec.json` (regenerated — reflects the new `project_id`/`study_id` query params)
+- `src/api/jobs.ts` (modified — `ListJobsParams` gains `project_id?`/`study_id?`)
+- `src/features/run/hooks/useJob.ts` (modified — new `useProjectRuns`/`useStudyRuns` hooks)
+- `src/features/run/components/JobsHistory.tsx` (modified — `formatTs`, `fmtCost`, `JobRow`, `JobDetailPanel` changed from module-private to exported for reuse; no behavior change to the global Jobs History screen itself)
+- `src/features/engagements/components/RecentRunsPanel.tsx` (new — the "Recent Runs" panel component)
+- `src/features/engagements/components/RecentRunsPanel.test.tsx` (new — co-located tests)
+- `src/features/engagements/components/EngagementsScreen.tsx` (modified — imports `RecentRunsPanel`; `ProjectDetail`/`StudyDetail` each render it after their "Available skills" card)
+- `src/features/engagements/components/EngagementsScreen.test.tsx` (modified — 2 new tests confirming the panel renders on Project/Study detail)
 
 ## Change Log
 
@@ -423,3 +461,12 @@ skills" `Card`'s closing tag in each component rather than trusting line numbers
   `RejectClient`+`RequireInternal`, but the dependency's own revisit-trigger comment flags this may not
   hold forever). `velara-web` working tree carries Story 16.5's uncommitted changes — this story's FE
   edits land on top of that tree, not a clean HEAD; do not discard it.
+- 2026-07-24 — Implemented Story 16.6 (dev-story). Backend: `GET /api/v1/jobs` gained mutually-exclusive
+  `project_id`/`study_id` filters, AND-composed with the existing hierarchy-scope fence exactly per the
+  story's Dev Notes; `docs/api-spec.json` regenerated. Frontend: new `RecentRunsPanel` wired into
+  `ProjectDetail`/`StudyDetail`, reusing `JobRow`/`JobDetailPanel`/`formatTs`/`fmtCost` from
+  `JobsHistory.tsx` (exported for reuse, global Jobs History screen itself unchanged). All line-number
+  predictions in the story matched the working tree exactly — zero drift since drafting. 16 new tests
+  (8 backend, 8 frontend), 0 regressions: backend 1580 passed/3 skipped/2 pre-existing-unrelated
+  failures (confirmed against a clean pre-story baseline); frontend 63 files/776 tests, `tsc`/`eslint`
+  clean. Not committed to `velara-web`/`velara-api` (never-push-subrepos rule).
