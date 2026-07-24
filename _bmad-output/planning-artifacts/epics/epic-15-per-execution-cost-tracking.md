@@ -4,7 +4,7 @@
 
 Every skill invocation, and every AI-assisted skill-adaptation call, that makes an LLM call records its own token counts and computed dollar cost as a permanent, queryable fact — surfaced per-invocation, per-skill, per-user, and per-adaptation — closing the gap where cost only ever existed as a single opaque platform-wide number.
 
-**FRs covered:** FR-USE-07 (new).
+**FRs covered:** USE-09 (new — per-execution/per-skill/per-user cost). _(Corrected 2026-07-24: previously cited the non-existent `FR-USE-07`; the real requirement is now recorded as PRD §5.11 USE-09 — see readiness-report finding F1/F2.)_
 
 **Sequencing:** After Epic 14 (no technical dependency — different files; sequenced after simply because Epic 14 is actively in flight). Four stories: **15.1** (persist structured cost at execution time — the risk-bearing migration story) → **15.2** (surface cost on the Job API + Run Console/Jobs History UI, depends on 15.1) → **15.3** (per-skill/per-user cost in Analytics, depends on 15.1; independent of 15.2) → **15.4** (cost the adapter-propose LLM spend, depends on 15.1 for the shared pricing table only; independent of 15.2 and 15.3).
 

@@ -2,6 +2,8 @@
 
 Requirements are numbered for traceability. BRD IDs are noted in parentheses where applicable. Priority: **P1** = Phase 1 required, **P2** = Phase 2 required, **P3** = architected for, built later.
 
+> **§5.0 — Single source of truth (reconciled 2026-07-24, readiness-report finding F1/F2/F3).** This §5 is the **authoritative Functional Requirements registry**. A parallel `epics/requirements-inventory.md` had drifted into a second registry with an `FR-<DOMAIN>-NN` prefix while §5 used bare `<DOMAIN>-NN` IDs; the two diverged (e.g. `FR-USE-07` = cost in the inventory, but §5 `USE-07` = audit name-resolution). That inventory is now **retired** — its unique content (`ORG-07`, `SEC-09..17`) has been merged in above, and it points here. **ID scheme:** bare domain-prefix IDs (`USE-09`, not `FR-USE-09`). Epics cite these IDs. New capabilities recorded this pass: **USE-09** (per-execution cost, Epic 15 — retroactive), **USE-10** (LLM-call observability/LangSmith, Epic 17), **CRT-06** (technical-certification evidence gate, Epic 17).
+
 ---
 
 ## 5.1 Organizational Hierarchy Management
@@ -14,6 +16,7 @@ Requirements are numbered for traceability. BRD IDs are noted in parentheses whe
 | ORG-04 | All access control policies, audit logs, and skill invocation records reference the full hierarchy path (Org → Client → Project → Study → Location where applicable). | P1 |
 | ORG-05 | The data model supports multiple Organizations without schema changes, even though Phase 1 deploys with one. | P1 |
 | ORG-06 | The Organization layer is never exposed in the UI. All user-facing paths, labels, and audit displays begin at the Client level. The UI nav section for this tree is labelled "Engagements." | P1 |
+| ORG-07 | The Engagements screen provides an on-screen **search/filter** to locate a Client/Project among potentially hundreds. Phase 1: client-side search/filter (mock — operates on loaded data); server-side search is deferred (P2). | P1 |
 
 ---
 
@@ -193,6 +196,9 @@ Certification and validation are a single unified workflow surface in the UI. Th
 | CRT-03 | **Methodological certification (Matt key):** Skill produces Vitalief-grade output; aligns with established methodology; voice and style match Vitalief standards. | P1 |
 | CRT-04 | Both certifications are recorded against the specific skill version. A new version requires re-certification before it can become `client-ready`. | P1 |
 | CRT-05 | The certification workflow records: certifier identity, certification type (technical/methodological), timestamp, skill ID and version, and any notes. This record is immutable. | P1 |
+| CRT-06 | **Technical-certification evidence gate.** Before the technical certification key (CRT-02) can be recorded for a skill version, a documented trail of **at least five dry-runs with differing outputs** must exist for that exact version — real invocations retained as evidence the skill was exercised. The gate applies to the technical key only (not methodological, CRT-03); the evidence trail does not carry over to a new version (a re-certified version needs its own trail, consistent with CRT-04). This adds a precondition to CRT-02; it does not alter the immutable certification record (CRT-05) or the two-key sequence (CRT-01). | P1 (Epic 17) |
+
+> **Added 2026-07-24** (`sprint-change-proposal-2026-07-24.md`; readiness-report finding F3): **CRT-06** records the certification-evidence gate delivered by **Epic 17 Story 17.3**. CRT-02 already lists technical-certification *criteria* ("handles representative and adversarial inputs"); CRT-06 adds the *procedural evidence obligation* — an ma_tech member must have a documented five-run trail before turning the technical key. Epic 17's epic file must have its `FRs covered` corrected from the non-existent `FR-CERT-04` to **CRT-06**.
 
 ---
 
@@ -221,8 +227,12 @@ Certification and validation are a single unified workflow surface in the UI. Th
 | USE-06 | A value-reporting view summarizes usage data per engagement for renewal conversations with clients. | P2 |
 | USE-07 | Audit log displays resolve hierarchy UUID segments to human-readable Client/Project/Study/Location **names** (server-side enrichment; graceful fallback for deleted entities). | P1 (Epic 12) |
 | USE-08 | Audit log entries render a **distinct icon per event type** (not a single play icon for all rows). | P2 (Epic 12) |
+| USE-09 | **Per-execution cost is a first-class, queryable fact.** Every completed invocation (and every AI-assisted skill-adaptation LLM call) records its own token counts and computed dollar cost, surfaced per-invocation, per-skill, and per-user — not only as a single platform-wide aggregate. Unknown-model calls store no fabricated cost (NULL, never a wrong default). | P1 (Epic 15) |
+| USE-10 | **Individual LLM calls are traceable via a secondary observability sink (LangSmith).** Each LLM call the platform makes — including calls made from inside AI-authored skill bundles — emits a trace carrying model, token counts, latency, and computed cost. The sink is config-gated (absent config = no-op) and **environment-graded**: trust-graded environments (staging/prod) send **metadata only** — never prompt or response content — honoring SEC-04; full prompt/response tracing is confined to dev/local, where data is synthetic. This is observability atop USE-09's stored cost, never a replacement for it. | P2 (Epic 17) |
 
 > **Added 2026-07-06** (`sprint-change-proposal-2026-07-06.md`, Epic 12): USE-07/USE-08 polish the audit surface. USE-07 closes the "shows raw UUIDs, always org" readability gap (the write-path context fix already landed 2026-07-02; USE-07 adds the read-side name resolution). Every invocation already records `skill_version` (job + audit) — the *which-version-ran* need is met; SKL-08 adds the ability to *choose* an older version to run.
+
+> **Added 2026-07-24** (`sprint-change-proposal-2026-07-20-cost-tracking.md` and `sprint-change-proposal-2026-07-24.md`; readiness-report finding F1/F2): closes a traceability gap where **shipped/planned cost & observability capability had no PRD requirement**. **USE-09** records the per-execution cost capability delivered by **Epic 15** (already implemented — this row is retroactive, written back to keep the PRD truthful; Epic 15's epic file must have its `FRs covered` corrected from the non-existent `FR-USE-07` to **USE-09**). **USE-10** records the **Epic 17** LangSmith LLM-call observability; its metadata-only-in-prod boundary is specified by the 2026-07-24 LangSmith ADR (`architecture/core-architectural-decisions.md`) and is a deliberate consequence of SEC-04. Epic 16 similarly mis-cited `FR-USE-08` for its run-history story (real USE-08 is audit icons); that FR is tracked under Epic 16's own scope, no new row needed here — only its `FRs covered` line requires correction.
 
 ---
 
@@ -239,7 +249,20 @@ Certification and validation are a single unified workflow surface in the UI. Th
 | SEC-05 | A data handling policy is documented and reviewed by Vitalief before platform launch. | P1 |
 | SEC-06 | The platform supports user authentication. Phase 1: username/password or API key. Phase 2: SSO compatible with Vitalief's identity provider. | P1/P2 |
 | SEC-07 | A BAA between Vitalief and MA Technologies is executed before any PHI-adjacent skill is hosted. | P1 |
-| SEC-08 | Audit logs are retained for a minimum of seven years, consistent with clinical research records norms. | P2 |
+| SEC-08 | Audit logs are retained for a minimum of seven years, consistent with clinical research records norms. **SEC-08 names HIPAA and 21 CFR Part 11 as co-equal, first-class compliance frameworks** (SEC-09..17 decompose them). | P2 |
+| SEC-09 | 21 CFR Part 11 — electronic records: the audit log is secure, computer-generated, UTC-time-stamped, attributable to a unique user, and tamper-evident (append-only). | P1 (Epic 9) |
+| SEC-10 | 21 CFR Part 11 — electronic signatures: certification approvals are electronic signatures recording the signer's identity, UTC timestamp, and the **meaning** of the signature; each signature is bound immutably to the signed skill version. | P1 (Epic 6) |
+| SEC-11 | 21 CFR Part 11 — access & authority: unique user identification (authentication) plus hierarchy-scoped RBAC restrict system access and signing authority to authorized individuals. | P1 (Epic 7/8) |
+| SEC-12 | Formal computer-system validation (IQ/OQ/PQ), validation documentation, and full electronic-signature non-repudiation. Phase 1 produces a validation plan + compliance-clause mapping; full execution is deferred to a tracked compliance backlog. | P2 (deferred) |
+| SEC-13 | **HIPAA §164.312(b) — audit controls cover ACCESS, not only mutation.** Every disclosure of a PHI-bearing artifact (ingested document, parsed text, skill output) is recorded in the audit trail, attributable to a user and a UTC time. Minting a presigned download URL **is** the disclosure and is the auditable act. | P1 (Epic 13.3) |
+| SEC-14 | **HIPAA §164.308(a)(5)(ii)(C) — log-in monitoring.** Authentication activity — successful login, **failed login**, logout, session/token revocation, credential reset — is recorded and monitorable, with alarming on anomalous patterns (brute force, credential stuffing). | P1 (Epic 13.4) |
+| SEC-15 | **SOC 2 CC6.3 / HIPAA §164.308(a)(3)(ii)(C) — access can be REMOVED.** A user's platform access can be revoked (disabled) through the platform, promptly and with an audit record, and active sessions are invalidated — not merely prevented from renewing. Role modification is likewise possible and audited. | P1 (Epic 13.2) |
+| SEC-16 | **SOC 2 CC7.1/CC7.2 — detective controls.** Cloud control-plane and data-plane activity (CloudTrail, S3/ALB access logging) is captured sufficiently to investigate a security incident, including actions taken out-of-band via the AWS console. | P1 (Epic 13.5) |
+| SEC-17 | **HIPAA §164.528 — accounting of disclosures.** The platform can produce, for a given document/subject over a date range, an accounting of who accessed or received the data. (Epic 13.3 provides the events; the reporting surface is P2.) | P2 (Epic 13.3) |
+
+> **Added 2026-06-08** (`sprint-change-proposal-2026-06-08.md`): SEC-09..12 decompose the **21 CFR Part 11** obligations SEC-08 names.
+> **Added 2026-07-13** (Epic 13): SEC-08 names HIPAA and Part 11 as co-equal, but SEC-09..12 decomposed **only the Part 11 half**. A code-verified gap analysis found the audit log covered only the **write** path (who ran, who granted), never the **read** path or the **auth** path, and that user deprovisioning did not exist. **SEC-13..17 close that HIPAA/SOC 2 decomposition gap.** (See `velara-api/docs/hipaa-security-rule-mapping.md` and `soc2-control-matrix.md`.)
+> **Merged 2026-07-24** (readiness-report remediation, F1): SEC-09..17 and ORG-07 were carried into the PRD from the now-retired `epics/requirements-inventory.md`, which had kept them current while PRD §5 had not. See §5.0 note.
 
 ---
 

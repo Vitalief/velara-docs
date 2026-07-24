@@ -1,6 +1,20 @@
-# Requirements Inventory
+# Requirements Inventory — ⚠️ RETIRED as an FR registry (2026-07-24)
 
-## Functional Requirements
+> **This document is no longer the source of truth for Functional Requirements.**
+> It had drifted into a **second, parallel FR registry** using an `FR-<DOMAIN>-NN`
+> prefix while the PRD (`prds/prd-Velara-2026-05-29/prd/5-functional-requirements.md`)
+> used bare `<DOMAIN>-NN` IDs — and the two **diverged** (e.g. here `FR-USE-07` = cost,
+> but PRD `USE-07` = audit name-resolution). Per the 2026-07-24 readiness-report
+> remediation (finding F1/F2/F3), the **PRD §5 is now the single authoritative FR
+> registry**. Everything this file had that the PRD lacked (`ORG-07`, `SEC-09..17`,
+> and the Epic 15/16/17 capabilities) has been **merged into PRD §5**; new IDs are
+> **USE-09** (cost), **USE-10** (LLM observability), **CRT-06** (cert evidence gate).
+>
+> **Do not add or renumber FRs here.** Add them to the PRD. The FR list below is
+> frozen historical reference; the **FR→Epic cross-walk table near the end remains
+> useful** and may be consulted, but cite PRD IDs (drop the `FR-` prefix) going forward.
+
+## Functional Requirements _(frozen — see PRD §5 for the live registry)_
 
 **Organizational Hierarchy (ORG)**
 - FR-ORG-01 [P1]: The platform stores Organizations, Clients, Projects, Studies, and Locations as first-class entities with names, descriptions, and creation metadata.

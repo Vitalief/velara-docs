@@ -4,7 +4,7 @@
 
 Locations are owned by the Client and reused across every Project/Study underneath it. Skills can be attached once at the Client level and become available everywhere underneath that matches their own scope. A Study's protocol document is captured once at Study creation and reused automatically by every skill run within it. Engagement screens consolidate their scattered action buttons into a single menu per card. Project and Study detail screens show the outputs of skills run in that context.
 
-**FRs covered:** FR-ORG-03 (superseded), FR-REG-04 (clarified), FR-INV-09 (extended), FR-REG-10 (new), FR-ING-05 (new), FR-USE-08 (new).
+**FRs covered:** ORG-03 (superseded), REG-04 (clarified), INV-09 (extended), REG-10 (new), ING-05 (new), USE-03 (extended — hierarchy-scoped run history surfaces the existing "usage queryable by hierarchy" requirement on Project/Study screens). _(Corrected 2026-07-24: previously used an `FR-` prefix the PRD doesn't use, and the run-history story was mis-cited as a new `FR-USE-08` — which collides with the real USE-08 = audit event-type icons. Rather than mint a colliding ID, the run-history capability is traced to the existing **USE-03** (usage queryable by hierarchy), which it extends to the UI. `REG-10`/`ING-05` here are the PRD's real IDs (skill location-authoring control / future ingest connectors) — confirm each Epic-16 story maps to the intended one at create-story; `ORG-03`/`REG-04`/`INV-09` are the genuine superseded/clarified/extended anchors. See readiness-report finding F1.)_
 
 **Sequencing:** The Location data migration (16.1) is the risk-bearing story and must land — and be verified against real existing engagement data — before any other story touches Location-adjacent code. 16.2-16.6 are independent of each other once 16.1 lands. No technical dependency on Epic 14/15; sequencing relative to Epic 15 is a capacity call, not an architectural one.
 
@@ -146,6 +146,97 @@ So that I don't have to search the global Jobs History to find what's already be
 
 ---
 
+## Story 16.7: Run Console No Longer Reopens a Stale Completed Job
+
+> **Added 2026-07-24** via correct-course (see `planning-artifacts/sprint-change-proposal-2026-07-24.md`). Deployed-dev bug: the Run Console surfaces a previously-completed job's status/output instead of an empty state when opened.
+
+_Fix. FRONTEND (velara-web). Independent of 16.1-16.6._
+
+As a Vitalief consultant,
+I want the Run Console to open empty ("Run to invoke") unless I have an in-flight
+job or explicitly opened a specific job,
+So that a previously-finished run doesn't reappear every time I open the console
+from anywhere.
+
+**Context (from investigation):** `activeJobId` is persisted to sessionStorage
+solely so polling survives a mid-run refresh (`useRunStore.ts`). `JobStatusPanel`
+(`RunConsole.tsx:1134-1158`) restores it at mount and is supposed to clear it via
+the `hydratedJobId` one-shot guard when the restored job is already TERMINAL — but
+in deployed dev a completed job still shows. This story root-causes why the guard
+is not firing (candidates: `hydratedJobId` not set at hydration, over-broad
+`partialize`, `TERMINAL_JOB_STATUSES` mismatch, or effect-dependency timing) and
+fixes it so the intended behavior holds.
+
+**Acceptance Criteria:**
+
+1. **AC1 — Empty by default.** Opening the Run Console from any entry point (nav,
+   skill detail, engagement screen) with no in-flight job shows the empty "No job
+   running. Click Run to invoke a skill." state — never a previously-completed
+   job's status/output.
+
+2. **AC2 — In-flight jobs still survive a refresh.** A job that is still
+   queued/running when the tab is refreshed IS restored and polling resumes (the
+   one behavior sessionStorage persistence exists to protect — must not regress).
+
+3. **AC3 — Explicit reopen still works.** Selecting a specific job from Jobs
+   History (which sets `activeJobId` before navigating) still opens that job — the
+   fix must distinguish "explicitly opened" from "stale restore" (the exact
+   distinction `hydratedJobId` was built to make).
+
+4. **AC4 — Root cause documented + regression test.** The dev record states the
+   actual root cause; a test covers "terminal job in sessionStorage → console
+   opens empty" and "running job in sessionStorage → console restores it."
+
+**Notes:** FE-only. No API/schema change. Do not remove sessionStorage persistence
+— narrow the restore, don't delete it (AC2).
+
+---
+
+## Story 16.8: Engagement-Screen "Run" Opens the Console Locked to That One Skill
+
+> **Added 2026-07-24** via correct-course (see `planning-artifacts/sprint-change-proposal-2026-07-24.md`). Deployed-dev UX: running a specific skill from an engagement screen shows the full attached-skill picker (that skill merely pre-selected) instead of locking to it.
+
+_Fix/UX. FRONTEND (velara-web). Independent of 16.1-16.7._
+
+As a Vitalief consultant,
+I want clicking "Run" on a specific skill from a Project or Study screen to open
+the Run Console showing only that skill,
+So that I'm running the skill I clicked, not re-picking it from the full list of
+everything attached in that context.
+
+**Context (from investigation):** In context-first mode the console renders the
+entire `availableSkills` picker (project + study attachments) as a `role="listbox"`
+and only pre-*selects* the clicked skill (`RunConsole.tsx:487-501, 670-696`).
+Skill-first mode already locks to one skill (`RunConsoleSkillFirstInner`) — this
+story brings the engagement-launched context-first path in line with that locked
+idiom, for the case where a single skill was explicitly chosen.
+
+**Acceptance Criteria:**
+
+1. **AC1 — Launched-with-a-skill = locked single skill.** When the console is
+   opened from an engagement skill row (a specific `skillId` is supplied), the
+   skill area shows only that one skill as a locked card (mirroring skill-first
+   mode's locked card), not the full picker. Context (Client/Project/Study) stays
+   pre-scoped and locked exactly as it is today (5.2 behavior preserved).
+
+2. **AC2 — No-skill context launch still shows the picker.** If the console is
+   opened context-first WITHOUT a specific skill (e.g. a future "Run something
+   here" affordance), the multi-skill picker still renders — this story narrows
+   only the explicit-skill launch path, it does not remove the picker component.
+
+3. **AC3 — Run behavior unchanged.** The invocation payload, version handling
+   (grantor-only selector per 11.7), location selector for location-dependent
+   skills, and study-protocol handling (16.4) all behave exactly as today for the
+   locked skill.
+
+4. **AC4 — Back navigation unchanged.** Back still returns to the originating
+   Project/Study screen (5.2 AC preserved).
+
+**Notes:** FE-only. Reuse skill-first mode's locked-card presentation rather than
+inventing a new one. No API/schema change.
+
+---
+
 ## Story Sequencing & Dependencies
 
 | Story | Depends on | Ship order | Weight |
@@ -156,5 +247,7 @@ So that I don't have to search the global Jobs History to find what's already be
 | **16-4** Study-creation-time protocol upload | **16-1** (screen-only) | 2nd (or parallel) | Medium |
 | **16-5** Consolidate engagement-screen actions into one menu | — | Any time, ideally after 16-2/16-3 land | Medium (first Menu component in the codebase) |
 | **16-6** Hierarchy-scoped run history on Project/Study screens | — | Any time | Light-Medium |
+| **16-7** Run Console no longer reopens a stale completed job (bug) | — | Deployed-dev bug — prioritize | Light (FE) |
+| **16-8** Engagement "Run" locks console to that one skill (fix/UX) | — | Deployed-dev UX — prioritize | Light (FE) |
 
-**Recommended order:** 16-1 first and fully isolated — verified against realistic pre-migration data before anything else in this epic touches Location-adjacent code. 16-2 through 16-6 are independent of each other once 16-1 lands. Per `create-story` discipline, each story is expanded to full implementation detail one at a time when picked up — these epic-level ACs are the contract, not the implementation plan.
+**Recommended order:** 16-1 first and fully isolated — verified against realistic pre-migration data before anything else in this epic touches Location-adjacent code. 16-2 through 16-6 are independent of each other once 16-1 lands. **16-7 and 16-8 (added 2026-07-24) are independent FE bug/UX fixes against deployed dev — prioritize them ahead of remaining feature work.** Per `create-story` discipline, each story is expanded to full implementation detail one at a time when picked up — these epic-level ACs are the contract, not the implementation plan.
