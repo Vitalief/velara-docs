@@ -237,6 +237,93 @@ inventing a new one. No API/schema change.
 
 ---
 
+## Story 16.9: Fix the Confirm/Dispatch Race That Strands a Protocol Upload at "Processing"
+
+> **Added 2026-07-27** via direct operator report + live investigation of deployed dev.
+> Deployed-dev bug: creating a Study with a protocol upload (Story 16.4) sometimes hangs
+> at "Processing document…" for the full 2-minute client timeout, then errors with a
+> generic timeout message that gives no hint of the real cause.
+
+_Fix. BACKEND (velara-api). Independent of 16.1-16.8._
+
+As a Vitalief consultant,
+I want a protocol document upload to reliably reach a parsed or clearly-failed state,
+So that I'm never stuck watching "Processing document…" for two minutes only to get a
+generic timeout with no actionable explanation.
+
+**Context (from investigation — confirmed live against deployed dev, not speculation):**
+`confirm_file_ref` (`ingest_service.py:334-344`) publishes the `parse_document` Celery
+task to the broker (`parse_document.delay(...)`, line 335) **before** committing the
+row's `status` transition from `pending` to `confirmed` (the commit is a separate,
+later statement at line 344 — deliberately ordered this way so a broker-publish failure
+rolls back to `pending` instead of stranding a `confirmed`-but-undispatched row, per the
+comment at lines 324-326). This leaves a real window in which the worker can dequeue and
+execute the task **before** the API's commit becomes visible to it. `parse_document`
+(`ingest_tasks.py:97-103`) treats any status other than `confirmed` (and not already
+terminal) as "unexpected" — it logs a single `warning` (`parse_document_unexpected_status`)
+and **returns immediately**: no retry, no requeue, nothing writes a terminal status. The
+row is left at `pending` forever; nothing will ever touch it again. The frontend's
+`useIngest` poll only recognizes `'parsed'` and `'failed'` as terminal, so a
+permanently-`pending` row polls for the full 2-minute cap before surfacing a generic
+"File processing timed out" error (`useIngest.ts` `MAX_ATTEMPTS`/timeout branch) — the
+user sees a slow, unexplained failure instead of the fast, specific one this story
+enables.
+
+**Confirmed live in deployed dev** (`/velara/dev/worker` CloudWatch log group,
+2026-07-27T13:56:35Z): `parse_document_unexpected_status file_ref_id=478ef3e6-75e2-4f7d-a8ba-5d66a5d3ce2a status=pending`
+— that file reference's row has had no further log activity since (no
+`parse_document_completed`, no `parse_document_failed`) and is permanently stranded.
+Only one occurrence found in a 3-day log window — this is an intermittent race (depends
+on relative timing between the broker round-trip and the DB commit landing), not a
+constant failure, which matches an inconsistent "sometimes it hangs" report rather than
+"always."
+
+**Acceptance Criteria:**
+
+1. **AC1 — The race no longer permanently strands a row.** When `parse_document`
+   observes a `pending` (not yet `confirmed`) row, it must not silently give up. It
+   retries (bounded, short backoff) rather than treating "not confirmed yet" as a
+   terminal no-op — a genuinely still-`pending` row (e.g., a stale/duplicate task
+   delivery for a row the API never actually confirmed) must eventually resolve to
+   either processing normally (once the commit lands) or a clean terminal `failed` after
+   retries are exhausted — never an indefinite silent `pending`.
+
+2. **AC2 — No regression to the existing broker-failure protection.** The existing
+   guard at `ingest_service.py:334-340` (a broker-publish failure rolls the row back to
+   `pending` rather than stranding a `confirmed`-but-undispatched row) must continue to
+   work exactly as today — this story fixes the worker's handling of a *real* dispatched
+   task racing the commit, not the broker-unreachable case, and must not touch or weaken
+   that existing rollback.
+
+3. **AC3 — Terminal-state idempotency guards are preserved.** The existing
+   `FILE_REF_TERMINAL_STATUSES` early-return (`ingest_tasks.py:88-95`, for benign
+   duplicate task delivery after a row already reached `parsed`/`failed`/`rejected`) is
+   unchanged — this story only changes the handling of the `pending`-not-yet-`confirmed`
+   branch, not the already-terminal branch.
+
+4. **AC4 — A stranded row surfaces a specific, fast error, not a generic 2-minute
+   timeout.** If retries are exhausted and the row still isn't `confirmed` (a genuine
+   anomaly, not just normal commit latency), `parse_document` writes a clear terminal
+   `failed` status with a distinct `error_code` so the existing frontend failure path
+   (`useIngest.ts`'s `status === 'failed'` check) surfaces promptly instead of waiting
+   out the full timeout window.
+
+5. **AC5 — Regression test reproduces the race.** A test simulates a `parse_document`
+   delivery against a row still in `pending` and asserts the new retry/resolve-or-fail
+   behavior, distinct from the existing "already terminal" idempotency test.
+
+**Notes:** Backend-only (`velara-api`). No frontend change required for AC1-AC3/AC5 —
+`useIngest.ts`'s existing `'failed'`-status handling already covers AC4 with no FE code
+change, since the fix makes the worker reach that status faster, not different. If a
+distinct error message for this specific error_code is wanted client-side, that's an
+optional FE follow-up, not required to close this story's ACs. Do not restructure
+`confirm_file_ref`'s commit ordering (dispatch-before-commit) — that ordering exists
+specifically to protect against a different failure mode (broker unreachable, AC2); fix
+the worker's reaction to the race, not the ordering that creates the (narrow, necessary)
+window.
+
+---
+
 ## Story Sequencing & Dependencies
 
 | Story | Depends on | Ship order | Weight |
@@ -249,5 +336,6 @@ inventing a new one. No API/schema change.
 | **16-6** Hierarchy-scoped run history on Project/Study screens | — | Any time | Light-Medium |
 | **16-7** Run Console no longer reopens a stale completed job (bug) | — | Deployed-dev bug — prioritize | Light (FE) |
 | **16-8** Engagement "Run" locks console to that one skill (fix/UX) | — | Deployed-dev UX — prioritize | Light (FE) |
+| **16-9** Fix confirm/dispatch race stranding protocol uploads (bug) | — | Deployed-dev bug — prioritize | Light-Medium (BE, Celery retry semantics) |
 
 **Recommended order:** 16-1 first and fully isolated — verified against realistic pre-migration data before anything else in this epic touches Location-adjacent code. 16-2 through 16-6 are independent of each other once 16-1 lands. **16-7 and 16-8 (added 2026-07-24) are independent FE bug/UX fixes against deployed dev — prioritize them ahead of remaining feature work.** Per `create-story` discipline, each story is expanded to full implementation detail one at a time when picked up — these epic-level ACs are the contract, not the implementation plan.

@@ -508,6 +508,21 @@ development_status:
   #   Epic 16 stays in-progress until these + a manual epic-close.
   16-7-run-console-no-longer-reopens-stale-completed-job: done
   16-8-engagement-run-locks-console-to-single-skill: done
+  # 2026-07-27: 16-9 added directly (operator report + live investigation of deployed dev, no
+  #   separate correct-course doc). BE-only bug: confirm_file_ref dispatches parse_document to the
+  #   Celery broker BEFORE committing the pending->confirmed transition (deliberately ordered that
+  #   way to protect against a broker-unreachable strand); if the worker dequeues and reads the row
+  #   before that commit lands, parse_document sees status=pending, logs a warning, and gives up
+  #   permanently — no retry, no failure write. Confirmed LIVE in deployed dev via CloudWatch
+  #   (/velara/dev/worker, 2026-07-27T13:56:35Z): file_ref_id=478ef3e6... stranded at pending with
+  #   no further activity in a 3-day log window. Frontend's useIngest poll doesn't recognize
+  #   'pending' as terminal, so it silently polls out the full 2-minute client timeout before
+  #   showing a generic "processing timed out" error — this is the exact "stuck at Processing
+  #   document" symptom reported. Fix scoped to the worker's reaction to the race (bounded retry +
+  #   fast terminal-fail with a new error_code on exhaustion) — explicitly does NOT reorder
+  #   confirm_file_ref's dispatch-before-commit (that ordering guards a different, worse failure
+  #   mode: broker-unreachable). No FE change required.
+  16-9-fix-confirm-dispatch-race-stranding-protocol-uploads: ready-for-dev
 
   # ─────────────────────────────────────────────────────────
   # Epic 17: LLM-Call Observability & Certification Evidence
