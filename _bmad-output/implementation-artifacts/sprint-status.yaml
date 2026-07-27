@@ -53,7 +53,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-02
-last_updated: 2026-07-24
+last_updated: 2026-07-27
 # 2026-07-24: 16-7-run-console-no-longer-reopens-stale-completed-job moved to ready-for-dev (create-story).
 #   FE-only (velara-web), zero backend surface. Root-caused against current source (not speculation):
 #   `hydratedJobId` (useRunStore.ts) is set exactly once per tab session, inside `onRehydrateStorage`,
@@ -385,7 +385,7 @@ development_status:
   # 2026-07-24: 16-7/16-8 added via correct-course (sprint-change-proposal-2026-07-24.md).
   #   Two FE-only deployed-dev fixes against the Run Console. Prioritize ahead of Epic 17.
   #   Epic 16 stays in-progress until these + a manual epic-close.
-  16-7-run-console-no-longer-reopens-stale-completed-job: ready-for-dev
+  16-7-run-console-no-longer-reopens-stale-completed-job: in-progress
   16-8-engagement-run-locks-console-to-single-skill: backlog
 
   # ─────────────────────────────────────────────────────────
