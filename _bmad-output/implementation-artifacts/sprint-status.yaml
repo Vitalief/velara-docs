@@ -54,6 +54,24 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-27
+# 2026-07-27: 17-3-certification-dry-run-evidence-gate moved to ready-for-dev (create-story).
+#   First story picked from Epic 17 (epic status backlog→in-progress). Independent of 17-1/17-2
+#   (LangSmith) — no shared files, no ordering dependency. Genuinely new ground: two research passes
+#   (backend + frontend) confirmed no dry-run/preset/job-kind concept exists anywhere in either
+#   subrepo today. Story adds AC7 beyond the epic's literal text (product-owner direction during
+#   drafting): a UI to create/configure 5 dry-run input configs per skill + a "Run All" action to
+#   re-generate the trail after a version bump, alongside individually-runnable configs. Three
+#   explicit decisions resolved (not left ambiguous, per the epic's own instruction): "differing
+#   outputs" enforced automatically via a new InvocationResult.output_sha256 column (≥5 distinct
+#   hashes), RBAC stays at the existing RejectNonGrantor tier (not narrowed to ma_tech-only), and a
+#   new certification_dry_run flag lets a dry-run skip the project/study context requirement every
+#   other invocation has. New schema: certification_dry_run_configs + certification_dry_run_evidence
+#   tables (migration 0029, chained off head 0028_study_protocol_association). Independent validator
+#   spot-checked every file:line citation against actual current source, confirmed the migration
+#   chain and epic AC1-AC6 mapping, and caught 2 fixable issues before finalizing: a
+#   queue_invocation citation off by 14 lines (docstring vs. function signature), and an
+#   under-specified KeyCard/isLocked wiring instruction (the technical key's isLocked is hardcoded
+#   false today, not an existing condition to extend) — both corrected in the story file.
 
 # 2026-07-27: 16-8-engagement-run-locks-console-to-single-skill moved to done (code-review).
 #   3-layer adversarial review (Blind Hunter + Edge Case Hunter + Acceptance Auditor). All 5 ACs
@@ -483,7 +501,7 @@ development_status:
   #   (version-selector role gate) was DROPPED — already satisfied by Story 11.7.
   #   17-1 needs a LangSmith ADR first; 17-2 depends on 17-1; 17-3 independent.
   # ─────────────────────────────────────────────────────────
-  epic-17: backlog
+  epic-17: in-progress
   17-1-langsmith-tracing-for-platform-llm-calls: backlog
   17-2-ai-adapter-emits-langsmith-traced-skill-bundles: backlog
-  17-3-certification-dry-run-evidence-gate: backlog
+  17-3-certification-dry-run-evidence-gate: ready-for-dev
