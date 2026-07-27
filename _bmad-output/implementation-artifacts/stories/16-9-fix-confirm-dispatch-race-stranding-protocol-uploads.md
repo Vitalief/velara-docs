@@ -13,7 +13,7 @@ baseline_commit: velara-api on branch `development` (head `d193a07`). `ingest_se
 
 # Story 16.9: Fix the Confirm/Dispatch Race That Strands a Protocol Upload at "Processing"
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -510,3 +510,113 @@ Claude Sonnet 5 (claude-sonnet-5)
   passed, 3 skipped, 1 pre-existing failure (`test_repeated_denials_are_deduped` — verified fails
   identically on unmodified HEAD, already logged in `deferred-work.md`, unrelated to this story). 0
   regressions introduced.
+
+## Review Findings
+
+_Code review 2026-07-27 (3-layer adversarial: Blind Hunter + Edge Case Hunter + Acceptance Auditor).
+All 5 ACs verified met by the Acceptance Auditor; all 5 out-of-scope constraints respected
+(confirm_file_ref untouched, terminal-state branch untouched, no FE change, no second retry mechanism
+in execution_tasks.py). Two real correctness gaps found in the new terminal-fail path (both in code
+this story added), plus a test-strength gap. 3 pre-existing/out-of-scope items deferred; 5 dismissed
+as noise._
+
+**Patch — APPLIED (2026-07-27):**
+
+- [x] [Review][Patch] `_mark_confirm_race_timeout` could clobber a legitimately-confirmed row to
+  `failed` [velara-api/app/workers/ingest_tasks.py] — **FIXED.** The guard was
+  `ref.status not in FILE_REF_TERMINAL_STATUSES`, but `confirmed` is NOT terminal
+  (`{parsed, rejected, failed}`). If the API's `pending→confirmed` commit landed during retry
+  exhaustion (possible because `confirm_file_ref` holds its `FOR UPDATE` lock across a ≤100 MB S3
+  GET + SHA256, so a large/slow file's confirm can exceed the ~10s retry budget), the timeout writer
+  read `confirmed` and force-wrote `failed` — reintroducing this story's own target bug. Now guards
+  on `ref.status == FILE_REF_STATUS_PENDING` (three-way `if ref is None / elif == pending / else
+  leave-alone`), so a row that raced to `confirmed` (or any other non-pending state) is left for its
+  own already-dispatched task / parse path. New regression test
+  `test_confirm_race_timeout_does_not_clobber_a_confirmed_row` proves a `confirmed` row is untouched.
+  (blind+edge)
+
+- [x] [Review][Patch] Terminal-fail write ran on a disposed engine in a 2nd event loop, unguarded
+  [velara-api/app/workers/ingest_tasks.py] — **FIXED.** `asyncio.run(_execute())` disposes the
+  shared module engine before `asyncio.run(_mark_confirm_race_timeout(...))` opens a fresh
+  `session_scope()` on it in a second loop — the exact "Event loop is closed" / asyncpg cross-loop
+  failure `dispose_engine` exists to prevent, on a `--pool=solo` worker (`docker-compose.yml:89`),
+  and unguarded so an AC4 write failure would be silent. `_mark_confirm_race_timeout` now wraps its
+  body in `try/finally: await dispose_engine()` (mirroring `execution_tasks.py:738-746`'s
+  `_aggregate_with_cleanup`), so the second loop disposes the engine it re-opened before closing.
+  Also added the `ref is None` (row deleted before timeout write) `warning` log so that branch isn't
+  observability-blind. (blind+edge)
+
+- [x] [Review][Patch] `test_pending_status_resolves_once_confirmed_on_retry` proved too little
+  [velara-api/tests/integration/api/test_ingest.py] — **FIXED.** After flipping the row to
+  `confirmed`, the test asserted only "some non-`_FakeRetry` exception" — which could fire before the
+  status check ever ran. It now also asserts the row ends `status == "failed"` with
+  `error_code == "PARSE_FAILED"` (the parse-failure handler's write) — proving the second attempt
+  exited the race branch and entered the REAL parse path, not merely that some exception occurred.
+  (auditor+blind)
+
+- [x] [Review][Patch] The `dispose_engine()` leak-guard on the race path was untested
+  [velara-api/tests/integration/api/test_ingest.py] — **FIXED.** `_run_parse_document_in_fresh_loop`
+  now spies on `ingest_tasks.dispose_engine` (wrapping the real one so behaviour is unchanged) and
+  returns its call count; `test_pending_status_retries_via_self_retry` asserts `dispose_calls >= 1`,
+  pinning that the `except _ConfirmRacePending: await dispose_engine()` race-exit guard actually
+  fires. Also refreshed the stale test-section header comment that still described the earlier
+  mocked-stub approach. (blind)
+
+**Deferred (pre-existing / out-of-scope, checked):**
+
+- [x] [Review][Defer] Engine not disposed on the `not_found` / already-terminal early `return`s
+  [velara-api/app/workers/ingest_tasks.py:139,148] — These returns exit before reaching the
+  parse-phase `finally: dispose_engine()`. **Pre-existing**: verified against `git show HEAD` — the
+  original code returned from these same branches inside the `session_scope()` block without
+  disposing either. This story did not change that behavior for these two paths (it only added
+  disposal to the NEW `_ConfirmRacePending` path). Deferred as a pre-existing worker-lifecycle
+  cleanup gap, unrelated to this story's race fix.
+
+- [x] [Review][Defer] No `task_acks_late` / `task_reject_on_worker_lost` — a worker crash during the
+  2s retry countdown drops the re-dispatched message [velara-api/app/workers/celery_app.py:19-88] —
+  With default `acks_late=False`, each retry delivery is acked at dequeue, so a worker kill (deploy,
+  OOM, spot reclaim) mid-countdown loses the retry and leaves the row `pending`/`confirmed` with no
+  further task. **Pre-existing, platform-wide** Celery configuration affecting every task, not
+  introduced by this story; the bounded-retry loop merely inherits it. Deferred as a broader
+  worker-durability decision (candidate: `acks_late=True` for ingest/execution tasks) outside 16.9's
+  scope.
+
+- [x] [Review][Defer] `_ConfirmRacePending` handler is skipped if the ref-load `session_scope`'s
+  `__aexit__` itself raises [velara-api/app/workers/ingest_tasks.py:170-176] — If the session
+  teardown (rollback/close) raises a non-`_ConfirmRacePending` exception, the
+  `except _ConfirmRacePending` handler doesn't run and its `dispose_engine()` is skipped. Extreme
+  edge (session teardown erroring); the pre-existing parse phase has the same class of exposure via
+  its own structure. Deferred as a low-value hardening item.
+
+## Change Log (code review)
+
+- 2026-07-27 — Code review (3-layer adversarial) + fixes applied. All 5 ACs verified met;
+  confirm_file_ref and the terminal-state idempotency branch confirmed untouched (AC2/AC3). 4 patch
+  findings raised AND APPLIED: (1) `_mark_confirm_race_timeout` guard changed from
+  `not in TERMINAL_STATUSES` to `== pending` so a row that races to `confirmed` during retry
+  exhaustion is no longer force-failed (the story's own bug at the tail); (2) the terminal-fail
+  helper now disposes its engine in a `finally` (it runs in a 2nd `asyncio.run()` after the shared
+  engine was already disposed — solo-pool "Event loop is closed" risk) + logs the `ref is None`
+  case; (3) the resolve-once-confirmed test now asserts the row reaches `failed`/`PARSE_FAILED`
+  (proving the parse path was entered, not just "some exception"); (4) the race path's
+  `dispose_engine()` guard is now covered by a spy assertion. 3 deferred (pre-existing
+  engine-dispose-on-early-return, missing acks_late, session-teardown-error dispose edge — all logged
+  to deferred-work.md), 5 dismissed as noise (stub-vs-real-Celery retry semantics [inherent to
+  celery/celery#4661, best achievable], the defensible `raise self.retry` outer raise, unreachable
+  stale-error_code-on-resurrection [terminal guard blocks it], redundant-but-conventional manual
+  `updated_at`, and the two-nested-asyncio.run observation folded into patch #2).
+  Gates re-run green: `ruff check .` clean on both touched files (2 pre-existing E501s remain only in
+  uncommitted Story 17.3 `test_certifications.py`, out of scope); full backend suite 1598 passed
+  (+1 new confirmed-clobber regression test), 3 skipped, 1 pre-existing unrelated failure
+  (`test_repeated_denials_are_deduped`, documented). 0 regressions from the patches.
+
+### File List (code-review changes)
+
+- `app/workers/ingest_tasks.py` — `_mark_confirm_race_timeout` rewritten: `== pending` guard (was
+  `not in TERMINAL_STATUSES`), three-way `ref is None` / `pending` / else branches with logs, and a
+  `try/finally: await dispose_engine()` wrapper.
+- `tests/integration/api/test_ingest.py` — new `test_confirm_race_timeout_does_not_clobber_a_confirmed_row`;
+  `_run_parse_document_in_fresh_loop` now spies on `dispose_engine` and returns a 3-tuple (call sites
+  updated); `test_pending_status_retries_via_self_retry` asserts `dispose_calls >= 1`;
+  `test_pending_status_resolves_once_confirmed_on_retry` asserts terminal `failed`/`PARSE_FAILED`;
+  refreshed the stale test-section header comment.
