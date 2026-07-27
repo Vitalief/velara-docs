@@ -535,4 +535,4 @@ development_status:
   epic-17: in-progress
   17-1-langsmith-tracing-for-platform-llm-calls: backlog
   17-2-ai-adapter-emits-langsmith-traced-skill-bundles: backlog
-  17-3-certification-dry-run-evidence-gate: review
+  17-3-certification-dry-run-evidence-gate: done

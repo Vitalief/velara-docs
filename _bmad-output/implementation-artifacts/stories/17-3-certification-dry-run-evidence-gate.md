@@ -9,7 +9,7 @@ baseline_commit: velara-api head `0028_study_protocol_association` (Alembic); ve
 
 # Story 17.3: Certification Dry-Run Evidence Gate (5 Runs Before the Technical Key)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -632,6 +632,25 @@ Claude Sonnet 5 (claude-sonnet-5)
   this file (task checkboxes, Dev Agent Record, Change Log, Status).
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` — status transitions.
 
+### Review Findings
+
+_Code review 2026-07-27 (3-layer adversarial: Blind Hunter + Edge Case Hunter + Acceptance Auditor). Core gate AC1–AC6 verified correct. All decision-needed items and patches resolved and applied inline; gates re-run green. Details below._
+
+**Decision-needed — RESOLVED (product-owner direction, 2026-07-27):**
+- [x] [Review][Decision] Dry-run config engagement/`study_id` coupling replaced entirely with a **directly-uploaded protocol document**. The PO's original need was "skills that run only on the study protocol had no way to create a config"; tying a config to a whole Study (with its authz/clear-to-null/Study-deletion problems) was the wrong shape. **Applied:** `study_id` FK → `protocol_file_ref_id` FK (nullable, `ON DELETE SET NULL`) on `certification_dry_run_configs`; migration 0030 rewritten in place (never applied to any shared env); the config modal now uses the existing org-level `DocumentUploadCard`/`useIngest` upload path instead of `HierarchyPickerCascade`; validation uses `ingest_service.assert_file_ref_ready` (the same gate the invocation path applies); at Run time the protocol is passed through as a normal `file_ref_ids` entry (no new backend injection path). This **subsumes** two of the original patch findings — the FK-`ondelete` bug (the new FK is correctly `SET NULL`) and the study-scope authz concern are both gone by construction.
+  - The "cannot clear to NULL via PATCH" limitation carries over verbatim to `protocol_file_ref_id` (documented in `update_dry_run_config`); clearing still requires delete+recreate. Recorded as a deferred item below rather than adding a sentinel now.
+- [x] [Review][Decision] NULL-hash skills blocked from technical cert — resolved in context by the redesign (protocol-driven runs produce hashable LLM output, so they reach distinct hashes normally). No separate diagnostic patch applied; kept as a deferred watch item for genuinely output-less code-driven-hybrid skills.
+- [x] [Review][Decision] Config-limit TOCTOU — **deferred** (PO choice): low likelihood (two near-simultaneous creates by one grantor on one skill), max-5 is a soft UX cap not a correctness invariant. Logged to deferred-work.md.
+
+**Patch — APPLIED:**
+- [x] [Review][Patch] Run-All is now genuinely sequential. Replaced the stale-closure `waitForTerminal(() => pollJobId)` with `runOne` polling **its own** job to terminal via a direct `getJob` loop (bounded to 5 min), linking evidence with the config id captured per-job. Fixes the near-simultaneous firing + evidence mislink, and folds in the two related edge cases: a mid-loop failure/timeout now clears `runAllProgress` in a `finally` (buttons no longer freeze), and the bounded poll can't hang forever. [CertificationDryRunTrail.tsx runOne/runAll/pollJobToTerminal]
+- [x] [Review][Patch] `link_dry_run_evidence` idempotent 500 fixed — the re-fetch is now scoped to the RETURNED row's `skill_version_id` (not the request body's), and `next(..., None)` with a clean `DRY_RUN_EVIDENCE_JOB_NOT_ELIGIBLE` fallback replaces the bare `next(...)` that raised `StopIteration`→500. [certifications.py link_dry_run_evidence]
+
+**Deferred (pre-existing / out-of-scope, checked):**
+- [x] [Review][Defer] `useDryRunEvidence` 3s poll is effectively dead during the first in-flight run — evidence rows are linked only on terminal, so `items` is empty and `refetchInterval` returns false until the link mutation's own invalidation fires. Works, but the poll doesn't cover the window it was written for. [useCertificationDryRuns.ts:61-68] — deferred, cosmetic.
+- [x] [Review][Defer] Evidence can be linked from any completed job of the same version, not only genuine dry-run launches — attestation gap on a Part-11-adjacent compliance gate. [certification_service.py:771-840] — deferred, design question for compliance.
+- [x] [Review][Defer] All 4 dry-run config/evidence routes are audit-exempt (incl. config DELETE) — the trail's mutation history before a technical cert is unauditable. [test_audit_coverage_guard.py] — deferred, matches documented exempt rationale; revisit if compliance requires trail provenance.
+
 ## Change Log
 
 - 2026-07-27 — Implemented (dev-story). Full-stack: new `certification_dry_run_configs`/
@@ -648,3 +667,49 @@ Claude Sonnet 5 (claude-sonnet-5)
   idempotency bug before the test suite surfaced it. Gates: backend `pytest` 1587/1587 passed (3
   skipped, pre-existing sandbox-linux-only skips), `ruff check .` clean; frontend `tsc --noEmit`
   clean, `eslint` 0 errors, `vitest run` 804/804 passed (+8 new tests), 0 regressions.
+- 2026-07-27 — Code review (3-layer adversarial) + fixes applied. Core gate AC1–AC6
+  verified correct. **Design change (PO direction):** the dry-run config's engagement
+  `study_id` was replaced with a **directly-uploaded protocol document**
+  (`protocol_file_ref_id`, nullable FK to `file_references`, `ON DELETE SET NULL`) —
+  skills that run only on a protocol now attach one by uploading it via the existing
+  org-level ingest path (`DocumentUploadCard`/`useIngest`), and it is injected at Run
+  time as a normal invocation `file_ref_id` (no new backend injection path). Migration
+  0030 rewritten in place (`study_id` → `protocol_file_ref_id`); it was never applied to
+  a shared environment. This also eliminated the review-found FK-`ondelete` bug (the new
+  FK is correctly `SET NULL`) and the study-scope authz concern. **Patches applied:**
+  (1) Run-All is now genuinely sequential — replaced a stale-closure poll with a per-job
+  `getJob`-to-terminal loop (bounded 5 min), fixing near-simultaneous firing + evidence
+  mislink, plus a `finally` that unfreezes the buttons on failure/timeout; (2)
+  `link_dry_run_evidence` no longer 500s on the idempotent cross-version path (re-fetch
+  scoped to the returned row's version + guarded `next(..., None)`). **Deferred:**
+  config-limit TOCTOU, `protocol_file_ref_id`/`inputs` clear-to-null, and three
+  pre-existing items (evidence-poll dead window, any-completed-job linkability,
+  audit-exempt config routes) — all logged to `deferred-work.md`. Gates re-run green:
+  backend `ruff` clean + 62 certification tests + 272 skills/audit/migration-harness
+  tests pass (migration 0030 reversibility + idempotency verified via the stamp-back
+  replay harness); frontend `tsc` clean, `eslint` 0 problems, 50 certification + 167 run
+  tests pass.
+
+### File List (code-review additions/changes)
+
+Beyond the implementation File List above, the code-review redesign changed:
+
+- `app/db/migrations/versions/0030_dry_run_config_study.py` — REWRITTEN. Now adds
+  `protocol_file_ref_id` (nullable FK `file_references`, `ON DELETE SET NULL`) instead of
+  `study_id`; same idempotent `add_column`/`create_foreign_key` + existence-check pattern.
+  (The earlier `study_id` draft was never applied to a shared env.)
+- `app/models/certification.py` — `CertificationDryRunConfig.study_id` →
+  `protocol_file_ref_id` (`ForeignKey("file_references.id", ondelete="SET NULL")`).
+- `app/schemas/certification.py` — `study_id` → `protocol_file_ref_id` on the 3 config schemas.
+- `app/services/certification_service.py` — `create_/update_dry_run_config` validate via
+  `ingest_service.assert_file_ref_ready` instead of `hierarchy_service.get_study`.
+- `app/api/v1/certifications.py` — routes pass `protocol_file_ref_id`; `link_dry_run_evidence`
+  re-fetch scoped to the returned row's version + guarded `next(..., None)` (500 fix).
+- `tests/integration/api/test_certifications.py` — dry-run config tests rewritten to
+  `protocol_file_ref_id` (local `_seed_parsed_file_ref` helper); orphaned `_seed_study` removed.
+- `src/api/certifications.ts` — `study_id` → `protocol_file_ref_id` on config types.
+- `src/features/certification/components/CertificationDryRunTrail.tsx` — modal uses
+  `DocumentUploadCard` (protocol upload) instead of `HierarchyPickerCascade`; `runOne`
+  sends `file_ref_ids`; Run-All rewritten to a per-job `getJob`-to-terminal sequential loop.
+- `src/features/certification/components/CertificationDryRunTrail.test.tsx` — rewritten for
+  the protocol-upload flow (`useIngest`/`getJob` mocks) + `file_ref_ids` Run assertions.
