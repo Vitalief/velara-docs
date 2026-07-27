@@ -533,6 +533,6 @@ development_status:
   #   17-1 needs a LangSmith ADR first; 17-2 depends on 17-1; 17-3 independent.
   # ─────────────────────────────────────────────────────────
   epic-17: in-progress
-  17-1-langsmith-tracing-for-platform-llm-calls: backlog
+  17-1-langsmith-tracing-for-platform-llm-calls: ready-for-dev
   17-2-ai-adapter-emits-langsmith-traced-skill-bundles: backlog
   17-3-certification-dry-run-evidence-gate: done
