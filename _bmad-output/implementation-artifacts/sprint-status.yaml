@@ -55,6 +55,21 @@
 generated: 2026-06-02
 last_updated: 2026-07-27
 
+# 2026-07-27: 16-7-run-console-no-longer-reopens-stale-completed-job moved to done (code-review).
+#   3-layer adversarial review (Blind Hunter + Edge Case Hunter + Acceptance Auditor). All 4 ACs
+#   verified satisfied for shipped production behavior; tsc/eslint clean, vitest 791/791 green. Triage:
+#   0 decision-needed, 2 patch (both applied), 2 defer, 6 dismissed. Patches: (1) hardened a dev-ONLY
+#   StrictMode race — the panel's unmount-cleanup nulls the store's explicitJobId on StrictMode's
+#   throwaway first mount, so an explicitly-opened terminal job fetched cold could be cleared when
+#   useJob resolves after the cleanup; added explicitlyOpenedIdRef (a useRef latch that survives the
+#   synthetic remount) so the guard honors live explicitJobId OR the latch — production build (StrictMode
+#   off) was never affected; (2) corrected 3 docstrings that described a nonexistent "Jobs pick →
+#   navigate to Run Console" flow (JobsHistory renders inline + the only Jobs→console button is job-less)
+#   to the real in-console explicit paths (submit / "view prior"). Deferred: one-frame flash of a stale
+#   terminal panel before the post-paint guard clears it (PRE-EXISTING — the HEAD hydration guard had the
+#   identical fetch→render→clear ordering); and the component-test lifecycle gap (mocked store can't
+#   drive real mount/unmount/StrictMode timing — a mock-based StrictMode regression test passes even with
+#   the fix reverted, so a real-store harness is required; both logged to deferred-work.md).
 # 2026-07-27: 16-8-engagement-run-locks-console-to-single-skill moved to ready-for-dev (create-story).
 #   FE-only (velara-web), zero backend surface. Root cause: EngagementsScreen.tsx's onRun always
 #   passes a concrete skill.id via ?skillId=, but RunConsoleInner (context-first mode) only used it
@@ -425,7 +440,7 @@ development_status:
   # 2026-07-24: 16-7/16-8 added via correct-course (sprint-change-proposal-2026-07-24.md).
   #   Two FE-only deployed-dev fixes against the Run Console. Prioritize ahead of Epic 17.
   #   Epic 16 stays in-progress until these + a manual epic-close.
-  16-7-run-console-no-longer-reopens-stale-completed-job: review
+  16-7-run-console-no-longer-reopens-stale-completed-job: done
   16-8-engagement-run-locks-console-to-single-skill: ready-for-dev
 
   # ─────────────────────────────────────────────────────────
