@@ -13,7 +13,7 @@ baseline_commit: velara-api unaffected (this story has zero backend surface); ve
 
 # Story 16.8: Engagement-Screen "Run" Opens the Console Locked to That One Skill
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -147,6 +147,77 @@ one case (`preSelectedSkillId` present) where a single skill was explicitly chos
     by running, not just inspection.
   - [x] Gates: `tsc --noEmit` clean, `eslint` clean, `vitest run` 793/793 green (up from 791 pre-change:
     net +2 new tests — 1 test edited in place, 2 new added, 0 regressions).
+
+## Review Findings
+
+_Code review 2026-07-27 (3-layer adversarial: Blind Hunter + Edge Case Hunter + Acceptance Auditor).
+All 5 ACs verified satisfied and non-vacuously proven by tests. Triage: 0 decision-needed, 3 patch,
+1 defer, 4 dismissed. Blind Hunter and Edge Case Hunter independently converged on the same
+high-severity defect (finding 1)._
+
+- [x] [Review][Patch] **`useSkill` error/loading discarded → permanent skeleton bricks the locked
+  console** [velara-web/src/features/run/components/RunConsole.tsx:505,673] — HIGH. FIXED: now
+  destructures `isError`/`error` from `useSkill`; the locked branch drops out of the skeleton on error
+  and renders an error message (SKILL_NOT_FOUND copy or `getErrorMessage`), mirroring
+  RunConsoleSkillFirstInner's pattern per Trap 1. The locked branch
+  destructures only `const { data: fullSkill } = useSkill(selectedSkillId)`, ignoring `isError`. When
+  `preSelectedSkillId` is truthy and the skill IS attached (`selectedSkill` present →
+  `skillSelectedButMissing` false) but `useSkill`'s detail fetch errors (transient 500 / network /
+  skill deleted mid-session), `fullSkill` stays `undefined` forever, so `selectedSkill && !fullSkill`
+  keeps the skeleton condition permanently true → infinite spinner, no error message, no Run
+  affordance, until a full remount. This is exactly Trap 1's instruction ("gate the same way
+  `RunConsoleSkillFirstInner` gates its own `skillLoading`/`skillError` states") — only the loading
+  half was mirrored; the error half was dropped. Skill-first mode's pattern (RunConsole.tsx:808 +
+  996, `error: skillError` → explicit error branch) is the fix template. Suggested: destructure
+  `isError`/`error` from `useSkill`, and in the locked branch render an error message (e.g. reuse the
+  `skillSelectedButMissing`-style card copy or a "couldn't load this skill" message) instead of
+  falling through to the skeleton.
+
+- [x] [Review][Patch] **Study-launch flash of "That skill isn't available in this context." before
+  `projectId` resolves** [velara-web/src/features/run/components/RunConsole.tsx:672-681] — MEDIUM.
+  FIXED: added `attachmentsSettling = origin === 'study' && !projectId` and folded it into the
+  skeleton condition, so the not-available fallback fires only after both attachment sources settle. For
+  a study-launched Run of a PROJECT-attached skill, `RunConsoleResolver` yields `resolvedProjectId=''`
+  until `studyCtx.project.data.id` resolves (RunConsole.tsx:1669-1670). During that window
+  `useProjectSkills('')` is disabled (`enabled: !!projectId`, useProjectSkills.ts:14 → not loading, no
+  data) while `useStudySkills` has already resolved WITHOUT the project skill → `skillsLoading=false`,
+  `selectedSkill` absent → `skillSelectedButMissing=true`. Because the branch checks
+  `skillSelectedButMissing` before `fullSkill`, the "not available" fallback renders (even if
+  `fullSkill` already resolved), then flips to `LockedSkillCard` once the project id lands. 16.8 makes
+  this materially worse than before: pre-change the fallback was a supplement below a still-rendered
+  picker; now it is the ONLY thing in the skill slot, so a valid launch briefly reads as a hard "not
+  available" error. Suggested: fold the still-resolving-projectId window (study origin && projectId
+  empty) into the skeleton condition so the missing-skill fallback fires only after BOTH attachment
+  sources have genuinely settled.
+
+- [x] [Review][Patch] **Locked-path skeleton / error sub-state is untested — lets finding 1 ship
+  green** [velara-web/src/features/run/components/RunConsole.test.tsx:332-380] — MEDIUM. FIXED: added
+  3 tests — loading skeleton (no card/picker/fallback), generic `useSkill` error (message shown, not
+  an endless skeleton), and a SKILL_NOT_FOUND error (removed/other-org copy). Task 2
+  enumerated three locked sub-states (skeleton / not-found / resolved) but the tests cover only
+  resolved-card, picker path, and missing-in-attachment-list. There is no test for `skillsLoading` or
+  the `selectedSkill present && fullSkill undefined` (loading/errored) sub-state — precisely the state
+  that hangs forever per finding 1. Add coverage for the loading skeleton and the `useSkill`-error
+  path alongside the finding-1 fix. (Related low nit, folded in: the AC5 test leaves the default
+  `useSkill` mock resolving a real skill for the "missing" id; it still guards the branch order but
+  would be more faithful with a `{ data: undefined, error }` override.)
+
+- [x] [Review][Defer] **Attachment-list (`useProjectSkills`/`useStudySkills`) fetch error is
+  misreported as "skill not available"** [velara-web/src/features/run/components/RunConsole.tsx:489-499,557]
+  — deferred, pre-existing. Both attachment hooks return `error` but `RunConsoleInner` never consumes
+  it, so a failed attachment fetch (data undefined, not loading, `availableSkills` empty) makes
+  `skillSelectedButMissing` true → the fallback claims the skill is unattached when the real cause is
+  a failed request, with no retry. The `skillSelectedButMissing` derivation (line 557) and the
+  attachment queries predate this story; 16.8 did not introduce this. Fix would consume the queries'
+  `error` and render a retryable "couldn't load skills" state.
+
+_Dismissed as noise (4): (a) reworded fallback copy / removal of the picker-path fallback block —
+by-design (auditor confirmed no reachable picker-path missing-skill state; test asserts the new
+string); (b) the trailing `: null` leaf of the locked branch is unreachable dead code, harmless and
+superseded by finding 1's error branch; (c) `fullSkill` resolved-but-not-attached → fallback wins —
+by-design (not-attached must block Run, confirmed by auditor + edge hunter); (d) 16.7's
+`hydratedJobId`/`explicitJobId` mock plumbing threaded through the shared test file is a coupling note,
+not a 16.8 defect._
 
 ## Dev Notes
 

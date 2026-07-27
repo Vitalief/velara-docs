@@ -55,6 +55,22 @@
 generated: 2026-06-02
 last_updated: 2026-07-27
 
+# 2026-07-27: 16-8-engagement-run-locks-console-to-single-skill moved to done (code-review).
+#   3-layer adversarial review (Blind Hunter + Edge Case Hunter + Acceptance Auditor). All 5 ACs
+#   verified satisfied and non-vacuously tested. Triage: 0 decision-needed, 3 patch (all applied),
+#   1 defer, 4 dismissed. HEADLINE: Blind Hunter + Edge Case Hunter INDEPENDENTLY converged on one
+#   HIGH defect — the new locked skill-card path destructured only `data` from useSkill, dropping the
+#   `isError` handling that skill-first mode has (the story's own Trap 1 told the dev to mirror it), so
+#   a failed skill-DETAIL fetch on an attached skill left `fullSkill` undefined forever → permanent
+#   skeleton, no error, no Run affordance (console bricked till remount). Fix: destructure isError/error,
+#   add an error branch (SKILL_NOT_FOUND copy / getErrorMessage) before the card. Patch 2: study-launch
+#   flashed "That skill isn't available" before the async projectId resolved (useProjectSkills disabled
+#   at projectId='') — folded a new `attachmentsSettling = origin==='study' && !projectId` into the
+#   skeleton gate. Patch 3: added 3 tests (loading skeleton, generic useSkill error, SKILL_NOT_FOUND)
+#   covering the previously-untested sub-states that let patch 1 ship green. Deferred (pre-existing):
+#   ATTACHMENT-list (useProjectSkills/useStudySkills) fetch errors are still misreported as
+#   "skill not available" — logged to deferred-work.md. tsc + eslint clean; vitest 796/796 (up from
+#   793, +3 review tests, 0 regressions).
 # 2026-07-27: 16-8-engagement-run-locks-console-to-single-skill moved to review (dev-story).
 #   FE-only (velara-web), zero backend surface, built alongside Story 16.7's uncommitted changes with
 #   zero line overlap (confirmed: 16.7 touches only JobStatusPanel further down RunConsole.tsx). Branched
@@ -457,7 +473,7 @@ development_status:
   #   Two FE-only deployed-dev fixes against the Run Console. Prioritize ahead of Epic 17.
   #   Epic 16 stays in-progress until these + a manual epic-close.
   16-7-run-console-no-longer-reopens-stale-completed-job: done
-  16-8-engagement-run-locks-console-to-single-skill: review
+  16-8-engagement-run-locks-console-to-single-skill: done
 
   # ─────────────────────────────────────────────────────────
   # Epic 17: LLM-Call Observability & Certification Evidence
