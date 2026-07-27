@@ -522,7 +522,7 @@ development_status:
   #   fast terminal-fail with a new error_code on exhaustion) — explicitly does NOT reorder
   #   confirm_file_ref's dispatch-before-commit (that ordering guards a different, worse failure
   #   mode: broker-unreachable). No FE change required.
-  16-9-fix-confirm-dispatch-race-stranding-protocol-uploads: ready-for-dev
+  16-9-fix-confirm-dispatch-race-stranding-protocol-uploads: in-progress
 
   # ─────────────────────────────────────────────────────────
   # Epic 17: LLM-Call Observability & Certification Evidence
