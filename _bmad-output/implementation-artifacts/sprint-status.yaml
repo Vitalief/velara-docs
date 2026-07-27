@@ -54,6 +54,28 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-27
+
+# 2026-07-27: 16-7-run-console-no-longer-reopens-stale-completed-job moved to review (dev-story).
+#   Frontend-only, as scoped. Root cause confirmed against current source: hydratedJobId is a
+#   once-per-tab, load-time-only flag (Zustand persist's onRehydrateStorage), so it never catches a
+#   terminal job left in activeJobId from an earlier run this session with no refresh in between —
+#   exactly the reported bug. Fix adds a second store field, explicitJobId, scoped to the CURRENTLY
+#   MOUNTED JobStatusPanel instance's lifetime (set by setActiveJobId on any explicit non-null call;
+#   cleared on that panel's unmount) — the counterpart to hydratedJobId's "came from storage" semantics.
+#   JobStatusPanel's guard now clears any terminal activeJobId matching neither hydratedJobId nor
+#   explicitJobId. Caught and corrected during design: a naive "was this ever explicitly set" flag
+#   (not scoped to mount lifetime) would have made a once-run job count as explicit forever and never
+#   be recognized as stale — traced the "run, navigate away, come back later" scenario against the
+#   design before implementing to confirm the unmount-scoping was necessary. All 4 pre-existing
+#   useRunStore.test.ts assertions and 102 of 104 pre-existing RunConsole.test.tsx assertions kept
+#   green unmodified; one pre-existing RunConsole.test.tsx test asserted the OLD, actually-ambiguous
+#   contract (hydratedJobId: null was treated as "safe to leave alone" whether explicit or stale) and
+#   was corrected to express the new contract (explicitJobId: 'job-picked') rather than deleted. New
+#   test coverage: +5 useRunStore.test.ts (explicitJobId/clearExplicitJobId), +1 RunConsole.test.tsx
+#   (the literal AC1 bug scenario). Also fixed (discovered during the full-suite gate, not anticipated
+#   by the story draft): src/routes/internal.test.tsx's inline useRunStore mock was missing the new
+#   fields and crashed on JobStatusPanel's unmount cleanup — extended with null/vi.fn() defaults.
+#   tsc --noEmit + eslint clean; vitest run 791/791 green, 0 regressions.
 # 2026-07-24: 16-7-run-console-no-longer-reopens-stale-completed-job moved to ready-for-dev (create-story).
 #   FE-only (velara-web), zero backend surface. Root-caused against current source (not speculation):
 #   `hydratedJobId` (useRunStore.ts) is set exactly once per tab session, inside `onRehydrateStorage`,
@@ -385,7 +407,7 @@ development_status:
   # 2026-07-24: 16-7/16-8 added via correct-course (sprint-change-proposal-2026-07-24.md).
   #   Two FE-only deployed-dev fixes against the Run Console. Prioritize ahead of Epic 17.
   #   Epic 16 stays in-progress until these + a manual epic-close.
-  16-7-run-console-no-longer-reopens-stale-completed-job: in-progress
+  16-7-run-console-no-longer-reopens-stale-completed-job: review
   16-8-engagement-run-locks-console-to-single-skill: backlog
 
   # ─────────────────────────────────────────────────────────

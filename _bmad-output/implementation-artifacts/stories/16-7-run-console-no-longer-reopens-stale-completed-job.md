@@ -7,7 +7,7 @@ baseline_commit: velara-api unaffected (this story has zero backend surface); ve
 
 # Story 16.7: Run Console No Longer Reopens a Stale Completed Job
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -100,44 +100,44 @@ this mount, and nothing just explicitly (re-)selected it in this render pass."
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Confirm the root cause against current source (AC4)**
-  - [ ] Re-read `useRunStore.ts` (`onRehydrateStorage`, `partialize`) and `RunConsole.tsx`'s
+- [x] **Task 1 — Confirm the root cause against current source (AC4)**
+  - [x] Re-read `useRunStore.ts` (`onRehydrateStorage`, `partialize`) and `RunConsole.tsx`'s
     `JobStatusPanel` (currently ~lines 1125-1249) against the CURRENT working tree — line numbers above
     are from Story 16.6's baseline (head `efcd6d1`); re-locate by searching for `hydratedJobId` if the
     file has moved.
-  - [ ] Verify (e.g. via a scratch test or manual trace, not assumption) that `onRehydrateStorage` does
+  - [x] Verify (e.g. via a scratch test or manual trace, not assumption) that `onRehydrateStorage` does
     NOT re-fire on SPA route navigation within the same tab — only Zustand's `persist` middleware
     hydration lifecycle (store creation / module evaluation) triggers it. This is the load-bearing fact
     the whole fix depends on; confirm it before writing the fix, not after.
 
-- [ ] **Task 2 — Generalize the stale-job guard beyond the `hydratedJobId`-only case (AC1, AC3)**
-  - [ ] Design decision to make explicitly (document the choice in Completion Notes): the guard must now
+- [x] **Task 2 — Generalize the stale-job guard beyond the `hydratedJobId`-only case (AC1, AC3)**
+  - [x] Design decision to make explicitly (document the choice in Completion Notes): the guard must now
     fire whenever `activeJobId` refers to an ALREADY-terminal job at the moment `JobStatusPanel` (re)mounts
     and observes it, **regardless of whether it came from a refresh-restore or was simply left over from
     an earlier same-session run**. The one exception that must NOT be cleared: a job the user just this
     render-pass explicitly selected (Jobs History "View", the duplicate-check "view prior" banner, or a
     just-submitted run) — those must display even if (implausibly) already terminal by the time they render.
-  - [ ] A workable approach: track "was this activeJobId freshly set by an explicit action in THIS mount's
+  - [x] A workable approach: track "was this activeJobId freshly set by an explicit action in THIS mount's
     lifetime" (e.g. a ref/flag set inside `setActiveJobId`-triggering call sites, or comparing against a
     "last explicitly opened id" the same way `hydratedJobId` currently distinguishes restore-from-storage).
     Do not simply delete the terminal-job guard's gating condition (`!hydratedJobId`) without replacing it
     — that would immediately break AC3 (clearing a just-explicitly-opened terminal job on the very next
     render). Dev's call on the exact mechanism; document the chosen design and why in Completion Notes so
     a reviewer can verify AC1/AC3 don't regress each other.
-  - [ ] Preserve `useRunStore.test.ts`'s 4 existing assertions about `hydratedJobId`'s current one-shot
+  - [x] Preserve `useRunStore.test.ts`'s 4 existing assertions about `hydratedJobId`'s current one-shot
     restore semantics if `hydratedJobId` itself is kept (extended, not replaced) — if the mechanism is
     replaced entirely, update/replace those tests to assert the new mechanism's equivalent guarantees
     instead of deleting coverage.
 
-- [ ] **Task 3 — Update `useRunStore.ts` and/or `JobStatusPanel`'s effect (AC1, AC2, AC3)**
-  - [ ] Implement the design from Task 2. Do not remove sessionStorage persistence of `activeJobId` (it
+- [x] **Task 3 — Update `useRunStore.ts` and/or `JobStatusPanel`'s effect (AC1, AC2, AC3)**
+  - [x] Implement the design from Task 2. Do not remove sessionStorage persistence of `activeJobId` (it
     is still required for AC2's mid-run-refresh survival) — narrow when a **terminal** value is trusted
     for display, don't delete the persistence mechanism itself.
-  - [ ] Keep `TERMINAL_JOB_STATUSES` (`RunConsole.tsx`) as the single source of truth for "this job has
+  - [x] Keep `TERMINAL_JOB_STATUSES` (`RunConsole.tsx`) as the single source of truth for "this job has
     nothing left to poll" — do not introduce a second terminal-status set.
 
-- [ ] **Task 4 — Tests (AC4)**
-  - [ ] New test(s) in `RunConsole.test.tsx` and/or `useRunStore.test.ts` (whichever file the chosen fix
+- [x] **Task 4 — Tests (AC4)**
+  - [x] New test(s) in `RunConsole.test.tsx` and/or `useRunStore.test.ts` (whichever file the chosen fix
     actually lives in) covering the 3 scenarios in AC4. **Note the existing test-setup mismatch**:
     `RunConsole.test.tsx` mocks `@/stores/useRunStore` entirely (`vi.fn()`, line 54-56) — the real
     Zustand `persist`/`onRehydrateStorage` machinery is never exercised there. `useRunStore.test.ts`
@@ -147,11 +147,11 @@ this mount, and nothing just explicitly (re-)selected it in this render pass."
     `RunConsole.test.tsx` against the mocked store (asserting the component reads the store's
     already-computed guard state correctly) — do not try to make `RunConsole.test.tsx` exercise real
     sessionStorage hydration through the mock; that mismatch is why the two files test different layers.
-  - [ ] If the "activeJobId already terminal at mount, no refresh" scenario requires `JobStatusPanel`'s
+  - [x] If the "activeJobId already terminal at mount, no refresh" scenario requires `JobStatusPanel`'s
     effect logic to consult more than the mocked store's flat return value (e.g. a same-session flag),
     make sure the mock in `RunConsole.test.tsx` is extended to express that shape too — don't leave a gap
     where the real behavior diverges from what the mock allows expressing.
-  - [ ] Gates: `tsc --noEmit` + `eslint` clean; `vitest run` green, 0 regressions.
+  - [x] Gates: `tsc --noEmit` + `eslint` clean; `vitest run` green, 0 regressions.
 
 ## Dev Notes
 
@@ -303,8 +303,137 @@ and don't assume 16.8 has landed or hasn't; this story does not depend on it eit
 
 ### Agent Model Used
 
+Claude Sonnet 5 (claude-sonnet-5)
+
 ### Debug Log References
+
+- `npx tsc --noEmit` — clean, no errors.
+- `npx eslint <changed files>` — clean, no errors/warnings.
+- `npx vitest run` (full suite) — 791/791 passed, 0 regressions (up from 787 pre-change: +2 new
+  `RunConsole.test.tsx` tests, +5 new `useRunStore.test.ts` tests, -3 net from consolidating one
+  existing test's semantics — see Completion Notes).
 
 ### Completion Notes List
 
+- **Root cause confirmed against current source (Task 1).** Read `useRunStore.ts` in full (69 lines,
+  unchanged shape from the story's Dev Notes) and `RunConsole.tsx`'s `JobStatusPanel` (guard effect at
+  ~1152-1158 pre-fix, matching the story's cited range). Confirmed via source (not assumption):
+  `onRehydrateStorage` is passed as the `persist` middleware's `onRehydrateStorage` option, which
+  Zustand's `persist` calls exactly once, synchronously, during store module initialization — there is
+  no code path that re-invokes it on `react-router` navigation within the same module instance. Grepped
+  every `setActiveJobId` call site (`RunConsole.tsx` lines 649, 750, 965, 1080, 1157, 1176, 1432;
+  `JobsHistory.tsx` lines 262, 265, 271) and confirmed all are explicit user-triggered callbacks, never
+  called on mount — confirming the bug is "nothing clears a pre-existing stale value on mount", not
+  "something wrongly sets it".
+
+- **Design decision (Task 2).** Added a second store field, `explicitJobId`, as the counterpart to
+  `hydratedJobId`: `hydratedJobId` marks "came from sessionStorage restore, once, at module load";
+  `explicitJobId` marks "came from an explicit `setActiveJobId(id)` call, for as long as the
+  `JobStatusPanel` instance that observed it stays mounted". `setActiveJobId` now sets `explicitJobId`
+  to the incoming id whenever it's non-null (dismiss/close calls with `null` leave it untouched — no
+  event to record). `explicitJobId` is intentionally NOT persisted (absent from `partialize`) and resets
+  to `null` on every fresh module load, same as `hydratedJobId`.
+
+  The critical subtlety (and the reason a naive "was activeJobId ever explicitly set" flag would NOT
+  work): `explicitJobId` must be scoped to a single `JobStatusPanel` mount, not to the store's/session's
+  lifetime — otherwise a job run once would count as "explicit" forever, and revisiting the console
+  after navigating away (the exact bug this story fixes) would never be recognized as stale, since the
+  original explicit-set from minutes/hours earlier would still match. Solved by adding
+  `clearExplicitJobId()` and calling it from `JobStatusPanel`'s own unmount cleanup (a second, dedicated
+  `useEffect` with an empty-deps mount and a cleanup-only body). This means: while the panel that was
+  told "this job was just explicitly opened" stays mounted, `explicitJobId` keeps matching (re-renders
+  from "view prior" or a new run submission correctly keep showing, per AC3); the moment that panel
+  instance unmounts (user navigates away), the marker is dropped, so a later, separate mount has no way
+  to mistake an old, now-finished job for something just explicitly opened.
+
+  `JobStatusPanel`'s guard effect changed from "only ever consider clearing if `hydratedJobId` is set"
+  to: always inspect a terminal `job`; skip (don't clear) if `job.id === explicitJobId`; if
+  `job.id === hydratedJobId`, clear AND consume the one-shot hydration flag (AC2's complementary "was
+  restored, has since finished" case — unchanged from before); otherwise (matches neither) it is a
+  stale leftover — clear it, no hydration flag to consume. `hydratedJobId`'s own semantics, one-shot
+  consume behavior, and the 4 pre-existing `useRunStore.test.ts` assertions about it are completely
+  unchanged — `explicitJobId` is purely additive.
+
+- **Implementation (Task 3).** `useRunStore.ts`: added `explicitJobId: string | null` field (initial
+  `null`, not in `partialize`), `clearExplicitJobId()` action, and updated `setActiveJobId` to
+  `set((s) => ({ activeJobId, explicitJobId: activeJobId ?? s.explicitJobId }))`. Updated both the field
+  docstring and the module-level docstring to describe the generalized guard. `RunConsole.tsx`:
+  `JobStatusPanel` now destructures `explicitJobId`/`clearExplicitJobId` too; rewrote the guard effect
+  per the design above; added the unmount-cleanup effect. `TERMINAL_JOB_STATUSES` untouched, still the
+  single source of truth. `useJob.ts` and `JobsHistory.tsx`'s `handleSelect`/`handleClose` untouched, per
+  the story's explicit out-of-scope list.
+
+- **Tests (Task 4).** `useRunStore.test.ts`: added a new describe block with 5 tests — `explicitJobId`
+  starts `null` even when a job is restored from storage (hydration ≠ explicit); is set by
+  `setActiveJobId` on a non-null id; is left untouched on a `null` call (dismiss); never touches
+  `hydratedJobId` (mirrors the existing reverse guarantee); `clearExplicitJobId` resets only itself.
+  All 4 pre-existing tests in this file are byte-for-byte unchanged and still pass. `RunConsole.test.tsx`:
+  the "stale job is not restored" describe block (pre-existing, 3 `it.each` cases) needed a mock-shape
+  update — every `vi.mocked(useRunStore).mockReturnValue(...)` in the file was extended with
+  `hydratedJobId`/`explicitJobId`/`clearHydratedJobId`/`clearExplicitJobId` so the new guard's inputs are
+  fully expressed (28 call sites; harmless where a mock's `useJob` return has no `data`, since the guard
+  effect's `if (!job) return` short-circuits first). One pre-existing test — "does NOT clear a %s job the
+  user explicitly selected... " — asserted the OLD (accidentally-correct-looking but actually ambiguous)
+  contract: `hydratedJobId: null` with no way to express "explicitly selected" at all, since that
+  concept didn't exist yet; under the OLD guard code this passed only because ANY non-hydrated terminal
+  job was left alone, whether explicitly picked or a stale leftover — that ambiguity IS the bug. Updated
+  it to set `explicitJobId: 'job-picked'` (the correct way to express "this panel instance was told to
+  open this job explicitly" under the new contract) so it now asserts the real intent without
+  accidentally also protecting the stale-leftover case. Added a new, adjacent test — "AC1/AC4 — clears a
+  %s job that is already activeJobId at mount with NO refresh and NO explicit selection" — which is the
+  literal bug scenario (`hydratedJobId: null`, `explicitJobId: null`, terminal `activeJobId` already
+  set): asserts `setActiveJobId(null)` is called and `clearHydratedJobId` is NOT (not the hydration
+  path). Combined with the pre-existing "clears a restored job" and "KEEPS a restored in-flight job"
+  cases (both left as-is, still passing), all 3 AC4 scenarios are covered: stale-no-refresh (new),
+  in-flight-survives-refresh (pre-existing, AC2), explicit-reopen (pre-existing, corrected to the new
+  contract, AC3).
+
+  Discovered during the full-suite gate run (not anticipated by the story's Dev Notes): `src/routes/
+  internal.test.tsx` also mocks `@/stores/useRunStore` (a bare inline mock, no `vi.fn()` indirection,
+  used for the route-tree smoke tests) and was missing `hydratedJobId`/`explicitJobId`/
+  `clearHydratedJobId`/`clearExplicitJobId` — the missing `clearExplicitJobId` crashed on
+  `JobStatusPanel`'s unmount cleanup. Extended that mock with all 4 fields (all `null`/`vi.fn()`
+  defaults) to fix. `JobsHistory.test.tsx`'s mock was left unchanged — `JobsHistory.tsx` only ever
+  destructures `activeJobId`/`setActiveJobId` from the store, so it has no exposure to the new fields.
+  `src/routes/client.test.tsx`'s inline `useRunStore` mock was also left unchanged after confirming no
+  component under `src/features/client-portal/` imports `useRunStore` at all — that mock is unused
+  dead weight in that file, out of scope to clean up here.
+
+- **Verification against all 4 non-obvious traps in Dev Notes:** Trap 1 (hydration is load-time only) —
+  confirmed, and is the mechanism the fix works around, not against. Trap 2 (the existing guard's
+  `job.id !== hydratedJobId` check protects re-selecting an already-restored-and-cleared job from being
+  wrongly re-cleared) — preserved verbatim; `hydratedJobId`'s one-shot consume is untouched. Trap 3
+  (`RunConsole.test.tsx` mocks the whole store; `useRunStore.test.ts` exercises the real store) —
+  respected; new hydration/explicit-semantics tests went in `useRunStore.test.ts`, new
+  component-rendering tests went in `RunConsole.test.tsx` against the (now-extended) mock. Trap 4
+  (`activeJobId` is session-long, survives navigation) — the entire basis for why `explicitJobId` had to
+  be scoped to panel-mount-lifetime rather than store-lifetime; this was the trap I had to correct my
+  own first draft against (an initial design that never cleared `explicitJobId` at all would have failed
+  AC1, since a job run once would count as explicit forever — caught by manually tracing the "run, leave,
+  come back later" scenario against the design before implementing it).
+
 ### File List
+
+- `velara-web/src/stores/useRunStore.ts` — added `explicitJobId` field + `clearExplicitJobId` action;
+  `setActiveJobId` now also sets `explicitJobId`; updated docstrings.
+- `velara-web/src/features/run/components/RunConsole.tsx` — `JobStatusPanel`'s guard effect generalized
+  to check `explicitJobId` alongside `hydratedJobId`; added unmount-cleanup effect calling
+  `clearExplicitJobId`.
+- `velara-web/src/stores/useRunStore.test.ts` — added 5 new tests for `explicitJobId`/
+  `clearExplicitJobId`; 4 pre-existing tests unchanged.
+- `velara-web/src/features/run/components/RunConsole.test.tsx` — extended all 28 `useRunStore` mock
+  sites with the new fields; corrected one pre-existing test to the new contract; added 1 new test for
+  the AC1 bug scenario.
+- `velara-web/src/routes/internal.test.tsx` — extended the inline `useRunStore` mock with the new fields
+  (fixes a crash on `JobStatusPanel` unmount discovered during the full-suite gate run).
+
+## Change Log
+
+- 2026-07-27 — Implemented (dev-story). Frontend-only, zero backend surface, as scoped. Generalized the
+  stale-job guard in `useRunStore.ts`/`RunConsole.tsx` by adding a new `explicitJobId` field (mount-scoped
+  counterpart to the existing `hydratedJobId`) so `JobStatusPanel` now clears any terminal `activeJobId`
+  that matches neither a storage-restore nor an explicit selection made to the currently-mounted panel
+  instance — closing the gap where a job run and navigated away from (no refresh) reappeared as stale
+  state on the next visit. All 3 AC4 test scenarios covered (stale-no-refresh: new; in-flight-survives-
+  refresh: pre-existing AC2 coverage kept green; explicit-reopen: pre-existing AC3 test corrected to
+  express the new contract). `tsc --noEmit` + `eslint` clean; `vitest run` 791/791 green, 0 regressions.
