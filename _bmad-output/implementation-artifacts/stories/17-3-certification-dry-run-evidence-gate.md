@@ -9,7 +9,7 @@ baseline_commit: velara-api head `0028_study_protocol_association` (Alembic); ve
 
 # Story 17.3: Certification Dry-Run Evidence Gate (5 Runs Before the Technical Key)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -124,8 +124,8 @@ product-owner direction during drafting, 2026-07-27):
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Backend: dry-run config + evidence schema (AC1, AC2, AC5, AC7)**
-  - [ ] New Alembic migration `0029_certification_dry_runs.py`, `down_revision =
+- [x] **Task 1 — Backend: dry-run config + evidence schema (AC1, AC2, AC5, AC7)**
+  - [x] New Alembic migration `0029_certification_dry_runs.py`, `down_revision =
     "0028_study_protocol_association"`. Creates TWO tables:
     - `certification_dry_run_configs` — the saved, reusable input-set definitions, scoped to
       `skill_id` (survives version bumps, per AC7): `id` (UUID PK), `skill_id` (FK `skills.id`,
@@ -146,34 +146,29 @@ product-owner direction during drafting, 2026-07-27):
       trigger (`0015`'s `reject_certification_mutation()`) — evidence rows aren't Part 11 records
       themselves, only inputs to a gate; confirm this reading with the architect if in doubt, but
       nothing in AC4 requires dry-run rows to be immutable, only that `CertificationRecord` stays so.
-  - [ ] New SQLAlchemy models in `app/models/certification.py` (co-located with `CertificationRecord`,
+  - [x] New SQLAlchemy models in `app/models/certification.py` (co-located with `CertificationRecord`,
     same file): `CertificationDryRunConfig`, `CertificationDryRunEvidence`. No `relationship()`
     attributes needed — follow `CertificationRecord`'s flat-FK, explicit-`select()`-join convention.
-  - [ ] Add `output_sha256: Mapped[str | None]` (String(64), nullable) to `InvocationResult`
+  - [x] Add `output_sha256: Mapped[str | None]` (String(64), nullable) to `InvocationResult`
     (`app/models/invocation.py:160-219`) in the SAME migration — computed in
     `execution_service._persist_output` (`execution_service.py:191-237`) alongside the existing
     `output_file_key` write, mirroring how `FileReference.content_sha256` is computed
     (`0021_file_ref_content_hash.py` precedent — locate and read this migration + its call site
     before implementing, to match the hashing approach exactly, e.g. `hashlib.sha256(output_bytes).hexdigest()`).
 
-- [ ] **Task 2 — Backend: dry-run config CRUD + run-linking endpoints (AC1, AC7)**
-  - [ ] New router `app/api/v1/certification_dry_runs.py` (or extend `certifications.py` — pick one
-    and be consistent), gated `dependencies=[RejectNonGrantor]` to match the existing certification
-    router tier (`certifications.py:32-38`) unless the story's RBAC decision (below) says narrower.
-    **RBAC decision to make explicit in Dev Agent Record:** the epic frames this as an "ma_tech
-    member" action, but the existing `POST /api/v1/certifications` gate is `RejectNonGrantor`
-    (admin+ma_tech). Recommend staying consistent with the existing certification endpoints'
-    `RejectNonGrantor` tier (not narrowing to `RejectNonMaTech`) — narrowing only this one sub-surface
-    while its parent stays broader would be an inconsistent, undocumented RBAC seam. Document
-    whichever is chosen; do not silently default.
-  - [ ] `POST /api/v1/certifications/dry-run-configs` — create a config (`skill_id`, `label`,
-    `inputs`, `sort_order`). Enforce max 5 configs per skill (422 if exceeded — reuse
-    `VelaraHTTPException` idiom, new code e.g. `DRY_RUN_CONFIG_LIMIT_EXCEEDED`).
-  - [ ] `PATCH /api/v1/certifications/dry-run-configs/{id}` — edit label/inputs/sort_order. (Configs
+- [x] **Task 2 — Backend: dry-run config CRUD + run-linking endpoints (AC1, AC7)**
+  - [x] Extended `app/api/v1/certifications.py` (rather than a separate router file — simpler, one
+    less file, same prefix already matches), gated `dependencies=[RejectNonGrantor]` to match the
+    existing certification router tier (`certifications.py:32-38`).
+    **RBAC decision:** kept `RejectNonGrantor` (admin+ma_tech) for consistency with the parent
+    certification surface — not narrowed to `RejectNonMaTech`, per the story's own recommendation.
+  - [x] `POST /api/v1/certifications/dry-run-configs` — create a config (`skill_id`, `label`,
+    `inputs`, `sort_order`). Enforces max 5 configs per skill (422 `DRY_RUN_CONFIG_LIMIT_EXCEEDED`).
+  - [x] `PATCH /api/v1/certifications/dry-run-configs/{id}` — edit label/inputs/sort_order. (Configs
     themselves are NOT Part 11 records — no immutability requirement here, unlike `CertificationRecord`.)
-  - [ ] `DELETE /api/v1/certifications/dry-run-configs/{id}`.
-  - [ ] `GET /api/v1/certifications/dry-run-configs?skill_id={id}` — list a skill's saved configs.
-  - [ ] `POST /api/v1/certifications/dry-run-evidence` — body `{invocation_job_id, skill_version_id,
+  - [x] `DELETE /api/v1/certifications/dry-run-configs/{id}`.
+  - [x] `GET /api/v1/certifications/dry-run-configs?skill_id={id}` — list a skill's saved configs.
+  - [x] `POST /api/v1/certifications/dry-run-evidence` — body `{invocation_job_id, skill_version_id,
     dry_run_config_id?}`; validates the job actually belongs to that skill+exact version (match
     `InvocationJob.skill_id == skill_id AND InvocationJob.skill_version == target_version.version` —
     string-match against `skill_versions.version`, same pattern as
@@ -183,106 +178,123 @@ product-owner direction during drafting, 2026-07-27):
     ("this job counts as evidence") is already satisfied, and a hard error here would only complicate
     the FE's "Run All" retry logic for no correctness benefit. Document this choice in the Dev Agent
     Record.
-  - [ ] `GET /api/v1/certifications/dry-run-evidence?skill_version_id={id}` — list the trail
+  - [x] `GET /api/v1/certifications/dry-run-evidence?skill_version_id={id}` — list the trail
     (joins to `InvocationJob`/`InvocationResult` for status/output_sha256/timestamps) — powers AC6's
     UI card. Response includes a computed `distinct_output_count` and `is_sufficient: bool` so the FE
     doesn't need to re-derive the ≥5-distinct-hashes rule itself.
-  - [ ] There is no "run all" backend endpoint needed — "Run All" (AC7) is a FE-orchestrated sequence
+  - [x] There is no "run all" backend endpoint needed — "Run All" (AC7) is a FE-orchestrated sequence
     of N `POST /api/v1/invocations/{skill_id}` calls (one per saved config) followed by N `POST
     .../dry-run-evidence` linking calls, reusing existing endpoints. Do not build a new bulk-execute
     backend endpoint — this would be a parallel runner, which AC1 explicitly forbids.
-  - [ ] **Context requirement decision (flagged by frontend research, must be resolved here):** every
-    existing invocation requires `project_id` or `study_id` (`invocations.py` `queue_invocation`); a
-    certification dry-run is conceptually context-free. Decide and document: either (a) add a new
-    optional `certification_dry_run: bool` flag to `InvocationRequest`
-    (`schemas/invocation.py`) that lets `queue_invocation` skip the project/study requirement for
-    ma_tech/admin callers, or (b) require the ma_tech user to pick any project/study they have access
-    to, same as a normal run. Recommend (a) — a dry-run's purpose is orthogonal to engagement context,
-    and forcing a fake project/study pick would confuse the evidence trail with real client work.
-    This flag, if added, is a small `queue_invocation` change (`invocations.py:303-523` — function
-    signature at line 303, docstring runs ~304-316, body follows), NOT a change to
-    `execution_service.py`'s execution logic itself.
+  - [x] **Context requirement — CORRECTED during implementation, no backend change needed.** The
+    story's drafting assumed every invocation requires `project_id`/`study_id`, based on
+    `RunConsole.tsx`'s own `buildRunPayload()` always attributing to its already-known launch
+    context. Verified against the actual backend
+    (`invocations.py#_resolve_single_job_hierarchy_path`, lines 232-252): for a non-location-dependent
+    skill with no `study_id`/`project_id`/`client_id` supplied, an **unrestricted caller (ma_tech/admin
+    — internal roles bypass hierarchy scope, `dependencies.py:336-337`) already falls through to
+    `return "org", inputs_payload"`** (line 245-246) — a fully-supported context-free invocation today.
+    `schemas/invocation.py`'s own docstring confirms this is intentional: *"Omit all three to run at
+    the org root (unchanged default behavior for a context-free invocation, e.g. from the Skill
+    Registry)."* No new `certification_dry_run` flag, no `InvocationRequest` change, no
+    `queue_invocation` change. The dry-run trail UI's "Run" action calls
+    `POST /api/v1/invocations/{skill_id}` directly (via a thin new hook, not `RunConsole.tsx`) with
+    only `inputs` set — it lands at `hierarchy_path="org"` exactly like a Skill-Registry-launched run.
 
-- [ ] **Task 3 — Backend: the evidence gate itself (AC2, AC3)**
-  - [ ] New function `count_sufficient_dry_run_evidence(*, session, skill_version_id) -> int` in
-    `certification_service.py` (co-located near `evaluate_certification_eligibility`,
-    `certification_service.py:410-433`) — a pure-read query joining
-    `certification_dry_run_evidence` → `invocation_jobs` → `invocation_results`, filtering
-    `status == "completed"`, returning `COUNT(DISTINCT invocation_results.output_sha256)`.
-  - [ ] New exception `CertificationEvidenceInsufficientError(VelaraHTTPException)`, `ERROR_CODE =
-    "CERTIFICATION_EVIDENCE_INSUFFICIENT"`, message e.g. "At least 5 dry-runs with differing outputs
-    are required before technical certification can be recorded." — placed alongside
-    `CertificationIncompleteError`/`RecertificationRequiredError` (`certification_service.py:46-67`),
-    same two-line constructor shape.
-  - [ ] Insert the gate call inside `record_certification` (`certification_service.py:116-273`),
-    guarded `if certification_type == "technical":`, positioned right after `ver` is resolved (after
-    line 164, before the `CertificationRecord(...)` construction at line 167) — NOT inside
-    `assert_certified_for_client_ready` (a different call site for the lifecycle PATCH, not this POST).
-  - [ ] Add the new error message to the frontend's `CERTIFICATION_ERROR_MESSAGES` map
-    (`velara-web/src/shared/utils/errors.ts:102-110`), consumed by `friendlyCertificationError()`
-    (already called in `RecordTechnicalCertModal.tsx:95`) — no other FE error-plumbing change needed.
+- [x] **Task 3 — Backend: the evidence gate itself (AC2, AC3)**
+  - [x] New function `count_sufficient_dry_run_evidence(*, session, skill_version_id, org_id) -> int` in
+    `certification_service.py` (co-located near `evaluate_certification_eligibility`) — a pure-read
+    query joining `certification_dry_run_evidence` → `invocation_jobs` → `invocation_results`,
+    filtering `status == "completed"`, returning `COUNT(DISTINCT invocation_results.output_sha256)`.
+  - [x] New exception `CertificationEvidenceInsufficientError(VelaraHTTPException)`, `ERROR_CODE =
+    "CERTIFICATION_EVIDENCE_INSUFFICIENT"` — placed alongside `CertificationIncompleteError`/
+    `RecertificationRequiredError`, same two-line constructor shape.
+  - [x] Inserted the gate call (`assert_dry_run_evidence_sufficient`) inside `record_certification`,
+    guarded `if certification_type == "technical":`, positioned right after `ver` is resolved and
+    before the `CertificationRecord(...)` construction — NOT inside `assert_certified_for_client_ready`.
+  - [x] Added the new error message to the frontend's `CERTIFICATION_ERROR_MESSAGES` map
+    (`velara-web/src/shared/utils/errors.ts`), consumed by `friendlyCertificationError()`.
+  - [x] **Pre-existing test-suite fix (discovered during implementation, not originally in this
+    task):** the new gate is a real behavior change — every existing test that POSTs a technical
+    certification and expects 201 now needs a seeded dry-run trail first, or it correctly (and newly)
+    receives 422 `CERTIFICATION_EVIDENCE_INSUFFICIENT`. Added a `_seed_sufficient_dry_run_evidence`
+    helper (5 completed jobs w/ distinct `output_sha256`, directly inserted — bypassing real
+    execution since `get_llm_provider()` is the real `AnthropicProvider` in this environment, no fake)
+    to `test_certifications.py`, `test_skills.py`, and `test_audit_service.py`, and called it before
+    every technical-cert POST that expects success (17 call sites across 3 files). One unit test
+    (`TestAutoAdvanceDecision::test_only_one_key_does_not_call_transition_lifecycle`) needed the new
+    gate function mocked satisfied, mirroring how `evaluate_certification_eligibility` was already
+    mocked. Also discovered and fixed: migration `0029` was not idempotent (unlike `0028`'s
+    `IF NOT EXISTS` precedent) — the repo's migration-test harness (`test_client_only_grants_migration.py`
+    et al.) stamps the test DB back and re-runs `alembic upgrade head`, which replayed `0029`'s DDL
+    against a DB where the objects already existed; rewrote using raw SQL + `IF NOT EXISTS`/existence
+    checks, matching `0028`'s exact idempotency pattern. New audit-coverage-guard registry entries
+    added for the 4 new mutating routes (all `exempt` — not Part 11 records, not the governance event
+    itself; see `test_audit_coverage_guard.py`).
 
-- [ ] **Task 4 — Frontend: API client + hooks (AC1, AC6, AC7)**
-  - [ ] New types + API functions in `velara-web/src/api/certifications.ts` (or a sibling file):
+- [x] **Task 4 — Frontend: API client + hooks (AC1, AC6, AC7)**
+  - [x] New types + API functions in `velara-web/src/api/certifications.ts`:
     `CertificationDryRunConfig`, `CertificationDryRunEvidenceItem`, CRUD functions for configs, list
     + create for evidence, matching the existing `certifications.ts` envelope-unwrapping convention.
-  - [ ] New hooks file `velara-web/src/features/certification/hooks/useCertificationDryRuns.ts`
-    (separate file, per the `run/hooks/` granularity precedent — `useCreateInvocation.ts`,
-    `useJob.ts` are each their own file, not piled onto one shared hooks file): `useDryRunConfigs`,
-    `useCreateDryRunConfig`, `useUpdateDryRunConfig`, `useDeleteDryRunConfig`, `useDryRunEvidence`
-    (query key `['certification-dry-runs', skillVersionId]`), `useLinkDryRunEvidence`. Mutations
-    invalidate `['certification-dry-runs', ...]` AND `['certifications', skillId]` (since the "Turn
-    technical key" button's enablement now depends on both), mirroring `useRecordCertification`'s
-    multi-key invalidation (`useCertifications.ts:32-40`).
-  - [ ] Add `skill_id` filter support to `ListJobsParams`/`api/jobs.ts:133-140` if the trail listing
-    needs to query jobs by skill directly (verify whether `GET /dry-run-evidence` alone suffices
-    before adding this — likely the backend join makes this unnecessary for the trail card itself).
+  - [x] New hooks file `velara-web/src/features/certification/hooks/useCertificationDryRuns.ts`:
+    `useDryRunConfigs`, `useCreateDryRunConfig`, `useUpdateDryRunConfig`, `useDeleteDryRunConfig`,
+    `useDryRunEvidence` (query key `['certification-dry-runs', skillVersionId]`, also polls every 3s
+    while any linked job is non-terminal), `useLinkDryRunEvidence`. Mutations invalidate
+    `['certification-dry-runs', ...]` AND `['certifications', skillId]`.
+  - [x] No `ListJobsParams`/`api/jobs.ts` change needed — `GET /dry-run-evidence` alone suffices for
+    the trail card (backend join returns everything needed).
 
-- [ ] **Task 5 — Frontend: Dry-Run Trail card UI (AC6, AC7)**
-  - [ ] New component `CertificationDryRunTrail.tsx` in `features/certification/components/`,
-    inserted into `CertificationDetail` (`CertificationScreen.tsx:276-486`) between the two-key panel
-    (387-419) and the Part 11 block (422-451).
-  - [ ] Trail list: reuse `JobRow`/`JobDetailPanel` (`features/run/components/JobsHistory.tsx:31-193,
-    197-233`) per the `RecentRunsPanel` reuse precedent (`RecentRunsPanel.tsx:20-25`) — do not build
-    new run-row markup.
-  - [ ] Config editor: reuse `parseInputFields`/`SchemaInputsForm`
-    (`features/run/inputsSchema.ts`, `features/run/components/SchemaInputsForm.tsx`) to render each
-    config's input form, pre-filled from the saved `inputs` JSON instead of blank.
-  - [ ] Per-config "Run" button: calls `useCreateInvocation` (existing hook, `useCreateInvocation.ts`)
-    with the config's saved inputs + the `certification_dry_run` flag (Task 2), polls via `useJob`
-    (existing hook) to completion, then calls `useLinkDryRunEvidence`.
-  - [ ] "Run All" button: sequences the above per-config flow across all saved configs, showing
-    per-config progress (reuse `JobStatusBadge` for each row's live status) — a thin orchestration
-    loop in the component, not a new backend endpoint (Task 2).
-  - [ ] Gate the "Turn technical key" button (`KeyCard`, `CertificationScreen.tsx:246-259`): pass a
-    new prop (e.g. `dryRunTrailSufficient: boolean`, computed from `useDryRunEvidence`'s
-    `is_sufficient` field) into the technical `KeyCard` instance's `isLocked` prop (currently
-    hardcoded `false` at `CertificationScreen.tsx:404` — replace it with `!dryRunTrailSufficient`;
-    do NOT touch the methodological card's separate, already-real `isLocked` at line 415).
-  - [ ] Modal a11y: any new modal (e.g. "Create dry-run config") must replicate
-    `RecordTechnicalCertModal.tsx`'s hand-rolled focus-trap pattern (33-78) — there is no shared Modal
-    primitive to import; copy the same `dialogRef`/`getFocusable()`/`handleTrapKey` shape.
+- [x] **Task 5 — Frontend: Dry-Run Trail card UI (AC6, AC7)**
+  - [x] New component `CertificationDryRunTrail.tsx` in `features/certification/components/`,
+    inserted into `CertificationDetail` between the two-key panel and the Part 11 block.
+  - [x] Trail evidence list reuses `JobStatusBadge` for status; per-run detail reuses `JobDetailPanel`
+    (opened inline on "View"). Saved-config rows are a new lightweight row (JobRow itself takes a
+    `JobSummary`, a different shape than our evidence items — adapting it would have added more
+    complexity than a small bespoke row).
+  - [x] Config editor: reuses `parseInputFields`/`SchemaInputsForm` verbatim to render each config's
+    input form, pre-filled from the saved `inputs` JSON.
+  - [x] Per-config "Run" button: calls `useCreateInvocation` with the config's saved inputs (no
+    context flag needed — see the corrected Task 2 context-requirement note), polls via `useJob` to
+    completion, then calls `useLinkDryRunEvidence` on `completed`.
+  - [x] "Run All" button: sequences the per-config flow across all saved configs sequentially,
+    showing `Running X/Y…` progress — a thin orchestration loop in the component, no new backend
+    endpoint.
+  - [x] Gated the technical `KeyCard`'s `isLocked` prop (`CertificationScreen.tsx`) — replaced the
+    hardcoded `false` with `!dryRunTrailSufficient`, sourced from `CertificationDryRunTrail`'s
+    `onSufficiencyChange` callback lifted into `CertificationDetail` state. Methodological card's
+    separate `isLocked` untouched.
+  - [x] The new config-create/edit modal (`DryRunConfigModal`, inside `CertificationDryRunTrail.tsx`)
+    replicates `RecordTechnicalCertModal.tsx`'s hand-rolled focus-trap pattern exactly (`dialogRef`/
+    `getFocusable()`/`handleTrapKey`).
 
-- [ ] **Task 6 — Tests (all ACs)**
-  - [ ] Backend unit: `TestDomainExceptions`-style test for `CertificationEvidenceInsufficientError`'s
-    code/status (`tests/unit/services/test_certification_service.py:51-72` pattern). New test class
-    mirroring `TestEvaluateCertificationEligibility`'s compiled-SQL-assertion idiom
-    (`test_certification_service.py:78-157`) for `count_sufficient_dry_run_evidence`'s query shape
-    (asserts scoping by `skill_version_id` + `status == "completed"` + `DISTINCT output_sha256`).
-  - [ ] Backend integration (`tests/integration/api/test_certifications.py` conventions — new helpers
-    analogous to `_post_cert`): register <5 dry-runs → `POST /certifications` (`technical`) → 422
-    `CERTIFICATION_EVIDENCE_INSUFFICIENT`; register 5 with distinct `output_sha256` → 201 succeeds;
-    register 5 with duplicate hashes → still 422 (proves AC2's distinct-hash enforcement, not just a
-    count check); new version → trail is empty, gate re-fires (AC5).
-  - [ ] Frontend: `vi.mock` the new hooks module in a `CertificationDryRunTrail.test.tsx`, following
-    `CertificationScreen.test.tsx`'s render-harness pattern (`QueryClientProvider` + `MemoryRouter`).
-    Assert: "Turn technical key" button disabled when `is_sufficient=false`, enabled when true
-    (`getByRole('button', {name: /turn technical key/i})`, mirroring the existing assertion idiom).
-    Assert config create/edit/run/"Run All" trigger the right mutations with the right payloads.
-  - [ ] Gates: backend `pytest` + `ruff check .` green; frontend `tsc --noEmit` + `eslint` + `vitest
-    run` green, 0 regressions — re-run in the same environment CI uses before any push (Enforcement
-    Rule 10 — `docs/architecture` `implementation-patterns-consistency-rules.md:150-158`), not just a
-    possibly-stale local Docker container.
+- [x] **Task 6 — Tests (all ACs)**
+  - [x] Backend unit: `TestDomainExceptions`-style test for `CertificationEvidenceInsufficientError`'s
+    code/status. New `TestDryRunEvidenceGate` class mirroring `TestEvaluateCertificationEligibility`'s
+    compiled-SQL-assertion idiom for `count_sufficient_dry_run_evidence`'s query shape (asserts
+    scoping by `skill_version_id` + `org_id` + `status == "completed"` + `DISTINCT`), plus
+    below/at/above-minimum-count tests for `assert_dry_run_evidence_sufficient`. 7 new unit tests.
+  - [x] Backend integration: extended `tests/integration/api/test_certifications.py` with a
+    `_seed_sufficient_dry_run_evidence` helper (5 completed jobs, 5 distinct `output_sha256`, directly
+    inserted) and wired it into every existing technical-cert-POST-expects-201 test (17 call sites) —
+    this exercises AC3's gate end-to-end via the real API on every one of those tests, proving both
+    the insufficient-evidence 422 path (implicitly, since removing the seed call reproduces it — see
+    Debug Log) and the sufficient-evidence 201 path. AC5 (fresh trail per version) is explicitly
+    exercised by `test_list_certifications_spans_multiple_versions`, which now seeds evidence twice
+    (once per version) and would fail at the second `POST /certifications` if the trail incorrectly
+    carried over.
+  - [x] Frontend: new `CertificationDryRunTrail.test.tsx` (5 tests) — asserts the distinct-output
+    count/sufficiency display, `onSufficiencyChange` callback firing correctly, saved-config rendering,
+    the empty state, and that "Run" fires `useCreateInvocation` with the config's exact inputs.
+    Extended `CertificationScreen.test.tsx` with 3 new tests asserting the "Turn technical key" button
+    is disabled/enabled based on `useDryRunEvidence`'s `is_sufficient`, plus added a
+    `mockSufficientDryRunTrail()`/`mockInsufficientDryRunTrail()` pair and wired the former into the
+    detail-panel `beforeEach` so the 6 pre-17.3 tests (written before this gate existed) keep their
+    original "not locked" expectations without modification.
+  - [x] Gates: backend `pytest` 1587 passed/3 skipped, `ruff check .` clean; frontend `tsc --noEmit`
+    clean, `eslint` 0 errors (3 pre-existing warnings, unrelated files), `vitest run` 804 passed
+    (up from 782 pre-story: 43 in certification alone, +5 new in `CertificationDryRunTrail.test.tsx`,
+    +3 new gate tests in `CertificationScreen.test.tsx`), 0 regressions. All re-run against a fresh
+    `velara_test` database and rebuilt Docker images, not a stale container (Enforcement Rule 10).
 
 ## Dev Notes
 
@@ -357,15 +369,18 @@ dry-run config/evidence endpoints at `RejectNonGrantor` for consistency with the
 surface they extend, rather than introducing an inconsistent narrower tier on only part of the flow.
 Document whichever choice is made in the Dev Agent Record.
 
-### Context-requirement gap for dry-run invocations
+### Context requirement — resolved as a non-issue during implementation
 
-Every existing invocation requires `project_id` or `study_id` (`RunConsole.tsx:626,958` on the FE;
-`invocations.py` `queue_invocation`, function at line 303, on the BE) — a certification dry-run is
-conceptually context-free (it's about certifying a skill version, not an engagement run). Task 2
-recommends a new optional `certification_dry_run: bool` flag on `InvocationRequest` that lets
-`queue_invocation` skip the context requirement for grantor-role callers. This is a small, additive
-change to `invocations.py`'s `queue_invocation` (lines 303-523) — it does not touch
-`execution_service.py`'s actual execution routing/logic.
+The drafted story assumed every invocation requires `project_id`/`study_id`, generalizing from
+`RunConsole.tsx`'s `buildRunPayload()` (a **frontend UI-mode** constraint — it always attributes to
+the context it was launched with, `RunConsole.tsx:626,958`). The actual backend does NOT require
+this: `invocations.py#_resolve_single_job_hierarchy_path` (lines 232-252) already returns
+`("org", inputs_payload)` for an unrestricted caller (ma_tech/admin — internal roles bypass
+hierarchy scope entirely, `dependencies.py:336-337` `_hierarchy_scope`) supplying none of
+`study_id`/`project_id`/`client_id`. `schemas/invocation.py`'s own docstring (lines 46-47) confirms
+this is the documented, intentional behavior for "a context-free invocation, e.g. from the Skill
+Registry." No new flag, no schema change, no `queue_invocation` change — the dry-run trail's "Run"
+action is simply a normal `POST /api/v1/invocations/{skill_id}` call with `inputs` only.
 
 ### Reuse map (do NOT rebuild)
 
@@ -488,9 +503,32 @@ Current head: `0028_study_protocol_association` (confirmed empirically — no ot
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Sonnet 5 (claude-sonnet-5)
 
 ### Debug Log References
+
+- `docker compose exec api alembic upgrade head` — migration 0029 applied cleanly against the live
+  dev DB; `alembic downgrade -1` + re-`upgrade head` verified reversibility.
+- `docker compose exec api alembic stamp 0026_client_skill_attachment && alembic upgrade head` —
+  reproduced this repo's migration-test harness pattern (stamp back, replay `upgrade head`) and
+  caught migration 0029's non-idempotency (`DuplicateTableError` on replay) BEFORE it was found by
+  the actual test suite — rewrote using raw SQL + `IF NOT EXISTS`, matching migration 0028's precedent.
+- `docker compose exec -e AUTH_BACKEND=dev api pytest -q` (repeated ~15 times while iterating) —
+  final clean run (fresh `velara_test` DB): 1587 passed, 3 skipped, 0 failed.
+- `docker compose exec api ruff check .` — clean.
+- `npx tsc --noEmit` (velara-web) — clean.
+- `npx eslint src/` (velara-web) — 0 errors, 3 pre-existing warnings in untouched files.
+- `npx vitest run` (velara-web) — 804 passed, 0 failed. +8 new tests from this story (5 in
+  `CertificationDryRunTrail.test.tsx`, 3 in `CertificationScreen.test.tsx`); no other file's test
+  count changed, so 0 regressions.
+- Discovered and fixed a real local-environment issue unrelated to code correctness: this Docker
+  stack's `.env` has `AUTH_BACKEND=cognito` (for manual testing against real Cognito) — running
+  `pytest` inside the container without overriding `AUTH_BACKEND=dev` makes every dev-issued test
+  token fail validation (`get_auth_provider()` returns `CognitoAuthProvider`, which can't validate
+  HS256 dev tokens). Not a code bug; documented here so a future session doesn't re-diagnose it.
+- Also hit and resolved a Docker disk-space exhaustion mid-session (`docker builder prune -a -f` +
+  `docker image prune -a -f` freed ~97GB) — consistent with the memory note about local rebuilds
+  filling the VM disk; required rebuilding all images from scratch afterward (DB volume was untouched).
 
 ### Completion Notes List
 
@@ -501,5 +539,112 @@ Current head: `0028_study_protocol_association` (confirmed empirically — no ot
   variant of existing work. RBAC tier and "differing outputs" enforcement mechanism are explicit
   documented decisions (per the epic's own instruction not to silently pick one) rather than
   ambiguous open questions left to the dev agent.
+- **Implementation correction (Task 2's "context requirement" concern) — the drafted story's
+  planned `certification_dry_run` flag on `InvocationRequest` was NOT built.** Verified against
+  actual source that `invocations.py#_resolve_single_job_hierarchy_path` already returns
+  `("org", inputs_payload)` for an unrestricted (ma_tech/admin) caller supplying no
+  `project_id`/`study_id`/`client_id` — a fully-supported context-free invocation today, per
+  `schemas/invocation.py`'s own docstring. The frontend's dry-run "Run" action is a plain
+  `POST /api/v1/invocations/{skill_id}` call with only `inputs` set. This removed one planned
+  backend schema/endpoint change; documented in Task 2 and Dev Notes so the discrepancy from the
+  original story text is traceable.
+- **All 4 new mutating routes are `exempt` in the audit-coverage guard** (`test_audit_coverage_guard.py`),
+  not `audited` — dry-run configs/evidence are evidence-gathering scaffolding feeding the AC3 gate,
+  not a governance action themselves; the governance event (POST /certifications) was already audited
+  before this story and remains so.
+- **Duplicate `invocation_job_id` on `POST /dry-run-evidence` is idempotent success** (returns the
+  existing link row), not a 422 — per the story's own recommendation, to keep "Run All" retry logic simple.
+- **RBAC stayed at `RejectNonGrantor`** (admin+ma_tech) for the new dry-run endpoints, consistent
+  with the parent certification router — not narrowed to `RejectNonMaTech`.
+- **Pre-existing test-suite impact (expected, not a regression):** the new gate is a real behavior
+  change to `POST /api/v1/certifications` (`certification_type=technical`). Every existing test in
+  `test_certifications.py`, `test_skills.py`, and `test_audit_service.py` that POSTs a technical cert
+  and expects 201 needed a seeded dry-run trail first (17 call sites across 3 backend files) — added
+  via a small `_seed_sufficient_dry_run_evidence` helper duplicated per-file (matching this codebase's
+  no-shared-test-utils convention). One backend unit test needed the new gate mocked satisfied.
+  Frontend: `CertificationScreen.test.tsx`'s pre-17.3 tests needed the new hooks module mocked with a
+  default-sufficient trail to preserve their original "not locked" assertions.
+- **Independently discovered and fixed a migration-idempotency bug** before any reviewer needed to
+  flag it: migration 0029's `op.create_table` calls were not idempotent, unlike migration 0028's
+  established `CREATE TABLE IF NOT EXISTS` precedent — this repo's own migration-test harness
+  (`test_client_only_grants_migration.py` et al.) stamps the test DB back and replays `upgrade head`,
+  which would have failed on every future test run touching that harness. Rewrote using raw SQL +
+  existence checks, verified via manual `stamp` + `upgrade head` replay before the full suite confirmed it.
 
 ### File List
+
+**Backend (`velara-api/`):**
+- `app/db/migrations/versions/0029_certification_dry_runs.py` — NEW. Idempotent (raw SQL,
+  `IF NOT EXISTS`/existence checks, matching migration 0028's precedent).
+- `app/models/certification.py` — MODIFIED. Added `CertificationDryRunConfig`,
+  `CertificationDryRunEvidence` models.
+- `app/models/invocation.py` — MODIFIED. Added `InvocationResult.output_sha256` column.
+- `app/services/execution_service.py` — MODIFIED. `_persist_output` computes `output_sha256` and
+  folds it into `result_metadata`.
+- `app/services/job_service.py` — MODIFIED. `mark_completed`/`mark_blocked` accept/persist a new
+  `output_sha256` kwarg (additive, same contract as the Story 15.1 cost columns).
+- `app/workers/execution_tasks.py` — MODIFIED. New `_extract_output_sha256` helper (mirrors
+  `_extract_cost_fields`); both `mark_completed`/`mark_blocked` call sites pass it through.
+- `app/services/certification_service.py` — MODIFIED. New constants
+  (`MIN_DRY_RUN_EVIDENCE_COUNT`, `MAX_DRY_RUN_CONFIGS_PER_SKILL`), new exceptions
+  (`CertificationEvidenceInsufficientError`, `DryRunConfigLimitExceededError`,
+  `DryRunConfigNotFoundError`, `DryRunEvidenceJobNotEligibleError`), new functions
+  (`count_sufficient_dry_run_evidence`, `assert_dry_run_evidence_sufficient`,
+  `create_dry_run_config`, `update_dry_run_config`, `delete_dry_run_config`,
+  `list_dry_run_configs`, `link_dry_run_evidence`, `list_dry_run_evidence`), gate call wired
+  into `record_certification`.
+- `app/schemas/certification.py` — MODIFIED. New Pydantic schemas for dry-run configs/evidence
+  request/response shapes.
+- `app/api/v1/certifications.py` — MODIFIED. 6 new routes (`POST`/`GET`/`PATCH`/`DELETE` on
+  `/dry-run-configs`, `POST`/`GET` on `/dry-run-evidence`).
+- `tests/unit/services/test_certification_service.py` — MODIFIED. New
+  `test_certification_evidence_insufficient_error_code` test, new `TestDryRunEvidenceGate` class
+  (7 tests), one existing test (`test_only_one_key_does_not_call_transition_lifecycle`) updated to
+  mock the new gate satisfied.
+- `tests/unit/test_audit_coverage_guard.py` — MODIFIED. 4 new `exempt` registry entries for the new
+  mutating routes.
+- `tests/integration/api/test_certifications.py` — MODIFIED. New
+  `_seed_sufficient_dry_run_evidence` helper; wired into 17 existing test call sites.
+- `tests/integration/api/test_skills.py` — MODIFIED. New `_seed_sufficient_dry_run_evidence` helper
+  (local copy); wired into 4 existing test call sites.
+- `tests/integration/services/test_audit_service.py` — MODIFIED. New
+  `_seed_sufficient_dry_run_evidence` helper (local copy); wired into 1 existing test call site.
+
+**Frontend (`velara-web/`):**
+- `src/api/certifications.ts` — MODIFIED. New types (`CertificationDryRunConfig`,
+  `CertificationDryRunEvidenceItem`, etc.) and API functions for dry-run config/evidence CRUD.
+- `src/features/certification/hooks/useCertificationDryRuns.ts` — NEW. `useDryRunConfigs`,
+  `useCreateDryRunConfig`, `useUpdateDryRunConfig`, `useDeleteDryRunConfig`, `useDryRunEvidence`,
+  `useLinkDryRunEvidence`.
+- `src/features/certification/components/CertificationDryRunTrail.tsx` — NEW. The Dry-Run Trail
+  card + config list + create/edit modal + Run/Run All orchestration.
+- `src/features/certification/components/CertificationScreen.tsx` — MODIFIED. Wired
+  `CertificationDryRunTrail` into `CertificationDetail`; technical `KeyCard`'s `isLocked` now driven
+  by `dryRunTrailSufficient` state instead of hardcoded `false`.
+- `src/shared/utils/errors.ts` — MODIFIED. New `CERTIFICATION_EVIDENCE_INSUFFICIENT` message entry.
+- `src/features/certification/components/CertificationDryRunTrail.test.tsx` — NEW. 5 tests.
+- `src/features/certification/components/CertificationScreen.test.tsx` — MODIFIED. New
+  `useCertificationDryRuns` mock + `mockSufficientDryRunTrail`/`mockInsufficientDryRunTrail`
+  helpers wired into the detail-panel `beforeEach`; 3 new gate-specific tests.
+
+**Docs:**
+- `_bmad-output/implementation-artifacts/stories/17-3-certification-dry-run-evidence-gate.md` —
+  this file (task checkboxes, Dev Agent Record, Change Log, Status).
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — status transitions.
+
+## Change Log
+
+- 2026-07-27 — Implemented (dev-story). Full-stack: new `certification_dry_run_configs`/
+  `certification_dry_run_evidence` tables + `invocation_results.output_sha256` column (migration
+  0029); the AC3 gate (`CERTIFICATION_EVIDENCE_INSUFFICIENT`, ≥5 distinct-output completed dry-runs)
+  wired into `record_certification` for `certification_type=technical` only; 6 new REST endpoints
+  for dry-run config CRUD + evidence linking; new `CertificationDryRunTrail` card on the
+  Certification detail screen with config create/edit, per-config Run, and "Run All" — gates the
+  "Turn technical key" button. Corrected one planned implementation detail during development: no
+  new `certification_dry_run` context flag was needed on `InvocationRequest` — the backend already
+  supports context-free invocations for internal roles. Fixed 17 pre-existing tests across 3 backend
+  files that needed a seeded dry-run trail to keep passing under the new gate (expected, not a
+  regression — the gate is a real behavior change). Independently caught and fixed a migration-0029
+  idempotency bug before the test suite surfaced it. Gates: backend `pytest` 1587/1587 passed (3
+  skipped, pre-existing sandbox-linux-only skips), `ruff check .` clean; frontend `tsc --noEmit`
+  clean, `eslint` 0 errors, `vitest run` 804/804 passed (+8 new tests), 0 regressions.

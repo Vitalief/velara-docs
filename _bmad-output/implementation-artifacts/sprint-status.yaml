@@ -54,6 +54,22 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-27
+# 2026-07-27: 17-3-certification-dry-run-evidence-gate moved to review (dev-story). Full-stack
+#   implementation of the story as drafted, with one implementation correction discovered during
+#   development: the planned certification_dry_run context flag on InvocationRequest was NOT built
+#   — invocations.py#_resolve_single_job_hierarchy_path already supports context-free invocations
+#   for unrestricted (ma_tech/admin) callers, confirmed against actual source and
+#   schemas/invocation.py's own docstring. Backend: migration 0029 (certification_dry_run_configs +
+#   certification_dry_run_evidence tables + invocation_results.output_sha256 column), the AC3 gate
+#   wired into record_certification, 6 new REST endpoints. Frontend: new CertificationDryRunTrail
+#   card (config CRUD, per-config Run, "Run All") gating the technical KeyCard's isLocked. Fixed 17
+#   pre-existing backend tests across 3 files that needed a seeded dry-run trail under the new gate
+#   (expected behavior change, not a regression) and independently caught+fixed a migration-0029
+#   idempotency bug (this repo's stamp-and-replay migration-test harness would have failed on it)
+#   before the test suite surfaced it. Gates: backend pytest 1587/1587 passed (3 pre-existing skips),
+#   ruff clean; frontend tsc clean, eslint 0 errors, vitest 804/804 passed (+8 new tests), 0
+#   regressions — all re-verified against a fresh test DB and freshly rebuilt Docker images per
+#   Enforcement Rule 10, not a stale container. See story file Dev Agent Record for full detail.
 # 2026-07-27: 17-3-certification-dry-run-evidence-gate moved to ready-for-dev (create-story).
 #   First story picked from Epic 17 (epic status backlog→in-progress). Independent of 17-1/17-2
 #   (LangSmith) — no shared files, no ordering dependency. Genuinely new ground: two research passes
@@ -504,4 +520,4 @@ development_status:
   epic-17: in-progress
   17-1-langsmith-tracing-for-platform-llm-calls: backlog
   17-2-ai-adapter-emits-langsmith-traced-skill-bundles: backlog
-  17-3-certification-dry-run-evidence-gate: in-progress
+  17-3-certification-dry-run-evidence-gate: review
