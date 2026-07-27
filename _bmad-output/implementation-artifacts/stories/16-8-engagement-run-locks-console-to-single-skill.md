@@ -1,11 +1,14 @@
 ---
 baseline_commit: velara-api unaffected (this story has zero backend surface); velara-web on branch
-  `development` (head `efcd6d1`, Story 16.6) with a CLEAN working tree. Story 16.7 (also FE-only,
-  also touches `RunConsole.tsx`) is `ready-for-dev` but NOT yet implemented as of this story's
-  drafting — HEAD is still exactly 16.6. Verify with `git status` in `velara-web` before starting;
-  if 16.7 has landed by the time you pick this up, its diff is in a different function
-  (`JobStatusPanel`, ~line 1123+) than this story's (`RunConsoleInner`'s skill-picker block,
-  ~line 670-696) — expect a clean merge, not a conflict (see Trap 5 in 16.7's own Dev Notes).
+  `development` (head `efcd6d1`, Story 16.6). At this story's drafting, the working tree has
+  UNCOMMITTED, in-progress Story 16.7 changes to `useRunStore.ts` and `RunConsole.tsx` (confirmed via
+  `git diff` — sprint-status.yaml still shows 16.7 as `ready-for-dev`, so this is another session's
+  work-in-progress, not yet reviewed/committed). Confirmed: 16.7's uncommitted diff touches ONLY
+  `JobStatusPanel` (`RunConsole.tsx`, ~line 1131+) and its `hydratedJobId`/`explicitJobId` store
+  fields — zero overlap with this story's target (`RunConsoleInner`'s skill-picker block,
+  ~line 670-696). Run `git status`/`git diff` in `velara-web` before starting to see current state;
+  do not revert or stash 16.7's in-progress work — build this story's changes alongside it. If 16.7
+  has since been committed, only the file, not the line ranges this story cites, may shift.
 ---
 
 # Story 16.8: Engagement-Screen "Run" Opens the Console Locked to That One Skill
@@ -189,9 +192,10 @@ derived from `availableSkills: AttachedSkill[]` — it does NOT have every field
 `input_schema`, `current_version_id`). `LockedSkillCard` only reads `name`, `runtime_type`,
 `visibility`, `lifecycle_state`, `location_dependent`, `description` — all present on `AttachedSkill`
 too — so either type would satisfy it at the field level, but `LockedSkillCard`'s prop type is
-declared as `{ skill: Skill }`. `fullSkill` (line 505, already fetched via `useSkill(selectedSkillId)`
-for the schema-inputs feature) IS a real `Skill` — use `fullSkill` for the locked card, not
-`selectedSkill`, so the prop type matches with no widening/casting needed.
+declared as `{ skill: Skill }`. `fullSkill` (line 505, `useSkill(selectedSkillId)`) actually resolves
+to `SkillWithVersion` (`src/api/skills.ts`'s `getSkill` return type), which `extends Skill`
+(`src/features/skills/types.ts`) — a structural superset, so it satisfies `LockedSkillCard`'s `Skill`
+prop with no widening/casting needed. Use `fullSkill` for the locked card, not `selectedSkill`.
 
 **Trap 3 — the picker's `onSelect` callback also resets `locationSelection`/`selectedVersion`**
 (lines 687-691). In the locked path there is no click to trigger this reset — but there's also

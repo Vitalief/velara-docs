@@ -55,6 +55,24 @@
 generated: 2026-06-02
 last_updated: 2026-07-27
 
+# 2026-07-27: 16-8-engagement-run-locks-console-to-single-skill moved to ready-for-dev (create-story).
+#   FE-only (velara-web), zero backend surface. Root cause: EngagementsScreen.tsx's onRun always
+#   passes a concrete skill.id via ?skillId=, but RunConsoleInner (context-first mode) only used it
+#   to pre-*select* a row inside the full role="listbox" picker of every skill attached to the
+#   Project/Study — never narrowed to just the clicked skill. Skill-first mode already solves this
+#   shape via LockedSkillCard (a static, non-interactive card); fix reuses it verbatim for the
+#   context-first ?skillId= path, branching RunConsoleInner's skill-area JSX on preSelectedSkillId
+#   truthy/falsy (falsy = today's picker, unchanged, per AC2). fullSkill (already fetched via
+#   useSkill(selectedSkillId) for schema-inputs) resolves to SkillWithVersion which extends Skill, so
+#   it satisfies LockedSkillCard's prop type directly — no new query, no type widening. Only 1
+#   existing test needs updating (RunConsole.test.tsx:353-358, the ?skillId= pre-select assertion);
+#   AC5 adds explicit handling for skill-not-found-in-context under the locked (pickerless) UI.
+#   Independent validator confirmed all file:line citations against current source; caught 2 minor
+#   fixes before finalizing (frontmatter wrongly claimed a clean velara-web tree — it actually has
+#   Story 16.7's uncommitted, in-progress, non-overlapping JobStatusPanel fix sitting in it; and a
+#   `fullSkill IS a Skill` overstatement corrected to `SkillWithVersion extends Skill`). Confirmed
+#   zero functional overlap with concurrently in-progress Story 16.7 (different function, same file).
+#   Epic 16 fully sequenced now — 16.8 was the last remaining backlog story.
 # 2026-07-27: 16-7-run-console-no-longer-reopens-stale-completed-job moved to review (dev-story).
 #   Frontend-only, as scoped. Root cause confirmed against current source: hydratedJobId is a
 #   once-per-tab, load-time-only flag (Zustand persist's onRehydrateStorage), so it never catches a
@@ -408,7 +426,7 @@ development_status:
   #   Two FE-only deployed-dev fixes against the Run Console. Prioritize ahead of Epic 17.
   #   Epic 16 stays in-progress until these + a manual epic-close.
   16-7-run-console-no-longer-reopens-stale-completed-job: review
-  16-8-engagement-run-locks-console-to-single-skill: backlog
+  16-8-engagement-run-locks-console-to-single-skill: ready-for-dev
 
   # ─────────────────────────────────────────────────────────
   # Epic 17: LLM-Call Observability & Certification Evidence
