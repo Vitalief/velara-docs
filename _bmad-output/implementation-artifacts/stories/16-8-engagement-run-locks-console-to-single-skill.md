@@ -13,7 +13,7 @@ baseline_commit: velara-api unaffected (this story has zero backend surface); ve
 
 # Story 16.8: Engagement-Screen "Run" Opens the Console Locked to That One Skill
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
