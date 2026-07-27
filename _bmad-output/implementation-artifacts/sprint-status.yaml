@@ -55,6 +55,22 @@
 generated: 2026-06-02
 last_updated: 2026-07-27
 
+# 2026-07-27: 16-8-engagement-run-locks-console-to-single-skill moved to review (dev-story).
+#   FE-only (velara-web), zero backend surface, built alongside Story 16.7's uncommitted changes with
+#   zero line overlap (confirmed: 16.7 touches only JobStatusPanel further down RunConsole.tsx). Branched
+#   RunConsoleInner's skill area on preSelectedSkillId: engagement-launched Run (always carries a real
+#   skillId) now shows a locked single-skill card (reusing skill-first mode's LockedSkillCard verbatim,
+#   fed by the already-fetched fullSkill/useSkill) instead of the full multi-skill picker; a context-first
+#   launch with no skillId still shows the picker unchanged (AC2). Three locked-path sub-states handled:
+#   loading skeleton, not-found fallback (copy rewordered — dropped "pick from the list above", which no
+#   longer makes sense with no list in the locked path), resolved card. Confirmed via tsc (clean, no
+#   casting needed) that fullSkill's type (SkillWithVersion) satisfies LockedSkillCard's Skill prop, per
+#   the story's own Trap 2 prediction. Verified canRun/buildRunPayload/useDuplicateCheck/VersionSelector/
+#   LocationSelector/documentUploadHint all key off selectedSkill/selectedSkillId, never picker JSX — no
+#   changes needed there (Task 3 was pure confirmation). Tests: replaced the one test asserting the old
+#   pre-selection-inside-picker behavior with a locked-card assertion; added 2 new tests (AC2 no-skill
+#   picker-still-renders; AC5 skill-not-in-attached-list locked-mode fallback). tsc --noEmit + eslint
+#   (project-wide, 0 errors) clean; vitest run 793/793 green, 0 regressions (net +2 from 16.7's 791).
 # 2026-07-27: 16-7-run-console-no-longer-reopens-stale-completed-job moved to done (code-review).
 #   3-layer adversarial review (Blind Hunter + Edge Case Hunter + Acceptance Auditor). All 4 ACs
 #   verified satisfied for shipped production behavior; tsc/eslint clean, vitest 791/791 green. Triage:
@@ -441,7 +457,7 @@ development_status:
   #   Two FE-only deployed-dev fixes against the Run Console. Prioritize ahead of Epic 17.
   #   Epic 16 stays in-progress until these + a manual epic-close.
   16-7-run-console-no-longer-reopens-stale-completed-job: done
-  16-8-engagement-run-locks-console-to-single-skill: in-progress
+  16-8-engagement-run-locks-console-to-single-skill: review
 
   # ─────────────────────────────────────────────────────────
   # Epic 17: LLM-Call Observability & Certification Evidence

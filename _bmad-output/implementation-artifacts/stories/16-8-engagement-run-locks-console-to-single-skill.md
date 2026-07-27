@@ -13,7 +13,7 @@ baseline_commit: velara-api unaffected (this story has zero backend surface); ve
 
 # Story 16.8: Engagement-Screen "Run" Opens the Console Locked to That One Skill
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -93,76 +93,60 @@ one case (`preSelectedSkillId` present) where a single skill was explicitly chos
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Confirm current behavior against source (AC1/AC2)**
-  - [ ] Re-read `RunConsoleInner` (`RunConsole.tsx`, currently ~lines 455-786) against the CURRENT
-    working tree — line numbers above are from Story 16.6's baseline (head `efcd6d1`); re-locate by
-    searching for `availableSkills` and `SkillPickerRow` if the file has moved (Story 16.7 may have
-    landed first and shifted line numbers in `JobStatusPanel`, further down the file — that does not
-    affect this story's target lines, which sit well above it).
-  - [ ] Confirm `preSelectedSkillId` (derived from `?skillId=` in `RunConsoleContextFirst`, line 1561,
-    threaded through `RunConsoleResolver` to `RunConsoleInner`'s props) is `undefined` whenever the
-    query string has no `skillId` key — `new URLSearchParams(location.search).get('skillId') ?? undefined`
-    (line 1561) already does this correctly; no change needed there.
+- [x] **Task 1 — Confirm current behavior against source (AC1/AC2)**
+  - [x] Re-read `RunConsoleInner` against the CURRENT working tree (Story 16.7's uncommitted changes
+    shifted line numbers slightly — `preSelectedSkillId` prop at line 460, `availableSkills` at 493,
+    `selectedSkillId`/`selectedSkill` at 500-501, `fullSkill` at 505, `skillSelectedButMissing` at 557,
+    picker block at 670-696 pre-change — all confirmed at their new locations by grep, zero overlap
+    with 16.7's `JobStatusPanel` further down the file).
+  - [x] Confirmed `preSelectedSkillId` (`new URLSearchParams(location.search).get('skillId') ?? undefined`
+    in `RunConsoleContextFirst`) is `undefined` whenever the query string has no `skillId` — no change
+    needed.
 
-- [ ] **Task 2 — Branch `RunConsoleInner`'s skill area on `preSelectedSkillId` (AC1, AC2, AC5)**
-  - [ ] When `preSelectedSkillId` is truthy, render a locked single-skill card instead of the
-    `role="listbox"` picker block (lines ~670-696). Reuse `LockedSkillCard` (`RunConsole.tsx:238-260`)
-    directly — it takes a `Skill` (from `src/features/skills/types.ts`), and `RunConsoleInner` already
-    fetches the full skill via `useSkill(selectedSkillId)` into `fullSkill` (line 505) for the
-    schema-driven-inputs feature. Wire the locked card to render from `fullSkill` once it resolves
-    (verify `fullSkill` carries every field `LockedSkillCard` reads: `name`, `runtime_type`,
-    `visibility`, `lifecycle_state`, `location_dependent`, `description` — it does, `Skill` is a
-    superset of `AttachedSkill`).
-  - [ ] Handle the three sub-states of the locked path explicitly (this is what AC5 requires and what
-    the plain "always renders LockedSkillCard" happy path misses):
-    - `skillsLoading` (attachment list not yet resolved) → a loading skeleton in the locked-card slot
-      (reuse the existing `Skeleton` import used elsewhere in this file, e.g. lines 674-676's pattern).
-    - resolved but `skillSelectedButMissing` is true (attachment exists in the list check fails, or
-      the skill is retired/gone) → keep the existing fallback message block (lines 716-720) — it
-      already covers this; just ensure it still renders when the picker itself is absent.
-    - resolved and found (`selectedSkill` truthy, `fullSkill` loaded) → render `LockedSkillCard`.
-  - [ ] When `preSelectedSkillId` is falsy (AC2), render the existing picker block completely
-    unchanged (lines ~670-696, including the `skillsLoading`/`availableSkills.length === 0`/populated
-    branches) — do not alter this path at all.
-  - [ ] Do not touch `selectedSkillId` state management (`useState(preSelectedSkillId)`, line 500) or
-    `selectedSkill`/`skillSelectedButMissing` derivations (lines 501, 557) — the locked-card path
-    reads the SAME derived values the picker path already computes; only the JSX branch changes.
+- [x] **Task 2 — Branch `RunConsoleInner`'s skill area on `preSelectedSkillId` (AC1, AC2, AC5)**
+  - [x] Replaced the "Skill picker" block with a `preSelectedSkillId ? (...) : (...)` branch. Truthy
+    branch renders `LockedSkillCard` fed by `fullSkill` (`useSkill(selectedSkillId)`) — `tsc --noEmit`
+    confirms `SkillWithVersion extends Skill` satisfies `LockedSkillCard`'s prop type with no
+    casting, as Trap 2 predicted.
+  - [x] Three sub-states handled in the locked branch: `skillsLoading || (selectedSkill && !fullSkill)`
+    → skeleton in the locked-card slot; `skillSelectedButMissing` → fallback message; `fullSkill`
+    resolved → `LockedSkillCard`.
+  - [x] Falsy branch renders the picker block completely unchanged (same `skillsLoading`/
+    `availableSkills.length === 0`/populated sub-branches, same `SkillPickerRow`/`onSelect` wiring).
+  - [x] `selectedSkillId` state management and `selectedSkill`/`skillSelectedButMissing` derivations
+    untouched — only the JSX branch changed. Removed the now-redundant standalone
+    `skillSelectedButMissing` fallback block that used to sit below the picker (it only ever fired for
+    the locked-launch case — its message is now inlined in the locked branch instead, reworded per
+    Trap 4/Task 4).
 
-- [ ] **Task 3 — Verify no other logic implicitly depends on the picker being visible (AC3)**
-  - [ ] Confirm `canRun`, `buildRunPayload`, the duplicate-check pre-flight (`useDuplicateCheck`), the
-    `VersionSelector` gate, `LocationSelector` gate, and `documentUploadHint` (Story 16.4) all key off
-    `selectedSkill`/`selectedSkillId`/`showLocationSelector` — NOT off whether the picker JSX rendered.
-    They do (verified: none reference the picker's DOM or `SkillPickerRow`) — this task is a
-    confirmation, not expected to require code changes, but re-verify against current source before
-    assuming it still holds.
+- [x] **Task 3 — Verify no other logic implicitly depends on the picker being visible (AC3)**
+  - [x] Confirmed via source read: `canRun`, `buildRunPayload`, `useDuplicateCheck`, the
+    `VersionSelector`/`LocationSelector` gates, and `documentUploadHint` all key off
+    `selectedSkill`/`selectedSkillId`/`showLocationSelector` — none reference the picker's DOM or
+    `SkillPickerRow`. No code changes required.
 
-- [ ] **Task 4 — Tests (AC1, AC2, AC5)**
-  - [ ] Update the existing test `'AC2: pre-selects skill when skillId provided in query string'`
-    (`RunConsole.test.tsx:353-358`) — it currently asserts the picker row for the pre-selected skill
-    has `aria-selected="true"`. Under this story, a `?skillId=` launch no longer renders the picker at
-    all, so this assertion must change to: the locked card renders with the skill's name (e.g.
-    `expect(screen.getByText('Running skill')).toBeInTheDocument()` mirroring the skill-first mode
-    test at line 692, `it('AC1: shows the locked "Running skill" card with the skill name')`), AND
-    `expect(screen.queryByRole('listbox', { name: 'Available skills' })).not.toBeInTheDocument()`
-    (mirroring the skill-first isolation test at line 699-702).
-  - [ ] New test — no-skill context launch (AC2): render `/internal/engagements/run/project/project-1`
-    (no `?skillId=`) and assert the picker (`role="listbox"`) STILL renders with both mock skills
-    (this is exactly the existing test at line 324-328, `'AC1: shows project-attached skill list'` —
-    confirm it still passes unmodified; it should, since it exercises the no-`skillId` path).
-  - [ ] New test — pre-selected skill not in the attached list (AC5): mock `useProjectSkills`/
-    `useStudySkills` to NOT include the id passed via `?skillId=`, render with that query string, and
-    assert the existing fallback message renders (`"That skill isn't available in this context. Pick
-    a skill from the list above to run."`) — note the message text itself may need a small edit since
-    "pick a skill from the list above" no longer makes sense when there's no list in the locked path;
-    decide on exact wording during implementation and record the choice in Completion Notes (the
-    literal string is not asserted by any AC, but should read sensibly for a locked-launch context —
-    e.g. "That skill isn't available in this context." without the "pick from the list" clause when
-    `preSelectedSkillId` is set).
-  - [ ] Re-verify AC3-adjacent existing tests are unaffected: `'AC3: location selector appears when
-    location-dependent skill selected in Study scope'` (line 362) and its siblings render WITHOUT
-    `?skillId=` (they manually click a picker row) — these exercise the AC2 no-skill path and should
-    need no changes; confirm this by running the full file, not by inspection alone.
-  - [ ] Gates: `tsc --noEmit` + `eslint` clean; `vitest run` green, 0 regressions.
+- [x] **Task 4 — Tests (AC1, AC2, AC5)**
+  - [x] Replaced `'AC2: pre-selects skill when skillId provided in query string'` with
+    `'Story 16.8 AC1: locks to the pre-selected skill (no picker) when skillId is provided in query
+    string'` — asserts the locked card renders (`'Running skill'` + skill name, mirroring skill-first
+    mode's test) AND the picker/listbox/`Select skill …` rows are absent.
+  - [x] Confirmed `'AC1: shows project-attached skill list'` (no `?skillId=`) still passes unmodified
+    (exercises the no-skillId path). Added a new explicit test, `'Story 16.8 AC2: no-skill context
+    launch (no skillId) still shows the full picker'`, asserting the listbox + both skill rows render
+    and no locked-card slot appears.
+  - [x] New test `'Story 16.8 AC5: skillId not in the attached list shows the locked-mode fallback,
+    not the picker'` — mocks `useProjectSkills` to exclude the queried id, asserts the fallback message
+    and absence of the picker. Wording decision (recorded here per the task's note): reworded to
+    "That skill isn't available in this context." (dropped the old "Pick a skill from the list above
+    to run" clause — there is no list in the locked path to point to). This same reworded fallback is
+    now used for both the locked-launch AC5 case and (structurally unreachable, but shares the string)
+    any future locked-path missing-skill state; the picker-path's fallback is not needed since a
+    picker-selected skill can never be "missing" (it's chosen directly from the rendered list).
+  - [x] Re-ran the full test file: AC3-adjacent tests (`'AC3: location selector appears...'` and
+    siblings, all launched WITHOUT `?skillId=` and clicking a picker row) pass unmodified — confirmed
+    by running, not just inspection.
+  - [x] Gates: `tsc --noEmit` clean, `eslint` clean, `vitest run` 793/793 green (up from 791 pre-change:
+    net +2 new tests — 1 test edited in place, 2 new added, 0 regressions).
 
 ## Dev Notes
 
@@ -312,8 +296,74 @@ or hasn't; this story does not depend on it either way (per the epic's own seque
 
 ### Agent Model Used
 
+Claude Sonnet 5 (claude-sonnet-5)
+
 ### Debug Log References
+
+- `npx tsc --noEmit` — clean, no errors.
+- `npx eslint src/features/run/components/RunConsole.tsx src/features/run/components/RunConsole.test.tsx` — clean, no errors/warnings.
+- `npx vitest run` (full suite) — 793/793 passed, 0 regressions (up from 791 pre-change: +2 net new
+  tests in `RunConsole.test.tsx` — 1 existing test edited in place to assert the new locked-card
+  contract, 2 new tests added for AC2/AC5).
 
 ### Completion Notes List
 
+- **Task 1 (confirm current behavior).** Re-read `RunConsoleInner` against the current working tree.
+  Story 16.7's uncommitted changes (reviewed, patched, not yet committed per the never-push-subrepos
+  rule) shifted line numbers slightly in this story's target area (~5-15 lines) but zero overlap
+  confirmed: 16.7 only touches `JobStatusPanel`, far below `RunConsoleInner`'s skill-area block.
+  Confirmed `preSelectedSkillId` is `undefined` whenever `?skillId=` is absent from the query string —
+  no change needed to that derivation.
+
+- **Task 2 (branch the skill area).** Replaced the unconditional "Skill picker" block with
+  `preSelectedSkillId ? (locked branch) : (picker branch, unchanged)`. The locked branch has three
+  sub-states exactly as Task 2 specified: `skillsLoading || (selectedSkill && !fullSkill)` → skeleton;
+  `skillSelectedButMissing` → fallback message; `fullSkill` resolved → `LockedSkillCard`. Confirmed via
+  `tsc --noEmit` (clean) that `fullSkill`'s type (`SkillWithVersion`, from `useSkill`) satisfies
+  `LockedSkillCard`'s `{ skill: Skill }` prop with no casting, per Trap 2's prediction (`SkillWithVersion
+  extends Skill`). Removed the old standalone `skillSelectedButMissing` fallback block that used to sit
+  below the picker (it only ever fired for a pre-selected-but-unresolvable skill, i.e. only the locked
+  path — inlining it into the locked branch instead avoids a dead, unreachable duplicate in the picker
+  branch). `selectedSkillId` state management and `selectedSkill`/`skillSelectedButMissing` derivations
+  untouched, per the story's explicit instruction — only the JSX branch changed.
+
+- **Task 3 (verify no implicit picker-visibility dependency).** Confirmed via source read: `canRun`,
+  `buildRunPayload`, `useDuplicateCheck`, the `VersionSelector`/`LocationSelector` render gates, and
+  `documentUploadHint` all key off `selectedSkill`/`selectedSkillId`/`showLocationSelector` — none
+  reference the picker's DOM, `SkillPickerRow`, or `role="listbox"`. No code changes required; this task
+  was pure confirmation.
+
+- **Task 4 (tests).** Replaced the one test that asserted the old pre-selection-inside-the-picker
+  behavior with an assertion of the new locked-card contract (mirroring skill-first mode's existing
+  "locked card, no picker" pattern). Added an explicit AC2 test (no `skillId` → picker still renders,
+  no locked card) and an AC5 test (`skillId` present but not in the attached list → locked-mode fallback,
+  not the picker). Fallback copy decision: reworded `skillSelectedButMissing`'s message from "That skill
+  isn't available in this context. Pick a skill from the list above to run." to "That skill isn't
+  available in this context." — the "pick from the list above" clause no longer makes sense once there
+  is no list in the locked-launch path (Trap 4). Re-ran the full test file (not just inspected) to
+  confirm the AC3-adjacent location-selector tests — which launch without `?skillId=` and click a picker
+  row directly — are unaffected: they are, since they exercise the untouched AC2 picker path.
+  `tsc --noEmit` + `eslint` clean; `vitest run` 793/793 green, 0 regressions.
+
 ### File List
+
+- `velara-web/src/features/run/components/RunConsole.tsx` — `RunConsoleInner`'s skill-area JSX now
+  branches on `preSelectedSkillId`: locked `LockedSkillCard` (fed by `fullSkill`) with loading/missing
+  sub-states when truthy, the original unchanged picker block when falsy. Removed the now-redundant
+  standalone `skillSelectedButMissing` fallback block (inlined into the locked branch instead, with
+  reworded copy). No changes to `LockedSkillCard` itself, state/derivation logic, or
+  `RunConsoleSkillFirstInner`.
+- `velara-web/src/features/run/components/RunConsole.test.tsx` — replaced the `?skillId=` pre-selection
+  test with a locked-card assertion; added 2 new tests (AC2 no-skill picker-still-renders, AC5
+  skill-not-in-list locked-mode fallback).
+
+## Change Log
+
+- 2026-07-27 — Implemented (dev-story). Frontend-only, zero backend surface, as scoped. Branched
+  `RunConsoleInner`'s skill area on `preSelectedSkillId`: an engagement-launched Run (always carries a
+  real `skillId`) now shows a locked single-skill card (reusing skill-first mode's `LockedSkillCard`
+  verbatim) instead of the full multi-skill picker; a context-first launch with no `skillId` still shows
+  the picker unchanged (AC2). All three locked-path sub-states handled (loading skeleton, not-found
+  fallback with reworded copy, resolved card). No changes to run/invocation logic, back navigation, or
+  `RunConsoleSkillFirstInner` — verified those all key off `selectedSkill`/`selectedSkillId`, not picker
+  JSX. `tsc --noEmit` + `eslint` clean; `vitest run` 793/793 green, 0 regressions (net +2 tests).
