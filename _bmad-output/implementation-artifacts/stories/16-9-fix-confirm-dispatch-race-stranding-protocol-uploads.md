@@ -13,7 +13,7 @@ baseline_commit: velara-api on branch `development` (head `d193a07`). `ingest_se
 
 # Story 16.9: Fix the Confirm/Dispatch Race That Strands a Protocol Upload at "Processing"
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -134,19 +134,19 @@ with a "sometimes it hangs" report rather than "always."
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Confirm current behavior against source (AC1-AC3)**
-  - [ ] Re-read `parse_document` (`ingest_tasks.py:46-201`) and `confirm_file_ref`
+- [x] **Task 1 — Confirm current behavior against source (AC1-AC3)**
+  - [x] Re-read `parse_document` (`ingest_tasks.py:46-201`) and `confirm_file_ref`
     (`ingest_service.py:218-347`) against the current working tree — line numbers above are from
     HEAD `d193a07`; re-locate by searching for `parse_document_unexpected_status` if the file has
     moved.
-  - [ ] Confirm the `@celery.task(name="velara.workers.ingest.parse_document", bind=True)` decorator
+  - [x] Confirm the `@celery.task(name="velara.workers.ingest.parse_document", bind=True)` decorator
     (`ingest_tasks.py:46`) already has `bind=True` (needed for `self.retry(...)`) — it does; no
     decorator change needed for that alone, only for retry-limit/backoff configuration if you add
     `max_retries`/`default_retry_delay` to the decorator itself vs. passing them to `self.retry()`
     per-call. Either is acceptable; document which you chose in Completion Notes.
 
-- [ ] **Task 2 — Add bounded retry to the `pending`-status branch (AC1, AC2, AC3)**
-  - [ ] Modify ONLY the `if ref.status != FILE_REF_STATUS_CONFIRMED:` branch
+- [x] **Task 2 — Add bounded retry to the `pending`-status branch (AC1, AC2, AC3)**
+  - [x] Modify ONLY the `if ref.status != FILE_REF_STATUS_CONFIRMED:` branch
     (`ingest_tasks.py:97-103`) — this check currently sits INSIDE the same `async with session_scope()`
     block used to load the ref (lines 80-103). `self.retry()` raises a `Retry` exception that Celery
     catches at the task level; make sure raising it here doesn't get swallowed or converted by
@@ -154,26 +154,26 @@ with a "sometimes it hangs" report rather than "always."
     block at line 112 covers this branch — it starts AFTER the ref-loading block per current
     structure, so the pending-check itself sits outside that except, but verify this against current
     source since a refactor could have changed the boundary).
-  - [ ] Choose bounded retry parameters (e.g. `countdown=2`, `max_retries=5` — roughly enough to
+  - [x] Choose bounded retry parameters (e.g. `countdown=2`, `max_retries=5` — roughly enough to
     absorb typical commit-visibility latency, which the live incident suggests is sub-second to a
     few seconds, without waiting anywhere near the frontend's 2-minute cap). Document the chosen
     values and reasoning in Completion Notes.
-  - [ ] On retry exhaustion (Celery's `self.retry()` re-raises the original condition once
+  - [x] On retry exhaustion (Celery's `self.retry()` re-raises the original condition once
     `max_retries` is hit, or you can check `self.request.retries >= max_retries` explicitly before
     calling retry) — transition to AC4's terminal `failed` state instead of raising unhandled or
     looping forever.
 
-- [ ] **Task 3 — Terminal failure on retry exhaustion with a distinct error_code (AC4)**
-  - [ ] Add a new error code constant alongside `ERROR_CODE_PARSE_FAILED`/`ERROR_CODE_PARSE_TOO_LARGE`
+- [x] **Task 3 — Terminal failure on retry exhaustion with a distinct error_code (AC4)**
+  - [x] Add a new error code constant alongside `ERROR_CODE_PARSE_FAILED`/`ERROR_CODE_PARSE_TOO_LARGE`
     (`ingest_tasks.py:32-33`) — e.g. `ERROR_CODE_CONFIRM_RACE_TIMEOUT` or similar; name it to reflect
     "the row never reached confirmed after retries," not a parsing problem.
-  - [ ] Write the terminal `failed` status using the SAME fresh-`session_scope()` pattern the
+  - [x] Write the terminal `failed` status using the SAME fresh-`session_scope()` pattern the
     existing failure handler uses (`ingest_tasks.py:180-194` — a fresh session so a poisoned
     execution session can't strand the row; terminal-state-guarded so a concurrent transition isn't
     clobbered). Reuse this pattern, don't invent a second one.
 
-- [ ] **Task 4 — Tests (AC5)**
-  - [ ] **Trap to avoid:** do not call `parse_document(file_ref_id)` synchronously inside a
+- [x] **Task 4 — Tests (AC5)**
+  - [x] **Trap to avoid:** do not call `parse_document(file_ref_id)` synchronously inside a
     pytest-asyncio test and expect it to work cleanly — the task's body wraps `asyncio.run(_execute())`
     (`ingest_tasks.py:201`), which clashes with an already-running event loop under pytest-asyncio
     (`test_ingest.py:483-484`'s comment: "If asyncio.run() clash happens inside eager task, the
@@ -185,18 +185,18 @@ with a "sometimes it hangs" report rather than "always."
     that doesn't require `asyncio.run()` re-entry, or (b) driving it through Celery's `task.apply()`
     (eager mode, no broker) if that sidesteps the event-loop clash — verify which approach actually
     works in this test harness before committing to one; do not assume without checking.
-  - [ ] Test 1 (AC1): row seeded at `pending`, task observes it, retries; then row flipped to
+  - [x] Test 1 (AC1): row seeded at `pending`, task observes it, retries; then row flipped to
     `confirmed` (simulating the API's commit landing); retried attempt completes and reaches
     `parsed`.
-  - [ ] Test 2 (AC4): row seeded at `pending` and NEVER transitions to `confirmed` (simulating a
+  - [x] Test 2 (AC4): row seeded at `pending` and NEVER transitions to `confirmed` (simulating a
     genuinely stranded row, not just latency); retries exhaust; row ends at `failed` with the new
     error_code.
-  - [ ] Confirm the existing terminal-state idempotency test (whatever currently covers
+  - [x] Confirm the existing terminal-state idempotency test (whatever currently covers
     `ingest_tasks.py:88-95`, if one exists as a dedicated unit test vs. only exercised via the
     integration happy-path) still passes unmodified (AC3) — search for it before assuming it exists;
     if no dedicated test currently exercises that branch, note this as a pre-existing gap, not one
     this story is required to backfill (out of scope).
-  - [ ] Gates: `ruff` clean; the relevant pytest suite (`tests/unit/services/test_ingest_service.py`,
+  - [x] Gates: `ruff` clean; the relevant pytest suite (`tests/unit/services/test_ingest_service.py`,
     `tests/integration/api/test_ingest.py`, plus wherever you add the new worker-level tests) green,
     0 regressions.
 
@@ -336,8 +336,177 @@ race the real dispatch-then-commit timing end-to-end, which is not reliably repr
 
 ### Agent Model Used
 
+Claude Sonnet 5 (claude-sonnet-5)
+
 ### Debug Log References
+
+- Verified `self.retry()`'s real Celery semantics before implementing (`docker compose exec api
+  python3 -c "..."` against `celery.app.task.Task.retry` source, celery 5.4.0): it internally
+  computes `retries = request.retries + 1` and raises `MaxRetriesExceededError` itself once
+  `retries > max_retries` — so the implementation does NOT manually check
+  `self.request.retries >= max_retries` before calling retry (that would have been redundant and
+  off-by-one-prone); it lets `self.retry()` raise `MaxRetriesExceededError` and catches that.
+- Confirmed `celery/celery#4661` (GitHub) — `self.retry()` under `task_always_eager=True` +
+  `task_eager_propagates=True` (this repo's `celery_eager` fixture,
+  `tests/conftest.py:185-196`) raises a `RuntimeError`, not a clean retry — so `celery_eager` is
+  NOT usable to test the retry branch. Tests instead patch `parse_document.retry` /
+  `.MaxRetriesExceededError` directly on the real singleton task object and invoke
+  `parse_document(file_ref_id)` (plain call syntax) inside a fresh thread/event loop (see below).
+- Confirmed `Retry` (celery.exceptions.Retry) is a plain `Exception` subclass and
+  `session_scope()`'s `async with SessionFactory()` does not swallow exceptions on `__aexit__` — so
+  raising the new `_ConfirmRacePending` sentinel from inside the `async with session_scope()` block
+  that loads the ref propagates cleanly to the outer `parse_document`, without being caught by the
+  later `try/except Exception` block that handles parse failures (verified the sentinel is raised
+  BEFORE that `try:`, so AC3's terminal-state branch and the parse-failure branch are both
+  unaffected).
+- Reproduced and fixed a `dispose_engine()` gap during implementation (not present in the story's
+  Dev Notes): the pending-status branch originally raised `_ConfirmRacePending` from inside
+  `_execute()` WITHOUT ever reaching the inner `try/finally` that calls `await dispose_engine()` —
+  meaning the pooled asyncpg connection opened to load the ref would leak past `asyncio.run()`
+  returning. Fixed by wrapping the ref-load block in its own `try/except _ConfirmRacePending:
+  await dispose_engine(); raise` so disposal happens on every exit path, matching
+  `dispose_engine()`'s own docstring requirement ("call this... before `asyncio.run()` returns").
+- `docker compose exec api ruff check app/workers/ingest_tasks.py
+  tests/integration/api/test_ingest.py` — clean (caught and fixed one import-line-length issue
+  mid-implementation: `_mark_confirm_race_timeout`'s `from app.models.file_ref import ...` line
+  exceeded 100 chars — wrapped to a multi-line import). Full-repo `ruff check .` also run: only 2
+  pre-existing E501s remain, both in `tests/integration/api/test_certifications.py` (uncommitted
+  Story 17.3 work this story's baseline explicitly says not to touch) — unrelated to this story.
+- `docker compose exec -e AUTH_BACKEND=dev api pytest tests/integration/api/test_ingest.py
+  tests/unit/services/test_ingest_service.py -v` — 52 passed, 3 skipped (pre-existing
+  `USE_REAL_STORAGE=1`-gated skips, unrelated), 0 failed.
+- `docker compose exec -e AUTH_BACKEND=dev api pytest -q` (full backend suite) — 1597 passed, 3
+  skipped, 1 failed
+  (`tests/integration/api/test_auth_and_authz_auditing.py::test_repeated_denials_are_deduped`).
+  **Verified pre-existing and unrelated**: re-ran the identical test against `git stash`'d
+  (unmodified, HEAD `d193a07`) code inside the same container — it fails identically. Also already
+  logged in `deferred-work.md` (from the 2026-07-24 auth/authz-auditing review): the test's
+  `dedupe_key` uses a fixed literal route with no per-run uniqueness, and `audit_log_entries` is
+  append-only (DB trigger blocks DELETE), so re-running the suite against a not-yet-truncated
+  `velara_test` within ~15 minutes of a prior run collides with the prior run's own row. Not
+  introduced by, or related to, this story's ingest/Celery changes — no `deferred-work.md` update
+  needed since it's already recorded there.
+- This repo has no source bind-mount for the `api`/`worker` containers — `docker compose cp` was
+  used to sync `app/workers/ingest_tasks.py` and `tests/integration/api/test_ingest.py` into the
+  running `api` container ahead of each test run (confirmed via `docker-compose.yml`: only
+  `postgres_data`/`minio_data` volumes and one skill-bundle mount exist, no `./:/app`).
 
 ### Completion Notes List
 
+- **Bounded retry parameters chosen: `countdown=2` seconds, `max_retries=5`** (documented in
+  `ingest_tasks.py` as `_CONFIRM_RACE_RETRY_COUNTDOWN`/`_CONFIRM_RACE_MAX_RETRIES`). Reasoning: the
+  live incident's commit-visibility latency is sub-second to a few seconds; 5 retries × ~2s spacing
+  absorbs that with margin while resolving in well under 10 seconds total — nowhere near the
+  frontend's 2-minute poll cap (AC4's "fails fast" intent).
+- **Retry-limit configuration chosen: passed per-call to `self.retry(countdown=..., max_retries=...)`**,
+  not set on the `@celery.task(...)` decorator itself — keeps the race-specific retry policy
+  colocated with the one branch it governs, rather than becoming a task-wide default that could
+  silently apply to some future unrelated exception in this task.
+- **Retry-exhaustion detection: let Celery's real `self.retry()` raise `MaxRetriesExceededError`
+  itself, caught by the outer `parse_document`** — NOT a manual `self.request.retries >=
+  max_retries` pre-check (see Debug Log: `Task.retry()`'s own source already does `retries =
+  request.retries + 1` and raises when `retries > max_retries`; duplicating that logic would risk
+  an off-by-one and diverge from Celery's real semantics on a future Celery upgrade).
+- **Control-flow structure**: introduced a private sentinel exception `_ConfirmRacePending`, raised
+  from inside `_execute()`'s ref-loading block when the row is `pending` (not yet `confirmed`), and
+  caught by the OUTER sync `parse_document` (never inside the coroutine) specifically because
+  Celery's retry mechanism (`self.retry()` → `apply_async()`) is tied to the task's sync call stack,
+  not something safe/meaningful to invoke from inside a coroutine running under `asyncio.run()`.
+  This resolved the story's Trap 3 concern by construction rather than by trial and error.
+- **New terminal-write helper `_mark_confirm_race_timeout`** reuses the exact fresh-`session_scope()`
+  + terminal-state-guard shape as the existing parse-failure handler (`ingest_tasks.py:236-260`'s
+  precedent) — a fresh session so a poisoned session can't strand the row, and a terminal-state
+  check so a concurrently-landing real transition (e.g. the API's commit finally arriving, or a
+  duplicate task delivery reaching `parsed` first) isn't clobbered.
+- **New error code: `ERROR_CODE_CONFIRM_RACE_TIMEOUT = "CONFIRM_RACE_TIMEOUT"`** — distinct from
+  `PARSE_FAILED`/`PARSE_TOO_LARGE`, named to reflect "the row never reached confirmed after
+  retries," not an extraction problem. No frontend coupling to specific ingest error_code strings
+  was found (`useIngest.ts` only branches on `status === 'failed'`), confirmed via grep across both
+  subrepos before adding it — safe to introduce without a frontend change (matches the story's own
+  Out-of-scope note).
+- **AC2 verified untouched**: `confirm_file_ref`'s dispatch-before-commit ordering
+  (`ingest_service.py:324-344`) was not modified — confirmed via `git diff` scoped to
+  `ingest_service.py` showing zero changes.
+- **AC3 verified untouched and now has direct test coverage**: the pre-existing terminal-state
+  early-return (`ingest_tasks.py:88-95`, unmodified) previously had no dedicated unit/integration
+  test exercising it directly (searched `tests/` for `parse_document_skipped_terminal` — no hits
+  before this story). Added `test_already_terminal_row_still_skips_without_retry`, closing that
+  pre-existing gap as a side effect (not required by the story, but free given the new test
+  infrastructure built for AC1/AC4).
+- **Testing approach**: neither of Task 4's two suggested options worked as originally scoped.
+  Extracting the retry logic into a plain non-`asyncio.run()`-wrapped helper was only partially
+  possible (`_mark_confirm_race_timeout` IS such a helper and is tested directly), but the
+  retry-vs-exhaustion BRANCHING decision lives in the outer `parse_document`'s sync body, which
+  still wraps `asyncio.run()`. Celery's `task.apply()` (eager mode) was ruled out empirically —
+  confirmed it raises `RuntimeError` when `self.retry()` is called under
+  `task_always_eager=True`+`task_eager_propagates=True` (`celery/celery#4661`, reproduced locally).
+  Final approach (see Debug Log): patch `parse_document.retry`/`.MaxRetriesExceededError` directly
+  on the real singleton task object, and invoke `parse_document(file_ref_id)` (plain call syntax —
+  NOT `.delay()`/`.apply_async()`, no broker involved) inside a fresh thread via
+  `asyncio.to_thread(...)`, mirroring the pre-existing `_run_in_fresh_loop` pattern in
+  `tests/integration/api/test_invocations.py:1890-1912` (rebinding `app.db.session`'s
+  engine/SessionFactory to the new thread's own event loop, since asyncpg connections cannot cross
+  loops/threads). All 4 new control-flow tests exercise the REAL task function against a real
+  Postgres row, not a reimplementation of the logic.
+- **`docker compose cp` iteration note**: this environment's `api`/`worker` containers have no
+  source bind-mount (image-baked code only). Each edit to `ingest_tasks.py` or
+  `tests/integration/api/test_ingest.py` required `docker compose cp <file> api:/app/<path>`
+  before `pytest` picked it up — documented here so a future session doesn't waste time debugging
+  "why aren't my test changes taking effect."
+- **Pre-existing test failure investigated and excluded**: see Debug Log —
+  `test_repeated_denials_are_deduped` fails identically on unmodified `d193a07`, already logged in
+  `deferred-work.md`. Not touched by this story.
+- Live-incident row `file_ref_id=478ef3e6-75e2-4f7d-a8ba-5d66a5d3ce2a` (stranded before this fix
+  shipped) is NOT retroactively repaired by this change — per the story's own Data Model & Flow
+  Facts note, that specific row predates the fix and nothing will re-trigger it; a manual one-off
+  correction (if desired) is explicitly out of this story's scope.
+
 ### File List
+
+**Backend (`velara-api/`):**
+- `app/workers/ingest_tasks.py` — MODIFIED. Added `ERROR_CODE_CONFIRM_RACE_TIMEOUT` constant,
+  `_CONFIRM_RACE_RETRY_COUNTDOWN`/`_CONFIRM_RACE_MAX_RETRIES` constants, `_ConfirmRacePending`
+  sentinel exception, `_mark_confirm_race_timeout` helper; the `pending`-status branch inside
+  `_execute()` now raises `_ConfirmRacePending` (with an added `dispose_engine()` call on that exit
+  path) instead of silently giving up; the outer `parse_document` now catches
+  `_ConfirmRacePending` and calls `self.retry()`, catching `MaxRetriesExceededError` on exhaustion
+  to write the terminal `failed` status via the new helper. No change to the terminal-state
+  early-return branch, the parse-failure branch, or `confirm_file_ref`.
+- `tests/integration/api/test_ingest.py` — MODIFIED. New "Story 16.9" test section: helper
+  `_seed_pending_file_ref` (direct DB seed, bypasses presign/S3) and
+  `_run_parse_document_in_fresh_loop` (drives the real `parse_document` task in a fresh
+  thread/event loop with `.retry()`/`MaxRetriesExceededError` patched on the real task instance,
+  mirroring `test_invocations.py`'s `_run_in_fresh_loop` convention); 6 new tests:
+  `test_confirm_race_timeout_writes_failed_with_new_error_code`,
+  `test_confirm_race_timeout_does_not_clobber_a_terminal_row`,
+  `test_pending_status_retries_via_self_retry`,
+  `test_pending_status_resolves_once_confirmed_on_retry`,
+  `test_retry_exhaustion_writes_terminal_failed_with_new_error_code`,
+  `test_already_terminal_row_still_skips_without_retry`.
+
+**Docs:**
+- `_bmad-output/implementation-artifacts/stories/16-9-fix-confirm-dispatch-race-stranding-protocol-uploads.md` —
+  this file (task checkboxes, Dev Agent Record, Change Log, Status).
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — status transitions.
+
+## Change Log
+
+- 2026-07-27 — Implemented (dev-story). Backend-only fix for the confirm/dispatch race that
+  permanently strands a protocol upload at `pending`: `parse_document` now retries (bounded,
+  `countdown=2`, `max_retries=5`) via a new `_ConfirmRacePending` sentinel raised from the ref-load
+  branch and caught by the outer sync task body — resolving before Celery's `self.retry()` (tied to
+  the task's sync call stack) rather than from inside the `asyncio.run()`-wrapped coroutine. On
+  retry exhaustion, writes a terminal `failed` status with a new `CONFIRM_RACE_TIMEOUT` error_code
+  via a new helper reusing the existing fresh-session failure-write pattern. `confirm_file_ref`'s
+  dispatch-before-commit ordering and the pre-existing terminal-state idempotency guard are both
+  verified unchanged (AC2/AC3). Added 6 new integration tests driving the REAL `parse_document` task
+  (not a reimplementation) via a fresh-thread/event-loop pattern mirroring
+  `test_invocations.py`'s existing `_run_in_fresh_loop` convention, with `.retry()` patched on the
+  real singleton task object — necessary because Celery's real retry dispatch needs a broker and the
+  `celery_eager` fixture's `self.retry()` is broken under `task_eager_propagates=True`
+  (celery/celery#4661). One of the 6 new tests closes a pre-existing gap (no prior test directly
+  exercised the terminal-state early-return branch). Gates: backend `ruff check .` clean (only 2
+  pre-existing E501s remain, in uncommitted unrelated Story 17.3 files); `pytest` full suite 1597
+  passed, 3 skipped, 1 pre-existing failure (`test_repeated_denials_are_deduped` — verified fails
+  identically on unmodified HEAD, already logged in `deferred-work.md`, unrelated to this story). 0
+  regressions introduced.
