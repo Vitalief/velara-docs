@@ -534,5 +534,5 @@ development_status:
   # ─────────────────────────────────────────────────────────
   epic-17: in-progress
   17-1-langsmith-tracing-for-platform-llm-calls: done
-  17-2-ai-adapter-emits-langsmith-traced-skill-bundles: backlog
+  17-2-ai-adapter-emits-langsmith-traced-skill-bundles: ready-for-dev
   17-3-certification-dry-run-evidence-gate: done
