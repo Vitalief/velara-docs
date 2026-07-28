@@ -11,7 +11,7 @@ baseline_commit_note: velara-api head migration `0030_dry_run_config_study` (Sto
 
 # Story 17.1: LangSmith Tracing for Platform LLM Calls
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -285,6 +285,20 @@ the Celery worker (`execution_tasks.py:349`). There is no second construction pa
     and investigate). This is a CI job (`ci.yml:20-39`).
   - [x] Do NOT commit `velara-api` from this story (never-push-subrepos rule) — only `code-review`
     commits subrepos, post-review. Only the top-level docs repo is committed by `dev-story`.
+
+### Review Findings
+
+Code review 2026-07-28 (bmad-code-review, 3 parallel layers: Blind Hunter, Edge Case Hunter,
+Acceptance Auditor). Acceptance Auditor: all 7 ACs PASS, both out-of-scope constraints PASS. The
+two patch items below are robustness gaps *within* a correct-by-AC implementation, not AC violations.
+8 findings dismissed as noise (unreachable-enum boot claim, contextvars-across-threads with no thread
+offload in the LLM path, by-design LangSmith cost-column, cosmetic latency/payload notes).
+
+- [x] [Review][Patch] Failed LLM call emits a junk span + false `pricing_unrecognized_model` warning — when `messages.create()` raises, `span.record()` never runs but `finally` still calls `_emit_span` with an all-`None` span, posting a garbage `run_type="llm"` span (all-None metadata, empty `usage_metadata`, `cost_usd=None`) AND `compute_cost_usd(model=None)` logs a misleading `pricing_unrecognized_model` warning on *every* LLM failure. FIXED: `_emit_span` now early-returns `if span.model is None` (nothing was recorded → not a traceable run). +2 tests (`TestFailedCallEmitsNoSpan`). [app/core/tracing.py:172]
+- [x] [Review][Patch] Tracing can be "enabled" yet silently emit nothing depending on credential-injection path — `RunTree(...)` was built with no explicit `client`/`api_key`; it relied on `os.environ`, but `settings.LANGSMITH_API_KEY` is sourced from the `.env` file (pydantic `env_file`), which does NOT populate `os.environ`. When the key arrives via `.env` or Secrets-Manager-into-`Settings` (the documented staging/prod path, mirroring `ANTHROPIC_API_KEY`), `_tracing_enabled()` is True but `RunTree.post()` had no credential → swallow-and-warn-once, zero traces while appearing enabled. FIXED: added `_get_ls_client()` — a cached, explicit `Client(api_key=settings.LANGSMITH_API_KEY)` passed to `RunTree(ls_client=...)`, mirroring how the Anthropic client passes `api_key=` explicitly. +2 tests (`TestExplicitLangSmithClient`). [app/core/tracing.py:237]
+- [x] [Review][Defer] `_trace_failure_warned` never resets — a transient LangSmith blip permanently silences all trace-failure warnings for the worker lifetime; story deliberately chose "warn once per process", so reset-on-success is a contract change, not an unambiguous patch. [app/core/tracing.py:51] — deferred, hardening
+- [x] [Review][Defer] `LANGSMITH_TRACING=true` with a blank key silently no-ops (gate requires both) — operator gets zero traces and zero signal; a startup warning would help. [app/core/tracing.py:82] — deferred, hardening
+- [x] [Review][Defer] Two pre-existing Story 17.3 E501 docstring re-wraps bundled in this diff (behavior-neutral; already logged to deferred-work.md by dev). [tests/integration/api/test_certifications.py:1012] — deferred, pre-existing
 
 ## Dev Notes
 

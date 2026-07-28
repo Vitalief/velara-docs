@@ -2,6 +2,28 @@
 
 Items deferred during reviews — real but not actionable in their originating story.
 
+## Deferred from: code review of 17-1-langsmith-tracing-for-platform-llm-calls (2026-07-28)
+
+- **`_trace_failure_warned` never resets (`app/core/tracing.py:51`)** — the module-global warn-once
+  guard is set `True` on the first swallowed tracing error and never cleared for the process lifetime.
+  A *transient* LangSmith outage that recovers still leaves every subsequent (possibly sustained)
+  trace failure completely unlogged, blinding an operator debugging "why are no traces showing up."
+  Not auto-patched because the story deliberately chose "warn once per process"; resetting the flag on
+  a successful `run.post()`/`.patch()` is a contract change worth a conscious decision, not an
+  unambiguous fix. (The concurrent-race on the same global is benign — worst case the warning logs
+  twice — so not tracked separately.)
+- **`LANGSMITH_TRACING=true` + blank `LANGSMITH_API_KEY` silently no-ops (`app/core/tracing.py:82`)** —
+  `_tracing_enabled()` requires BOTH the master switch and a key, so an operator who flips tracing on
+  but forgets the key gets zero spans and zero signal. A boot-time / startup warning
+  (`if LANGSMITH_TRACING and not LANGSMITH_API_KEY: log.warning(...)`) would surface the misconfig.
+  Adjacent to the patched credential-injection finding but distinct (that one is enabled-yet-emits-
+  nothing; this one is half-configured). Deferred as hardening.
+- **Two pre-existing Story 17.3 E501 docstring re-wraps in `tests/integration/api/test_certifications.py`
+  (`:1012`, `:1025`)** — behavior-neutral line-length fixes folded into this diff so Rule 10 (`ruff
+  check .`) stays green. Pre-existing from Story 17.3, already noted in this ledger's spirit by the dev;
+  recorded here for completeness. No action needed beyond confirming they land with whatever commits
+  17.1's subrepo changes.
+
 ## CI failure on push to velara-api/development (2026-07-24) — pushed without re-verifying gates
 
 Pushing Story 16.6's already-committed code-review-patch commit to `origin/development` triggered a CI
