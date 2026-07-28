@@ -1,5 +1,6 @@
 ---
-baseline_commit: velara-api head migration `0030_dry_run_config_study` (Story 17.3 code-review landed);
+baseline_commit: 6e1b4f7f9174dca0c1be2a90700379c6d30669a5
+baseline_commit_note: velara-api head migration `0030_dry_run_config_study` (Story 17.3 code-review landed);
   velara-web on `development`. This is the SECOND Epic 17 story picked up (17.3 done, 17.1 now).
   Independent of 17.3 (zero shared files). 17.2 DEPENDS ON this story — do not start 17.2 until the
   tracing conventions here are settled. PREREQUISITE SATISFIED: the LangSmith ADR landed 2026-07-24
@@ -10,7 +11,7 @@ baseline_commit: velara-api head migration `0030_dry_run_config_study` (Story 17
 
 # Story 17.1: LangSmith Tracing for Platform LLM Calls
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
