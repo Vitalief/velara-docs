@@ -11,7 +11,7 @@ baseline_commit_note: velara-api head migration `0030_dry_run_config_study` (Sto
 
 # Story 17.1: LangSmith Tracing for Platform LLM Calls
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -127,8 +127,8 @@ the Celery worker (`execution_tasks.py:349`). There is no second construction pa
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Config: three new settings + the boot-time full-content refusal (AC2, AC3, AC4)**
-  - [ ] In `app/core/config.py` `Settings` (pydantic v2 `BaseSettings`), add — grouped with a comment
+- [x] **Task 1 — Config: three new settings + the boot-time full-content refusal (AC2, AC3, AC4)**
+  - [x] In `app/core/config.py` `Settings` (pydantic v2 `BaseSettings`), add — grouped with a comment
     banner near the Anthropic block (`:207-222`):
     - `LANGSMITH_API_KEY: str = ""` (empty default; injected from Secrets Manager in staging/prod like
       `ANTHROPIC_API_KEY`)
@@ -137,7 +137,7 @@ the Celery worker (`execution_tasks.py:349`). There is no second construction pa
     - `LANGSMITH_TRACING: bool = False` (master on-switch; maps to the SDK's `LANGSMITH_TRACING` env)
     - `LANGSMITH_TRACE_CONTENT: bool = False` (**MUST default false** — this default IS the safety floor,
       AC3/ADR item 4; do not default it true "for convenience")
-  - [ ] Extend `_reject_insecure_defaults_outside_dev` (`config.py:281-328`), AFTER the dev early-return
+  - [x] Extend `_reject_insecure_defaults_outside_dev` (`config.py:281-328`), AFTER the dev early-return
     (`:303-304 if self.ENVIRONMENT is Environment.dev: return self`), to append to `offenders`:
     ```python
     if self.LANGSMITH_TRACE_CONTENT:
@@ -149,11 +149,11 @@ the Celery worker (`execution_tasks.py:349`). There is no second construction pa
     This makes `Settings(ENVIRONMENT=staging, LANGSMITH_TRACE_CONTENT=True, ...)` raise, exactly like the
     `ANTHROPIC_API_KEY` gate at `:319-320`. Do NOT add the check before the dev early-return (dev must be
     allowed to set it true).
-  - [ ] Note the enum reality: `Environment` (`config.py:22-27`) is `dev`/`staging`/`prod` only. The
+  - [x] Note the enum reality: `Environment` (`config.py:22-27`) is `dev`/`staging`/`prod` only. The
     ADR's "dev/local" = `Environment.dev`. No new enum value.
 
-- [ ] **Task 2 — The tracing wrapper: a config-gated, safe-by-default, content-graded LLM span (AC1, AC2, AC3)**
-  - [ ] Create a small tracing helper module — recommended `app/core/tracing.py` (co-located with
+- [x] **Task 2 — The tracing wrapper: a config-gated, safe-by-default, content-graded LLM span (AC1, AC2, AC3)**
+  - [x] Create a small tracing helper module — recommended `app/core/tracing.py` (co-located with
     `observability.py`, the pattern it mirrors), NOT inside `anthropic_client.py` (keep the SDK-import
     lazy and the provider file focused). It exposes ONE function the provider calls around each LLM call.
     Recommended shape (a context manager or a thin wrapper — dev's choice, but it MUST):
@@ -180,46 +180,46 @@ the Celery worker (`execution_tasks.py:349`). There is no second construction pa
       failure, log a structured warning (`langsmith_trace_failed`, IDs/model/outcome only — never
       content) and continue. A trace must NEVER fail an LLM call. Consider a module-level "already
       warned" guard to avoid log spam if LangSmith is down.
-  - [ ] Compute cost inside the wrapper via `from app.core.pricing import compute_cost_usd` — call
+  - [x] Compute cost inside the wrapper via `from app.core.pricing import compute_cost_usd` — call
     `compute_cost_usd(model=result.model, input_tokens=..., output_tokens=...)`. Pass `None` through as
     `None` (unknown model → no cost on span; do NOT coalesce to 0 — the pricing memory note:
     None-as-$0 is the recurring bug class).
-  - [ ] Measure latency with `time.perf_counter()` around the actual `self._client.messages.create(...)`
+  - [x] Measure latency with `time.perf_counter()` around the actual `self._client.messages.create(...)`
     call (none is captured today — this is new; report `latency_ms`).
 
-- [ ] **Task 3 — Wire the wrapper into the provider's two methods (AC1)**
-  - [ ] In `AnthropicProvider.complete` (`anthropic_client.py:149-186`): wrap the
+- [x] **Task 3 — Wire the wrapper into the provider's two methods (AC1)**
+  - [x] In `AnthropicProvider.complete` (`anthropic_client.py:149-186`): wrap the
     `self._client.messages.create(...)` call so a span is emitted with `call_site="complete"`,
     `model=self._model`, tokens from `resp.usage.input_tokens/output_tokens`, `stop_reason`, latency, and
     cost. Content (only if `LANGSMITH_TRACE_CONTENT`): inputs `{system, user_content}`, output the
     extracted `output_text`. Return value (`LLMResult`) and all existing behavior/logging unchanged.
-  - [ ] In `AnthropicProvider.create_message` (`:188-235`): same, `call_site="create_message"`, tokens
+  - [x] In `AnthropicProvider.create_message` (`:188-235`): same, `call_site="create_message"`, tokens
     from `resp.usage`, content (if permitted) inputs `{system, messages, tools}`, output `resp.content`
     (stringified). Because `_run_hybrid` calls this once per tool-use turn, one span per turn is emitted
     — correct granularity.
-  - [ ] Do NOT change the provider's construction, the `get_llm_provider()` `@lru_cache` factory
+  - [x] Do NOT change the provider's construction, the `get_llm_provider()` `@lru_cache` factory
     (`:238-247`), or the injected `LLMProvider` Protocol surface. The `FakeLLMProvider` test doubles do
     not go through `messages.create`, so they naturally emit no spans — no test-double change needed for
     tracing (they may need the new settings present; see Task 5).
-  - [ ] Confirm the adapter-propose path is covered transitively: `skill_integration_assistant.py`'s 3
+  - [x] Confirm the adapter-propose path is covered transitively: `skill_integration_assistant.py`'s 3
     `complete` calls go through this same method — no edit to that file is required for them to be traced.
 
-- [ ] **Task 4 — Dependency + env/secrets documentation (AC6)**
-  - [ ] Add `langsmith` to `pyproject.toml` `[project].dependencies` (pin a current version — see Dev
+- [x] **Task 4 — Dependency + env/secrets documentation (AC6)**
+  - [x] Add `langsmith` to `pyproject.toml` `[project].dependencies` (pin a current version — see Dev
     Notes; check `uv.lock` regenerates cleanly). This is a genuinely new dependency — none of
     langsmith/langchain exists today.
-  - [ ] Add a `# ── LangSmith tracing ──` section to `.env.example` documenting all four vars, each with
+  - [x] Add a `# ── LangSmith tracing ──` section to `.env.example` documenting all four vars, each with
     a comment: `LANGSMITH_API_KEY=` (blank in dev = tracing off; Secrets Manager in staging/prod),
     `LANGSMITH_PROJECT=velara`, `LANGSMITH_TRACING=false`, and `LANGSMITH_TRACE_CONTENT=false` with an
     explicit **"dev ONLY — the app refuses to boot in staging/prod if true"** warning comment.
-  - [ ] Add the same four vars to `.env.test` (all off/false — tests must run with tracing disabled by
+  - [x] Add the same four vars to `.env.test` (all off/false — tests must run with tracing disabled by
     default so no test hits the network).
-  - [ ] Add a `LANGSMITH_API_KEY` row to `terraform/README.md`'s secrets table (mirror the
+  - [x] Add a `LANGSMITH_API_KEY` row to `terraform/README.md`'s secrets table (mirror the
     `ANTHROPIC_API_KEY` row at `:171`: secret name e.g. `velara-<env>-langsmith-api-key`, description
     "Optional — enables LangSmith LLM-call tracing; metadata-only in staging/prod").
 
-- [ ] **Task 5 — Tests (AC1–AC5) — establishing NEW test patterns (none exist for config/observability)**
-  - [ ] **Config boot-refusal test (AC4) — NEW pattern.** No `test_config.py` exists today. Create
+- [x] **Task 5 — Tests (AC1–AC5) — establishing NEW test patterns (none exist for config/observability)**
+  - [x] **Config boot-refusal test (AC4) — NEW pattern.** No `test_config.py` exists today. Create
     `tests/unit/core/test_config.py`. Assert:
     - `Settings(ENVIRONMENT="staging", LANGSMITH_TRACE_CONTENT=True, <other required staging fields>)`
       raises `pydantic.ValidationError` (pydantic wraps the `model_validator` `ValueError`), and the
@@ -233,38 +233,38 @@ the Celery worker (`execution_tasks.py:349`). There is no second construction pa
     - `Settings(ENVIRONMENT="dev", LANGSMITH_TRACE_CONTENT=True)` does NOT raise (dev is allowed).
     - `Settings(ENVIRONMENT="staging", LANGSMITH_TRACE_CONTENT=False, ...valid...)` does NOT raise for
       this reason (default is safe in every env).
-  - [ ] **Wrapper no-op test (AC2).** In `tests/unit/core/` (new `test_tracing.py`): with
+  - [x] **Wrapper no-op test (AC2).** In `tests/unit/core/` (new `test_tracing.py`): with
     `LANGSMITH_TRACING=false` (or `LANGSMITH_API_KEY=""`), calling the wrapper does nothing, imports no
     langsmith client, and returns/behaves transparently. Mirror how celery-app tests assert reload-time
     behavior with patched settings (`test_celery_app.py:25-35`). Do NOT hit the network.
-  - [ ] **Wrapper content-gating test (AC3).** With the wrapper ENABLED but `LANGSMITH_TRACE_CONTENT=false`,
+  - [x] **Wrapper content-gating test (AC3).** With the wrapper ENABLED but `LANGSMITH_TRACE_CONTENT=false`,
     patch the langsmith `RunTree` (mock it) and assert the `inputs`/`outputs` passed to it contain NO
     `system`/`user_content`/`messages`/response text — only metadata (model, tokens, latency, cost,
     stop_reason). With `LANGSMITH_TRACE_CONTENT=true` (dev), assert content IS present. This is the core
     safety test — make it unambiguous.
-  - [ ] **Wrapper error-swallow test (AC2).** With tracing enabled, make the mocked `RunTree.post()` (or
+  - [x] **Wrapper error-swallow test (AC2).** With tracing enabled, make the mocked `RunTree.post()` (or
     `.end`) raise; assert the wrapper swallows it and the LLM call's return value is unaffected (no
     exception propagates). Prove a trace failure can't break execution.
-  - [ ] **Provider-integration test (AC1).** Extend `tests/unit/integrations/test_anthropic_client.py`
+  - [x] **Provider-integration test (AC1).** Extend `tests/unit/integrations/test_anthropic_client.py`
     (existing SDK-patch style, `_make_sdk_response` at `:12-27`, `patch("anthropic.Anthropic", ...)`).
     With tracing enabled and `RunTree` mocked, call `AnthropicProvider.complete(...)` and assert a span
     was emitted with the expected metadata (model, tokens from the fake `resp.usage`, cost via the real
     `compute_cost_usd`, a `call_site="complete"` tag). Do the same for `create_message`
     (`call_site="create_message"`). Assert cost is `None` (not 0) when the fake response's model is
     unknown to `pricing.py`.
-  - [ ] **Cost-source test (AC1/AC5).** Assert the span's cost equals `compute_cost_usd(model, in, out)`
+  - [x] **Cost-source test (AC1/AC5).** Assert the span's cost equals `compute_cost_usd(model, in, out)`
     for a known model — i.e. it uses the one pricing source, not a second computation. (Pricing test
     conventions: `tests/unit/core/test_pricing.py`.)
 
-- [ ] **Task 6 — Gates (Enforcement Rule 10)**
-  - [ ] `ruff check .` clean (line-length 100, `select=["E","F","I","B","UP","W"]`). Watch E501 on any
+- [x] **Task 6 — Gates (Enforcement Rule 10)**
+  - [x] `ruff check .` clean (line-length 100, `select=["E","F","I","B","UP","W"]`). Watch E501 on any
     new long comment lines (Rule 10's exact past failure).
-  - [ ] `pytest` — full suite green against a fresh `velara_test` DB in the same environment CI uses (not
+  - [x] `pytest` — full suite green against a fresh `velara_test` DB in the same environment CI uses (not
     a stale local container). Confirm the new `langsmith` dependency is installed in that env.
-  - [ ] `python scripts/export_openapi.py && git diff --exit-code docs/api-spec.json` — must be a no-op
+  - [x] `python scripts/export_openapi.py && git diff --exit-code docs/api-spec.json` — must be a no-op
     (this story adds no route; if `api-spec.json` changes, something leaked into the API surface — stop
     and investigate). This is a CI job (`ci.yml:20-39`).
-  - [ ] Do NOT commit `velara-api` from this story (never-push-subrepos rule) — only `code-review`
+  - [x] Do NOT commit `velara-api` from this story (never-push-subrepos rule) — only `code-review`
     commits subrepos, post-review. Only the top-level docs repo is committed by `dev-story`.
 
 ## Dev Notes
@@ -450,9 +450,76 @@ So the ADR's "dev/local ONLY" full-content mode maps to `Environment.dev` — th
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (Claude Opus 4.8, 1M context) — dev-story implementation 2026-07-28.
+
 ### Debug Log References
 
+- **LangSmith SDK API verified before coding.** Pinned `langsmith==0.10.10` (latest). Confirmed the
+  `RunTree` manual-tracing surface in an isolated venv: `RunTree(name, run_type="llm",
+  project_name=..., inputs=..., tags=..., extra=...)` → `.post()` / `.end(outputs=...)` / `.patch()`.
+  `project_name` maps to `session_name`; token/cost/latency metadata rides in `extra["metadata"]` and
+  renders as first-class run fields. No LangChain needed (platform calls the anthropic SDK directly).
+- **OpenAPI-diff gate — TRUE no-op for this story, but surfaced a PRE-EXISTING 17.3 drift.**
+  Re-running `scripts/export_openapi.py` produces a 685-line diff — verified `grep` shows **0**
+  langsmith/tracing lines; the entire diff is Story 17.3's dry-run certification routes/schemas that
+  17.3's code-review never regenerated into the committed `docs/api-spec.json`. Reverted the spec to
+  baseline (17.1 adds no API surface, and dev-story must not commit subrepo files); logged the 17.3
+  drift + the two pre-existing `test_certifications.py` E501s (fixed inline so Rule 10 is green) to
+  `deferred-work.md` for the next pusher/code-review.
+- **Integration-suite env trap (cost ~2 wasted full runs).** The running `velara-api` docker `api`
+  container is configured for cloud-dev: its `/app/.env` has `AUTH_BACKEND=cognito`, and `conftest.py`
+  only forces `DATABASE_URL`. A bare `docker compose exec api pytest` → **626 failures**, all
+  `401 Unauthorized` (dev-JWT tokens rejected under cognito). Proved it was NOT my change by
+  reproducing identically on the pristine baseline `config.py`. Correct CI-equivalent invocation:
+  `sh -c 'cd /app && set -a && . ./.env.test && set +a && pytest'` (exports `.env.test`'s
+  `AUTH_BACKEND=dev` etc. to override `.env`). A polluted shared `velara_test` DB also failed one
+  no-time-window audit-count test (`test_repeated_denials_are_deduped`: got 4, want 1); recreated the
+  DB clean (`DROP/CREATE DATABASE velara_test`) → conftest re-ran migrations → full suite **1618
+  passed, 3 skipped, 0 failed**. Saved to memory as `project-velara-api-container-test-env`.
+- **Gates (Rule 10), final:** `ruff check .` clean across the whole repo; full pytest suite
+  1618 passed / 3 skipped / 0 failed on a fresh `velara_test` DB with `langsmith==0.10.10` installed;
+  OpenAPI spec unchanged by this story (no route added).
+
 ### Completion Notes List
+
+- **Implemented the LangSmith ADR verbatim — pure additive instrumentation, zero execution change.**
+  All 6 tasks complete, all 6 ACs satisfied. New `app/core/tracing.py` exposes one context manager
+  `trace_llm_call(call_site=...)` that the provider wraps around each real `messages.create` call; the
+  provider records result metadata (and content, unconditionally) onto the yielded span, and the
+  wrapper decides content-vs-metadata + emits/​swallows. Wired into both `AnthropicProvider.complete`
+  (`call_site="complete"`) and `.create_message` (`call_site="create_message"`); the 3
+  `skill_integration_assistant` adapter-propose `complete` sites are covered transitively (no edit).
+- **AC1 (span + one cost source):** every platform call emits a `run_type="llm"` span carrying
+  model, input/output tokens, newly-measured `latency_ms` (via `time.perf_counter()`), `stop_reason`,
+  `call_site`, and cost computed from the SAME `app.core.pricing.compute_cost_usd` Epic 15 uses.
+- **AC2 (config-gated, safe-by-default, non-load-bearing):** no-op unless
+  `LANGSMITH_TRACING and LANGSMITH_API_KEY` (mirrors `init_sentry`'s DSN gate; imports no langsmith
+  when off). All tracing errors are swallowed in `_emit_span` (try/except + warn-once) so a trace
+  failure can never fail an LLM call — proven by the error-swallow tests at both wrapper and provider
+  level.
+- **AC3 (content grading, constructed default):** metadata-only is the *constructed* default via
+  explicit `RunTree` inputs/outputs (`{"redacted": true}`); raw `system`/`user_content`/`messages`/
+  `tools`/response text attach ONLY when `LANGSMITH_TRACE_CONTENT` is true. Test cross-checks the
+  sensitive strings appear NOWHERE in the emitted payload when content is off.
+- **AC4 (boot refusal):** `_reject_insecure_defaults_outside_dev` gains a `LANGSMITH_TRACE_CONTENT`
+  offender AFTER the dev early-return, so `Settings(ENVIRONMENT=staging|prod,
+  LANGSMITH_TRACE_CONTENT=True)` raises `ValidationError` while dev is allowed — full-content in a
+  trust-graded env is a state the app refuses to boot into, not a config trusted to discipline.
+- **AC5 (additive to Epic 15):** no change to `invocation_results.cost_usd`,
+  `AnalyticsOverview.token_cost`, execution behavior, token accumulation, or any table/migration. Cost
+  on the span is `None` (never fabricated `$0`) for an unknown model — carried through from
+  `compute_cost_usd` (guards the recurring None-as-$0 bug class). **Every cost figure the app shows
+  today is byte-for-byte unchanged whether LangSmith is on, off, or down.**
+- **AC6 (dep + docs):** `langsmith==0.10.10` added to `pyproject.toml` (uv.lock regenerated cleanly);
+  four `LANGSMITH_*` vars documented in `.env.example` (new section, with the dev-only boot-refusal
+  warning) and `.env.test` (all off); `LANGSMITH_API_KEY` secrets row added to `terraform/README.md`.
+- **Test patterns established (none existed):** new `tests/unit/core/test_config.py` (boot-refusal,
+  supplies all OTHER staging offenders as valid so LANGSMITH_TRACE_CONTENT is the sole offender) and
+  `tests/unit/core/test_tracing.py` (no-op, content-gating, error-swallow, cost-source); extended
+  `tests/unit/integrations/test_anthropic_client.py` with 5 span-emission tests. 29 new/extended tests,
+  all green.
+- **Not committed (never-push-subrepos):** all `velara-api` changes stay uncommitted for `code-review`
+  to commit post-review. Only the top-level docs repo is committed by dev-story.
 
 - Ultimate context engine analysis completed - comprehensive developer guide created. This story
   implements a pre-existing, prescriptive ADR (LangSmith environment-graded trace sink, 2026-07-24) at a
@@ -465,8 +532,44 @@ So the ADR's "dev/local ONLY" full-content mode maps to `Environment.dev` — th
 
 ### File List
 
+All paths under `velara-api/` (backend-only; NOT committed by dev-story — code-review commits post-review):
+
+**New:**
+- `app/core/tracing.py` — the config-gated, content-graded LangSmith tracing wrapper (`trace_llm_call`).
+- `tests/unit/core/test_config.py` — boot-refusal tests (AC4) — new file, no `test_config.py` existed.
+- `tests/unit/core/test_tracing.py` — wrapper no-op / content-gating / error-swallow / cost-source tests.
+
+**Modified:**
+- `app/core/config.py` — 4 new `LANGSMITH_*` settings + the `LANGSMITH_TRACE_CONTENT` boot-refusal
+  offender in `_reject_insecure_defaults_outside_dev`.
+- `app/integrations/anthropic_client.py` — import `trace_llm_call`; wrap the two `messages.create`
+  calls in `complete` / `create_message` and record span metadata + content.
+- `pyproject.toml` — add `langsmith==0.10.10` to `[project].dependencies`.
+- `uv.lock` — regenerated (langsmith + transitive deps: orjson, requests, requests-toolbelt,
+  uuid-utils, xxhash, zstandard).
+- `.env.example` — new `# ── LangSmith tracing ──` section documenting all four vars.
+- `.env.test` — the four vars, all off/false (tests never hit the network).
+- `terraform/README.md` — `LANGSMITH_API_KEY` row added to the secrets table.
+- `tests/unit/integrations/test_anthropic_client.py` — +5 span-emission tests (`TestProviderTracing`).
+- `tests/integration/api/test_certifications.py` — re-wrapped 2 pre-existing over-long docstrings
+  (`:1012`, `:1025`) so `ruff check .` is green (Rule 10). PRE-EXISTING from Story 17.3 — no behavior
+  change; see `deferred-work.md`.
+
+**Docs repo (committed by dev-story):**
+- `_bmad-output/implementation-artifacts/stories/17-1-langsmith-tracing-for-platform-llm-calls.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — 17.1 → in-progress → review.
+- `_bmad-output/implementation-artifacts/deferred-work.md` — logged pre-existing 17.3 OpenAPI-spec
+  drift + the two 17.3 E501s.
+
 ## Change Log
 
+- 2026-07-28 — Implemented (dev-story). All 6 tasks / 6 ACs complete. New `app/core/tracing.py`
+  (`trace_llm_call` context manager) wired into `AnthropicProvider.complete` / `.create_message`;
+  4 `LANGSMITH_*` settings + boot-time full-content refusal in `config.py`; `langsmith==0.10.10` dep;
+  env/secrets docs. 29 new/extended tests. Gates green in the CI-equivalent env: ruff clean, full
+  pytest 1618 passed / 3 skipped / 0 failed (fresh `velara_test` DB, `.env.test` sourced), OpenAPI
+  spec unchanged by this story. Additive to Epic 15 stored cost — every cost figure in the app is
+  unchanged whether LangSmith is on/off/down. Status → review.
 - 2026-07-27 — Drafted (create-story). Backend-only instrumentation story implementing the 2026-07-24
   LangSmith ADR: a config-gated, safe-by-default, environment-graded tracing wrapper at the single LLM
   provider seam (`complete`/`create_message`), emitting per-call spans with model/tokens/latency/cost
