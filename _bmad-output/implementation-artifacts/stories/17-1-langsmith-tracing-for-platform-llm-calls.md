@@ -79,6 +79,12 @@ the Celery worker (`execution_tasks.py:349`). There is no second construction pa
    `app.core.pricing.compute_cost_usd(model=, input_tokens=, output_tokens=)` — NOT a second pricing
    source (mirrors 15.1/AC3). An unrecognized model yields `cost=None` on the span (never a fabricated
    `$0` — `compute_cost_usd` already returns `None`; carry that through, do not coalesce to 0).
+   *(Amended 2026-07-28:)* the span ALSO emits `usage_metadata` (token counts) so LangSmith's native
+   Tokens/Cost COLUMNS populate — but our authoritative `cost_usd` (pricing.py) stays in metadata as
+   the ground-truth cross-check. **LangSmith prices the Cost column from its OWN rate table** (operator
+   choice: "let LangSmith price it") — it can differ from, or be BLANK vs, the app's cost (e.g. it has
+   no rate for `claude-opus-4-8`, so that column is blank for the default model). `pricing.py` —
+   NEVER LangSmith — remains the single cost source of truth for the app / analytics / billing.
 
 2. **AC2 — Config-gated, safe-by-default; a trace failure never breaks a call.** LangSmith is enabled
    only when configured via env (`LANGSMITH_API_KEY` set AND `LANGSMITH_TRACING=true`); when
@@ -568,7 +574,8 @@ All paths under `velara-api/` (backend-only; NOT committed by dev-story — code
 - `tests/unit/integrations/test_anthropic_client.py` — +5 span-emission tests (`TestProviderTracing`);
   +run_kind assertions (default execution).
 - `tests/unit/core/test_tracing.py` — +`TestRunKind` (default execution, adaptation context, reset,
-  nesting) [AC7].
+  nesting) [AC7]; +`TestUsageMetadata` (token columns emitted, authoritative cost_usd retained, no
+  usage_metadata when tokens absent).
 - `tests/unit/services/test_skill_integration_assistant.py` — fake records ambient `run_kind`;
   +`test_adapter_propose_call_is_tagged_run_kind_adaptation` [AC7].
 - `tests/integration/api/test_certifications.py` — re-wrapped 2 pre-existing over-long docstrings
@@ -583,6 +590,14 @@ All paths under `velara-api/` (backend-only; NOT committed by dev-story — code
 
 ## Change Log
 
+- 2026-07-28 — Emit `usage_metadata` (token counts) so LangSmith's native Tokens/Cost columns populate
+  (operator asked why cost_usd was in metadata but not the Cost column — root cause: the free-form
+  metadata bag doesn't feed LangSmith's native columns; `usage_metadata` does). Operator chose "let
+  LangSmith price it" — we emit tokens only and LangSmith prices the Cost column from its own table
+  (which is blank for `claude-opus-4-8`, as it lacks that rate). Our authoritative `cost_usd`
+  (pricing.py) is retained in metadata as the cross-check; pricing.py stays the single source of truth.
+  +3 tests (`TestUsageMetadata`). Verified live: token columns populate; Cost column blank for Opus
+  (no LangSmith rate); our cost_usd correct in metadata. Full suite green; ruff clean.
 - 2026-07-28 — AC7 folded in (operator request, still in review). Added `run_kind` span categorization
   (execution vs adaptation) via an ambient `contextvars` context (`traced_run_kind`) in
   `app/core/tracing.py` — set as tag + metadata on every span; the 3 adapter-propose sites in
