@@ -125,6 +125,19 @@ the Celery worker (`execution_tasks.py:349`). There is no second construction pa
    `terraform/README.md`'s secrets table (mirroring the `ANTHROPIC_API_KEY` row at
    `terraform/README.md:171`). CI's OpenAPI-diff job is unaffected (no route change) but must still pass.
 
+7. **AC7 — Spans are categorized by run_kind (execution vs adaptation) for cost breakdown.**
+   *(Added 2026-07-28 during dev — folded in at operator request for a monthly per-category cost view
+   in LangSmith.)* `call_site` (`complete`/`create_message`) is the SDK method and does NOT separate a
+   skill EXECUTION from a skill ADAPTATION (both use `complete`). A `run_kind` dimension carries the
+   caller's intent onto every span — as both a tag (`run_kind:execution` / `run_kind:adaptation`) and a
+   metadata field — so LangSmith can filter/group monthly cost by category. It is set via an ambient
+   `contextvars.ContextVar` (`traced_run_kind(...)` in `app/core/tracing.py`), defaulting to
+   `"execution"`; the 3 adapter-propose call sites in `skill_integration_assistant.py` wrap their
+   `complete` call in `traced_run_kind("adaptation")`. **The `LLMProvider` Protocol signature is
+   deliberately NOT changed** (a param would break the 4 `FakeLLMProvider` doubles + positional
+   callers) — contextvars propagate correctly across `await`, so no signature threading is needed.
+   In-bundle sandbox calls remain 17.2's scope; this AC only categorizes the platform's own calls.
+
 ## Tasks / Subtasks
 
 - [x] **Task 1 — Config: three new settings + the boot-time full-content refusal (AC2, AC3, AC4)**
@@ -544,13 +557,20 @@ All paths under `velara-api/` (backend-only; NOT committed by dev-story — code
   offender in `_reject_insecure_defaults_outside_dev`.
 - `app/integrations/anthropic_client.py` — import `trace_llm_call`; wrap the two `messages.create`
   calls in `complete` / `create_message` and record span metadata + content.
+- `app/services/skill_integration_assistant.py` (AC7) — wrap the 3 adapter-propose `complete` calls in
+  `traced_run_kind("adaptation")` so their spans are categorized separately from executions.
 - `pyproject.toml` — add `langsmith==0.10.10` to `[project].dependencies`.
 - `uv.lock` — regenerated (langsmith + transitive deps: orjson, requests, requests-toolbelt,
   uuid-utils, xxhash, zstandard).
 - `.env.example` — new `# ── LangSmith tracing ──` section documenting all four vars.
 - `.env.test` — the four vars, all off/false (tests never hit the network).
 - `terraform/README.md` — `LANGSMITH_API_KEY` row added to the secrets table.
-- `tests/unit/integrations/test_anthropic_client.py` — +5 span-emission tests (`TestProviderTracing`).
+- `tests/unit/integrations/test_anthropic_client.py` — +5 span-emission tests (`TestProviderTracing`);
+  +run_kind assertions (default execution).
+- `tests/unit/core/test_tracing.py` — +`TestRunKind` (default execution, adaptation context, reset,
+  nesting) [AC7].
+- `tests/unit/services/test_skill_integration_assistant.py` — fake records ambient `run_kind`;
+  +`test_adapter_propose_call_is_tagged_run_kind_adaptation` [AC7].
 - `tests/integration/api/test_certifications.py` — re-wrapped 2 pre-existing over-long docstrings
   (`:1012`, `:1025`) so `ruff check .` is green (Rule 10). PRE-EXISTING from Story 17.3 — no behavior
   change; see `deferred-work.md`.
@@ -563,6 +583,14 @@ All paths under `velara-api/` (backend-only; NOT committed by dev-story — code
 
 ## Change Log
 
+- 2026-07-28 — AC7 folded in (operator request, still in review). Added `run_kind` span categorization
+  (execution vs adaptation) via an ambient `contextvars` context (`traced_run_kind`) in
+  `app/core/tracing.py` — set as tag + metadata on every span; the 3 adapter-propose sites in
+  `skill_integration_assistant.py` wrap in `traced_run_kind("adaptation")`. `LLMProvider` Protocol
+  unchanged (contextvars avoid touching the 4 FakeLLMProvider doubles). +5 tests. Verified end-to-end
+  in LangSmith: `run_kind:execution` and `run_kind:adaptation` land as distinct filterable spans with
+  correct per-category cost. Full suite 1623 passed / 3 skipped / 0 failed on a fresh DB; ruff clean.
+  (Motivation: monthly per-category cost breakdown in LangSmith — executions vs skill adaptations.)
 - 2026-07-28 — Implemented (dev-story). All 6 tasks / 6 ACs complete. New `app/core/tracing.py`
   (`trace_llm_call` context manager) wired into `AnthropicProvider.complete` / `.create_message`;
   4 `LANGSMITH_*` settings + boot-time full-content refusal in `config.py`; `langsmith==0.10.10` dep;
