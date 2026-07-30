@@ -807,5 +807,5 @@ development_status:
   #   the InvocationJob not the result id so the reconciler re-derives via the unique constraint; the
   #   dispatch sits inside run_skill's outer try whose except marks the job FAILED, so swallowing a
   #   broker-dispatch failure is mandatory).
-  17-8-deferred-cost-reconciler-task: ready-for-dev
+  17-8-deferred-cost-reconciler-task: in-progress
   17-9-cost-consumers-read-new-states: backlog
