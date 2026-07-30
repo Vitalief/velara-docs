@@ -54,6 +54,22 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-30
+# 2026-07-30: 17-8-deferred-cost-reconciler-task → DONE (code-review). 3 parallel adversarial layers
+#   (Blind Hunter, Edge Case Hunter, Acceptance Auditor) + triage: 1 decision-needed, 2 patch, 2 defer,
+#   4 dismissed. All decision+patch fixes applied & re-tested in-container; velara-web clean (no bundle).
+#   HEADLINE — [HIGH] partial-trace undercount (AD-4/AD-8): the completeness gate checked only "every
+#   VISIBLE llm run is priced," never "all the trace's llm runs are visible" — and list_runs is
+#   eventually-consistent, so a multi-LLM invocation could sum a PARTIAL child set, write it authoritatively,
+#   and (candidate re-check keys on cost_is_estimated=true) never revisit → a not-yet-indexed child's cost
+#   lost forever. FIX (user chose Option 1): new _require_trace_complete() gates on the trace's ROOT run
+#   being present+finalized (is_root=True probe, end_time set) before trusting the child set (root finalizes
+#   last ⇒ all children emitted). Patch 2: AC3's 0-row CAS branch was untested (redelivery test exited at the
+#   candidate re-check) — added a race test flipping the row to false between re-check and the CAS UPDATE →
+#   already_reconciled, 0 rows, never regressed. Patch 3: non-finite total_cost (NaN/Inf) passed the None-only
+#   guard — PG Numeric(12,6) STORES NaN authoritatively (corruption); now not is_finite() → retry. Gates:
+#   ruff clean; cost_reconciler unit 16 / integration 10 / enqueue 3; full worker suites 109 passed, 0
+#   regressions; ZERO api-spec.json diff (proper in-container regen). 2 deferred → deferred-work.md (Sentry
+#   breadcrumb on dispatch-failed; distinguish empty-trace-give-up from LangSmith latency).
 # 2026-07-30: 17-7-estimate-write-hot-path-slim-pricing → DONE (code-review). 3 parallel adversarial
 #   layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor): all 6 ACs SATISFIED, all forbidden
 #   actions avoided (within velara-api). 2 patches applied+tested: (1) HEADLINE — an out-of-scope
@@ -833,5 +849,5 @@ development_status:
   #   17.4); integration 808 passed / 3 pre-existing skips (0 regressions, fresh velara_test); zero
   #   api-spec.json diff. AC9 (live end-to-end LangSmith verification) is a manual/dev step per the story
   #   — not executed this session (no live key).
-  17-8-deferred-cost-reconciler-task: review
+  17-8-deferred-cost-reconciler-task: done
   17-9-cost-consumers-read-new-states: backlog
