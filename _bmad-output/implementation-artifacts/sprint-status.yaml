@@ -54,6 +54,19 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-30
+# 2026-07-30: 17-4-cost-tracking-schema-run-id-and-estimated-flag moved to review (dev-story).
+#   Schema-only implementation exactly as scoped: added langsmith_run_id (String(64), nullable) +
+#   cost_is_estimated (Boolean NOT NULL, server_default=false) to invocation_results via new idempotent
+#   migration 0031_invocation_cost_states (chained off head 0030_dry_run_config_study), mirrored on
+#   InvocationResult with an AD-5 cost-state docstring. Zero behavior/API change (verified: regenerated
+#   OpenAPI spec contains zero occurrences of the new columns; repo's tracked docs/api-spec.json has no
+#   working-tree diff). Verified live against a freshly recreated velara_test: full migration chain from
+#   empty DB, downgrade/upgrade round-trip, AND the exact stamp-back-then-replay scenario the shared
+#   migration-test harness exercises (stamped to 0030 with schema still at head, replayed upgrade head,
+#   confirmed the sa.inspect guard no-ops cleanly instead of raising DuplicateColumn — the precise bug
+#   class flagged twice before in this log for migration 0029). New test file
+#   test_invocation_cost_states_migration.py (2 tests). Full suite 1654 passed / 3 skipped (pre-existing,
+#   0 regressions), ruff clean repo-wide. Unblocks 17-7 (estimate write) + 17-8 (reconciler).
 # 2026-07-30: 17-4-cost-tracking-schema-run-id-and-estimated-flag moved to in-progress (dev-story).
 # 2026-07-30: 17-4-cost-tracking-schema-run-id-and-estimated-flag moved to ready-for-dev
 #   (create-story). First story of the 2026-07-29 cost re-architecture (17-4..17-9); dependency-free,
@@ -569,7 +582,7 @@ development_status:
   #   (run bmad-create-story to fill full context before dev). This SUPERSEDES the
   #   worker-side/hand-rolled tracing of 17.1/17.2. Recommended first: 17-5
   #   (wrap_anthropic seam, dependency-free, fixes the live cost bug).
-  17-4-cost-tracking-schema-run-id-and-estimated-flag: in-progress
+  17-4-cost-tracking-schema-run-id-and-estimated-flag: review
   17-5-wrap-anthropic-seam-delete-hand-rolled-tracing: backlog
   17-6-invocation-scoped-trace-sandbox-header-propagation: backlog
   17-7-estimate-write-hot-path-slim-pricing: backlog

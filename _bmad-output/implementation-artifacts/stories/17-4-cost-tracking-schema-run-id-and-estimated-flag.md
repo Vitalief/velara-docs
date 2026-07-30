@@ -21,7 +21,7 @@ status_note: >
 
 # Story 17.4: Cost-Tracking Schema — `langsmith_run_id` + `cost_is_estimated`
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -121,39 +121,39 @@ model so 17-7/17-8/17-9 can't misread them.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Update the ORM model** (AC: 1, 2)
-  - [ ] In `app/models/invocation.py`, in the `InvocationResult` class, immediately after the `cost_usd`
+- [x] **Task 1 — Update the ORM model** (AC: 1, 2)
+  - [x] In `app/models/invocation.py`, in the `InvocationResult` class, immediately after the `cost_usd`
         column (`:202`), add:
         `langsmith_run_id: Mapped[str | None] = mapped_column(String(64), nullable=True)` and
         `cost_is_estimated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))`.
         (`text` is already imported at `:30`; `Boolean`, `String` already imported at `:22,:28`.)
-  - [ ] Add the AD-5 semantics docstring/comment block above the two columns (AC2 wording). Follow the
+  - [x] Add the AD-5 semantics docstring/comment block above the two columns (AC2 wording). Follow the
         existing Story-15.1 comment style already in that block (`:187-202`).
-  - [ ] Do NOT set a Python-side `default=` on `cost_is_estimated` (the app-write default of `true` is
+  - [x] Do NOT set a Python-side `default=` on `cost_is_estimated` (the app-write default of `true` is
         17-7's; the DB `server_default=false` handles existing rows — see AC3).
-- [ ] **Task 2 — Author the migration** (AC: 1, 3, 4)
-  - [ ] Create `app/db/migrations/versions/0031_invocation_cost_states.py` (or an equally short slug
+- [x] **Task 2 — Author the migration** (AC: 1, 3, 4)
+  - [x] Create `app/db/migrations/versions/0031_invocation_cost_states.py` (or an equally short slug
         ≤31 chars). `revision = "0031_invocation_cost_states"`, `down_revision = "0030_dry_run_config_study"`.
-  - [ ] `upgrade()`: `bind = op.get_bind(); inspector = sa.inspect(bind)`; compute
+  - [x] `upgrade()`: `bind = op.get_bind(); inspector = sa.inspect(bind)`; compute
         `existing = {c["name"] for c in inspector.get_columns("invocation_results")}`; add
         `langsmith_run_id` (`sa.String(length=64)`, `nullable=True`) only if absent; add
         `cost_is_estimated` (`sa.Boolean()`, `nullable=False`, `server_default=sa.text("false")`) only
         if absent.
-  - [ ] `downgrade()`: `op.drop_column("invocation_results", "cost_is_estimated")` then
+  - [x] `downgrade()`: `op.drop_column("invocation_results", "cost_is_estimated")` then
         `op.drop_column("invocation_results", "langsmith_run_id")` (reverse order).
-  - [ ] Write a module docstring documenting: the two columns, that `cost_is_estimated`'s
+  - [x] Write a module docstring documenting: the two columns, that `cost_is_estimated`'s
         `server_default=false` makes historical rows authoritative (AD-5/AD-3 split, no backfill), and
         the AD-7 note that `langsmith_run_id` holds the **trace id**.
-  - [ ] NO data backfill `UPDATE` — server_default only.
-- [ ] **Task 3 — Verify** (AC: 4, 5)
-  - [ ] Run the migration against a clean `velara_test` DB (`alembic upgrade head`) and confirm both
+  - [x] NO data backfill `UPDATE` — server_default only.
+- [x] **Task 3 — Verify** (AC: 4, 5)
+  - [x] Run the migration against a clean `velara_test` DB (`alembic upgrade head`) and confirm both
         columns exist with the expected types/nullability/default; `alembic downgrade -1` then
         `upgrade head` round-trips cleanly.
-  - [ ] Add/extend a migration test in the stamp-and-replay style (see Testing) asserting: after
+  - [x] Add/extend a migration test in the stamp-and-replay style (see Testing) asserting: after
         `upgrade head`, `invocation_results` has both columns, a pre-existing seeded row reads
         `cost_is_estimated = false` and `langsmith_run_id IS NULL`. Confirm re-running `upgrade head`
         against an already-migrated DB is a no-op (idempotency — the harness does exactly this).
-  - [ ] `ruff check` clean; `python scripts/export_openapi.py` produces **zero** `docs/api-spec.json`
+  - [x] `ruff check` clean; `python scripts/export_openapi.py` produces **zero** `docs/api-spec.json`
         diff (AC5). Run the relevant model/migration tests.
 
 ## Dev Notes
@@ -283,8 +283,62 @@ You are only *documenting* these on the model this story; 17-7/17-8/17-9 enforce
 
 ### Agent Model Used
 
+claude-sonnet-5
+
 ### Debug Log References
+
+- Rebuilt `api`/`worker` Docker images twice (model+migration, then +test file) after pruning
+  `docker builder prune -a -f` (freed ~6GB; memory-flagged disk-fill risk avoided).
+- Recreated `velara_test` clean (`DROP DATABASE` + `CREATE DATABASE ... OWNER velara`) before first
+  migration run, per the container-test-env convention.
+- Verified idempotency the way the shared harness actually exercises it: `alembic stamp
+  0030_dry_run_config_study` (schema still at head) → `alembic upgrade head` replayed 0031's guarded
+  DDL against columns that already existed — no `DuplicateColumn`, confirmed via `\d invocation_results`
+  before/after.
+- First test-seed draft used wrong `skills` column names (`execution_mode` instead of the real
+  `author`/`runtime_type`/`visibility`/`lifecycle_state`) — read `app/models/skill.py:43-57` for the
+  real enum values (`visibility: internal_only|paired|client_facing`,
+  `lifecycle_state: draft|internal_ready|client_ready|retired`) and fixed the seed helper.
+- `python scripts/export_openapi.py` must run with `PYTHONPATH=/app` inside the container (bare
+  `python scripts/export_openapi.py` from `/app` fails `ModuleNotFoundError: app` — no `pip install -e`
+  effect without the path). Confirmed the regenerated spec contains zero occurrences of
+  `langsmith_run_id`/`cost_is_estimated` (AC5 — this story doesn't expose them) and that the repo's
+  tracked `docs/api-spec.json` has no working-tree diff (untouched by this story). Note: a
+  container-side regeneration DOES differ from the committed spec, but that diff is 100%
+  Story-17.3 dry-run-config endpoints missing from the tracked file — a pre-existing drift from before
+  this story started, not something this story introduced or is responsible for fixing.
 
 ### Completion Notes List
 
+- Added `langsmith_run_id` (String(64), nullable) and `cost_is_estimated` (Boolean, NOT NULL,
+  `server_default=false`) to `InvocationResult`, with an AD-5 cost-state docstring, immediately after
+  `cost_usd` (app/models/invocation.py). No import changes needed (`Boolean`/`String`/`text` already
+  imported). No Python-side `default=` set on `cost_is_estimated`, per AC3/Dev Notes — that's Story
+  17.7's job.
+- New migration `0031_invocation_cost_states.py`, chained off head `0030_dry_run_config_study`,
+  idempotent via `sa.inspect` existence checks (mirrors `0030`), reverse-order `downgrade()`. Verified
+  live: full-chain `upgrade head` from empty DB, `downgrade -1` → `upgrade head` round-trip, and a
+  stamp-back-to-0030-then-replay-upgrade-head idempotency check (the exact scenario the shared
+  stamp-and-replay migration harness exercises) — all clean, no `DuplicateColumn`.
+- New test `test_invocation_cost_states_migration.py` (2 tests): asserts both columns exist with
+  correct nullability/type after migration and that a pre-existing seeded row reads
+  `cost_is_estimated=false` / `langsmith_run_id=NULL` / `cost_usd` unchanged (no backfill); asserts
+  replaying `upgrade head` at head is idempotent (no `DuplicateColumn`).
+- Zero behavior change: nothing reads/writes these columns yet (confirmed no other production file
+  touched — File List below has exactly the 2 story-scoped files + 1 test file).
+- Gates: full suite 1654 passed / 3 skipped (pre-existing skips, 0 regressions) on a freshly recreated
+  `velara_test`; `ruff check .` clean repo-wide; OpenAPI export produces zero diff attributable to this
+  story (repo's tracked `docs/api-spec.json` has no working-tree changes).
+
 ### File List
+
+- `app/models/invocation.py` (modified — 2 new columns + docstring on `InvocationResult`)
+- `app/db/migrations/versions/0031_invocation_cost_states.py` (new — migration)
+- `tests/integration/services/test_invocation_cost_states_migration.py` (new — migration tests)
+
+## Change Log
+
+- 2026-07-30: Implemented Story 17.4 (schema-only). Added `langsmith_run_id` + `cost_is_estimated` to
+  `invocation_results` via idempotent migration `0031_invocation_cost_states`, mirrored on
+  `InvocationResult`. Zero behavior/API change. Full suite green (1654/1654, 3 pre-existing skips),
+  ruff clean, migration round-trip + idempotency verified live.
