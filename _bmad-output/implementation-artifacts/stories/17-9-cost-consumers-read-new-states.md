@@ -1,4 +1,5 @@
 ---
+baseline_commit: 98e13e7
 governing_ads: [AD-5, AD-9]
 spine: _bmad-output/planning-artifacts/architecture/architecture-Velara-2026-07-29/ARCHITECTURE-SPINE.md
 depends_on: [17-7, 17-8]
@@ -23,7 +24,7 @@ status_note: >
 
 # Story 17.9: Cost Consumers Read the New States
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

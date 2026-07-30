@@ -875,7 +875,8 @@ development_status:
   #   LangSmith-configured session before the epic closes. ⚠️ Baseline trap: 17-8's 6 files sit
   #   done-but-uncommitted in velara-api — excluded from 17-9's File List, reviewer separates
   #   diffs at commit time.
-  17-9-cost-consumers-read-new-states: ready-for-dev
+  # 2026-07-30: 17-9-cost-consumers-read-new-states moved to in-progress (dev-story).
+  17-9-cost-consumers-read-new-states: in-progress
   # 2026-07-30: 17-10-bundle-output-sha256-for-cert-gate drafted (create-story) → ready-for-dev.
   #   Follow-up to 17-3 closing its knowingly-deferred "NULL-hash bundle skills can't be technically
   #   certified" watch item. Field-diagnosed while certifying the velara-protocol-extractor bundle:
