@@ -16,7 +16,7 @@ status_note: >
 
 # Story 17.6: One Invocation-Scoped Trace + Sandbox Header Propagation
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -137,8 +137,8 @@ linkage is the **`trace_id`** (the `langsmith_run_id` column holds it), never a 
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Open one invocation-scoped trace in the worker** (AC: 1, 3, 4, 5)
-  - [ ] In `execution_tasks.py` `_execute()` (`:256`), import `trace` and `get_current_run_tree` from
+- [x] **Task 1 — Open one invocation-scoped trace in the worker** (AC: 1, 3, 4, 5)
+  - [x] In `execution_tasks.py` `_execute()` (`:256`), import `trace` and `get_current_run_tree` from
         `langsmith.run_helpers` (lazy/local import at the top of `_execute`, mirroring the existing lazy
         import style — do not add an eager module-level langsmith import that a tracing-off process pays
         for). Wrap the `await execution_service.execute_skill(...)` call (`:346-354`) in
@@ -146,7 +146,7 @@ linkage is the **`trace_id`** (the `langsmith_run_id` column holds it), never a 
         `execute_skill` nests under it. Keep the surrounding `async with session_scope()` (`:334`) and
         the `try/except/finally` (finally at `:509`) intact — the trace context lives *inside* that try,
         around the execute call, and must be exited before/at the completion write path.
-  - [ ] Capture the trace id via **one rule only (verified correct — do NOT read `rt.trace_id` from the
+  - [x] Capture the trace id via **one rule only (verified correct — do NOT read `rt.trace_id` from the
         `with` target)**: inside the `with trace(...)` block, read `cur = get_current_run_tree()`; set
         `langsmith_run_id = cur.trace_id if cur is not None else None`, held in a local (default `None`)
         available to the completion/blocked writes at `:362-406`. **Why not `rt.trace_id`:** when tracing
@@ -156,46 +156,46 @@ linkage is the **`trace_id`** (the `langsmith_run_id` column holds it), never a 
         tracing-off env — violating AC4/AD-6. `get_current_run_tree()` correctly returns `None` when off
         (`_context.py:27-29` default None) and the live root run when on — the single robust
         discriminator, no separate settings check needed.
-  - [ ] Do **not** open a trace on the fan-out parent path (`aggregate_results`, `:689-698`) — leave it
+  - [x] Do **not** open a trace on the fan-out parent path (`aggregate_results`, `:689-698`) — leave it
         exactly as-is; it stays `cost_usd=0`, `langsmith_run_id=NULL` (AC5).
-- [ ] **Task 2 — Persist `trace_id` to `langsmith_run_id` via the completion write** (AC: 3, 5)
-  - [ ] Add `langsmith_run_id: str | None = None` kwarg to `job_service.mark_completed` (`:525-536`) and
+- [x] **Task 2 — Persist `trace_id` to `langsmith_run_id` via the completion write** (AC: 3, 5)
+  - [x] Add `langsmith_run_id: str | None = None` kwarg to `job_service.mark_completed` (`:525-536`) and
         `mark_blocked` (`:571-582`), and map it onto `InvocationResult(langsmith_run_id=...)` at both row
         constructions (`:550-559`, `:595-604`). Document it in both docstrings as the LangSmith **trace**
         id (17-6), same additive/back-compatible contract as `output_sha256` — callers that don't pass it
         leave it NULL.
-  - [ ] In `run_skill._execute`, pass the captured trace id into the `mark_completed(**cost_fields, ...)`
+  - [x] In `run_skill._execute`, pass the captured trace id into the `mark_completed(**cost_fields, ...)`
         call (`:399-406`) and the `mark_blocked` call (`:374-381`) as `langsmith_run_id=<captured id>`.
         Keep `**cost_fields` (from `_extract_cost_fields`) exactly as-is — `langsmith_run_id` is a
         **separate** kwarg, NOT added to `_extract_cost_fields` (it is not a cost field; AC3).
-  - [ ] Confirm the fan-out parent `mark_completed` (`:692-698`) is NOT given a `langsmith_run_id`
+  - [x] Confirm the fan-out parent `mark_completed` (`:692-698`) is NOT given a `langsmith_run_id`
         (defaults to None) — AC5.
-- [ ] **Task 3 — Propagate the trace headers into the sandbox subprocess** (AC: 2, 4)
-  - [ ] In `code_driven_executor.py`, at the `LANGSMITH_*` injection block (`:511-515`): when
+- [x] **Task 3 — Propagate the trace headers into the sandbox subprocess** (AC: 2, 4)
+  - [x] In `code_driven_executor.py`, at the `LANGSMITH_*` injection block (`:511-515`): when
         `_settings.LANGSMITH_TRACING and _settings.LANGSMITH_API_KEY` (the existing gate) AND a current
         run tree exists, serialize the parent headers. Lazy/local import `get_current_run_tree` from
         `langsmith.run_helpers`; if `rt := get_current_run_tree()` is not None, set
         `injected_env["LANGSMITH_PARENT_HEADERS"] = json.dumps(rt.to_headers())`. (`json` is already
         imported in this module — confirm.) Guard the whole thing so a tracing-off process injects
         nothing new (AC4). Keep the existing three `LANGSMITH_*` injections unchanged.
-  - [ ] Do NOT inject `LANGSMITH_TRACE_CONTENT` (the existing comment `:499-510` deliberately omits it —
+  - [x] Do NOT inject `LANGSMITH_TRACE_CONTENT` (the existing comment `:499-510` deliberately omits it —
         the sandbox shim's redaction floor is unconditional `hide_inputs/outputs=True`, 17-5).
-- [ ] **Task 4 — Rebuild trace context in the sandbox shim** (AC: 2, 4)
-  - [ ] In `velara_trace.py` `_wrap_if_available(raw)` (`:221-251`), inside the existing env-gate +
+- [x] **Task 4 — Rebuild trace context in the sandbox shim** (AC: 2, 4)
+  - [x] In `velara_trace.py` `_wrap_if_available(raw)` (`:221-251`), inside the existing env-gate +
         langsmith-present guard (after the successful `from langsmith import Client` / `from
         langsmith.wrappers import wrap_anthropic` at `:240-246`), also import `RunTree` from
         `langsmith.run_trees` and `tracing_context` from `langsmith.run_helpers` **inside the same guarded
         try** (so an old/partial langsmith still falls back cleanly). Read
         `os.environ.get("LANGSMITH_PARENT_HEADERS")`; if present, `json.loads` it and
         `parent = RunTree.from_headers(headers)` (returns None if the header is malformed/absent).
-  - [ ] When `parent` is not None, wrap the returned traced client so its calls execute inside
+  - [x] When `parent` is not None, wrap the returned traced client so its calls execute inside
         `tracing_context(parent=parent)`. **Design note:** `_wrap_if_available` returns a client
         synchronously; `tracing_context` is a context manager that must be active *at the actual API
         call*, not at construction time. Store the reconstructed `parent` RunTree at module scope (e.g.
         `_parent_run`) when `_wrap_if_available` builds a traced client, then have the thin recorder
         enter `tracing_context(parent=_parent_run)` around each real call, guarded so a `None`
         `_parent_run` calls through exactly as today.
-  - [ ] **⚠️ CRITICAL — cover the STREAM path, not just create/parse (verified against `wrap_anthropic`).**
+  - [x] **⚠️ CRITICAL — cover the STREAM path, not just create/parse (verified against `wrap_anthropic`).**
         `.create`/`.parse` are synchronous: wrapping `with tracing_context(parent=_parent_run):` around
         the `self._inner.create(...)`/`.parse(...)` call in `_UsageMessages` (`:184-192`) nests them
         correctly. **But `.stream` does NOT create its traced run at `.stream()` construction time** —
@@ -212,26 +212,26 @@ linkage is the **`trace_id`** (the `langsmith_run_id` column holds it), never a 
         (`:159-171`) alongside the existing usage-fallback logic. Do the same for `.create`/`.parse` by
         wrapping their single call. Verify with a test that the stream path nests (patch `tracing_context`
         and assert it was entered during stream consumption, not merely constructed).
-  - [ ] **Hold the reconstructed parent by a STRONG reference.** `tracing_context(parent=...)` stores the
+  - [x] **Hold the reconstructed parent by a STRONG reference.** `tracing_context(parent=...)` stores the
         parent as a **weakref** (`run_helpers.py:1891` `_PARENT_RUN_TREE_REF.set(weakref.ref(v))`) and
         `get_current_run_tree()` dereferences it. The module-global `_parent_run` (a strong ref) is what
         keeps it alive — do NOT pass a throwaway inline `RunTree.from_headers(...)` to `tracing_context`,
         or it can be GC'd and nesting silently drops to None.
-  - [ ] `velara_trace.py` MUST keep zero `app.*` imports (it runs in the sandbox venv —
+  - [x] `velara_trace.py` MUST keep zero `app.*` imports (it runs in the sandbox venv —
         `sandbox_assets/__init__.py:6`). All new langsmith imports stay inside the existing guarded
         try/except so a venv without langsmith still falls back to untraced + `totals()` accumulation
         (AC4). `import json` locally in the shim if not already present.
-- [ ] **Task 5 — Tests** (AC: all)
-  - [ ] **Worker trace-open** — in `tests/unit/workers/test_execution_tasks.py` (or the existing
+- [x] **Task 5 — Tests** (AC: all)
+  - [x] **Worker trace-open** — in `tests/unit/workers/test_execution_tasks.py` (or the existing
         `run_skill` test module — locate it): assert that when tracing is ON, `run_skill` opens exactly
         ONE `trace(...)` around `execute_skill` and persists its `trace_id` to `mark_completed`'s
         `langsmith_run_id`; when tracing is OFF, no trace is opened and `langsmith_run_id` is None.
         Patch `langsmith.run_helpers.trace`/`get_current_run_tree` (or a fake) — do NOT require a live
         LangSmith key.
-  - [ ] **job_service** — extend `tests/unit/services/test_job_service.py` (or equivalent): assert
+  - [x] **job_service** — extend `tests/unit/services/test_job_service.py` (or equivalent): assert
         `mark_completed`/`mark_blocked` persist a passed `langsmith_run_id` onto `InvocationResult`, and
         default it to None when omitted (back-compat).
-  - [ ] **Sandbox propagation** — extend `tests/unit/services/test_velara_trace_shim.py`
+  - [x] **Sandbox propagation** — extend `tests/unit/services/test_velara_trace_shim.py`
         (`TestWrapAnthropicGuardedImport`, currently `:112-252`): (a) with `LANGSMITH_PARENT_HEADERS` set
         to a valid serialized `to_headers()` dict AND langsmith present, assert `from_headers` +
         `tracing_context(parent=...)` are invoked (patch them) so the in-sandbox call nests; (b) with the
@@ -240,7 +240,7 @@ linkage is the **`trace_id`** (the `langsmith_run_id` column holds it), never a 
         existing guard test still passes). Add the header-serialization assertion on the executor side if
         there is a `code_driven_executor` env-injection test; otherwise a focused new test for the
         `LANGSMITH_PARENT_HEADERS` injection.
-  - [ ] `ruff check .` clean; run affected unit + integration suites; `python scripts/export_openapi.py`
+  - [x] `ruff check .` clean; run affected unit + integration suites; `python scripts/export_openapi.py`
         → zero `docs/api-spec.json` diff (AC7).
 
 ## Dev Notes
@@ -434,11 +434,121 @@ name/run_type** unless you have a reason; keep it minimal (`"velara.invocation"`
 
 ### Agent Model Used
 
+claude-sonnet-5
+
 ### Debug Log References
+
+- Local unit test collection (`.venv/bin/python -m pytest`) fails entirely outside Docker: a
+  session-autouse `apply_migrations` fixture in `tests/conftest.py` requires a live Postgres reachable
+  at host `postgres` (the Docker Compose service name), which does not resolve from the host — confirmed
+  this is pre-existing (identical failure on baseline `fa1e96b` via `git stash`), not caused by this
+  story. All test runs were therefore executed inside the `api` container per
+  [Memory: project-velara-api-container-test-env].
+- Per [Memory: project-container-stale-baked-test-file]: the `api` container bakes source (no bind
+  mount). Every changed file was `docker cp`'d into the container after each edit and verified synced
+  (grep a new symbol) before trusting any in-container `pytest`/`ruff` run.
+- `langsmith.run_helpers.trace(...)` has NO `enabled=` kwarg (its real signature does not include one) —
+  an early test draft passed `enabled=True/False` directly to `trace(...)`, which silently absorbs it
+  into `**kwargs`, emits a `DeprecationWarning`, and drops it (tracing state follows ambient env
+  instead). Fixed by wrapping with the real override, `tracing_context(enabled=True/False)`, which sets
+  the actual enablement ContextVar `trace()` reads.
+- The `api` container's `.env` leaks `LANGSMITH_TRACING=true`/`LANGSMITH_TRACE_CONTENT=true` into
+  process env (same pre-existing leak documented in Story 17.5's Debug Log, causing
+  `test_config.py::test_default_value_is_false` to fail there and here — confirmed unrelated,
+  `config.py`/its test have an empty `git diff --stat`). This ALSO meant tests asserting the
+  tracing-OFF path could not rely on ambient env alone (it's ON in this container) — fixed by using
+  `tracing_context(enabled=False)` explicitly rather than assuming unset env vars, in both
+  `test_execution_tasks.py::TestCurrentLangsmithTraceId` and
+  `test_code_driven_executor.py`'s new `_langsmith_parent_headers_env_value` tests.
+- Writing `test_returned_id_is_a_string` (TDD red phase) caught a real type bug before it shipped:
+  `RunTree.trace_id` is a `UUID` object (verified `run_trees.py:335`), not a `str`, but
+  `langsmith_run_id` is a `String(64)` DB column — `_current_langsmith_trace_id` now explicitly
+  `str()`-casts before returning.
+- OpenAPI diff gate: the container's baked image predates some already-`done` Story 17.3 certification
+  dry-run routes (`docs/api-spec.json` in the repo has them; the container's freshly-generated spec did
+  not, for reasons orthogonal to this story — confirmed those routes exist in current
+  `app/api/v1/certifications.py`). Diffing the container's freshly-generated spec against the repo's
+  tracked file would have shown a false-positive diff unrelated to 17.6. Used a clean methodology
+  instead: generated the OpenAPI spec in-container on the pre-17.6 baseline (`git stash`), then again
+  post-17.6, and diffed those two container-generated specs directly against each other — byte-identical
+  (zero diff attributable to this story's changes), satisfying AC7 without the container/repo drift
+  confound.
+- Found and fixed a self-contradictory duplicate assertion in my own first draft of
+  `test_fan_out_parent_rollup_never_gets_langsmith_run_id` (`assert stored.cost_usd == 0` immediately
+  followed by `assert stored.cost_usd is None`, a copy-paste leftover) — caught by the in-container test
+  run, not by review.
 
 ### Completion Notes List
 
+- **AC1** — `execution_tasks.py` `_execute()` opens exactly one
+  `trace("velara.invocation", run_type="chain")` around the `execute_skill(...)` call (the sole
+  in-worker platform LLM funnel) via a lazy local import. No other `trace()`/root `RunTree` is opened
+  anywhere in the platform path; the fan-out parent roll-up (`aggregate_results`) is untouched.
+- **AC2/AC4** — `code_driven_executor.py` gained `_langsmith_parent_headers_env_value()` (extracted, pure
+  helper — no active trace → `None`, else `json.dumps(get_current_run_tree().to_headers())`, the FULL
+  header dict per the verified `dotted_order` SDK fact), wired into the existing `LANGSMITH_*`
+  injection block as a new `LANGSMITH_PARENT_HEADERS` env var, injected only when tracing is on AND a
+  trace is active. The sandbox shim's `_wrap_if_available` reconstructs the parent via
+  `RunTree.from_headers()` behind the existing guarded-import try, storing it in a strong
+  module-global (`_parent_run`) — never a throwaway inline ref (which `tracing_context`'s internal
+  weakref could drop). A new `_tracing_context_or_noop()` helper centralizes the "nest only if we have a
+  parent" branch.
+- **AC2 (critical fix)** — the pre-dev review's CRITICAL finding (stream nesting) was implemented
+  exactly as specified: `.create`/`.parse` wrap their single synchronous call in
+  `tracing_context(parent=_parent_run)`; `.stream()` does NOT scope it at construction — instead
+  `_UsageStream.__enter__` opens a `contextlib.ExitStack`-held `tracing_context` that stays active across
+  iteration, `get_final_message()`, and `__exit__`, because `wrap_anthropic`'s stream run is created
+  lazily on those calls, not at `.stream()` construction time. A dedicated test
+  (`test_stream_path_stays_nested_across_enter_iteration_and_exit`) proves the context is observably
+  active *during* stream consumption via a real (non-Mock) recording context manager, not just
+  constructed-and-discarded.
+- **AC3** — `job_service.mark_completed`/`mark_blocked` gained an additive `langsmith_run_id: str | None
+  = None` kwarg (mirroring `output_sha256`'s contract exactly), mapped onto
+  `InvocationResult(langsmith_run_id=...)`. `run_skill` captures the id via a new extracted helper,
+  `_current_langsmith_trace_id()` (mirrors the existing `_tag_sentry_job` extraction pattern so it's
+  unit-testable without running the full async task), and passes it as a separate kwarg to both write
+  sites — never threaded through `_extract_cost_fields`.
+- **AC4** — Verified against the real SDK (not assumed): `trace(...)` always returns a real `RunTree`
+  with a non-None `.trace_id` even when tracing is disabled, but does NOT set the current-run ContextVar
+  in that case — so `get_current_run_tree()` (not `rt.trace_id` from the `with` target) is the correct,
+  sole discriminator. Proven by a dedicated test that asserts BOTH halves: `rt.trace_id is not None` and
+  `captured is None` inside the same `tracing_context(enabled=False)` block.
+- **AC5** — Fan-out parent roll-up untouched (verified: no trace-open branch reaches it); a dedicated
+  integration test proves `_extract_cost_fields`'s existing `cost_usd=0` branch coexists correctly with
+  `langsmith_run_id` defaulting to `None` on that exact write shape.
+- **AC6** — Manual/dev verification step, not required in CI per the story's own Testing guidance; not
+  executed in this session (no live LangSmith key available) — flagged for a follow-up manual check
+  before this reaches a LangSmith-configured environment, exactly as the story anticipated.
+- **AC7** — `ruff check .` clean repo-wide. Full unit suite: 856 passed, 1 pre-existing unrelated
+  failure (`test_config.py::test_default_value_is_false`, confirmed `config.py`/its test untouched,
+  same container-env leak documented in Story 17.5). Full integration suite: 793 passed, 3 pre-existing
+  skips, 0 regressions. OpenAPI diff: zero, verified via a clean pre/post-17.6 in-container
+  regeneration-and-diff (not a diff against the possibly-stale tracked file — see Debug Log).
+- Pre-dev review's 4 findings (1 CRITICAL stream-nesting gap + 3 SHOULD-FIX corrections already folded
+  into the story text before implementation) were all implemented as corrected — no additional
+  implementation-time deviations from the story's Tasks were needed.
+
 ### File List
+
+- `app/workers/execution_tasks.py` (modified — opens one invocation-scoped trace around `execute_skill`;
+  new `_current_langsmith_trace_id()` helper; threads `langsmith_run_id` to `mark_completed`/`mark_blocked`)
+- `app/services/job_service.py` (modified — added `langsmith_run_id` kwarg to `mark_completed`/`mark_blocked`,
+  mapped onto `InvocationResult`)
+- `app/services/code_driven_executor.py` (modified — new `_langsmith_parent_headers_env_value()` helper;
+  injects `LANGSMITH_PARENT_HEADERS` into the sandbox subprocess env when a trace is active)
+- `app/services/sandbox_assets/velara_trace.py` (modified — `_wrap_if_available` reconstructs the parent
+  trace via `RunTree.from_headers()`; new `_parent_run` module-global (strong ref) and
+  `_tracing_context_or_noop()` helper; `tracing_context(parent=...)` threaded through `_UsageMessages`
+  create/parse and `_UsageStream` enter/exit for the lazy stream path)
+- `tests/unit/workers/test_execution_tasks.py` (modified — new `TestCurrentLangsmithTraceId` class, 4 tests)
+- `tests/unit/services/test_job_service.py` (modified — new `langsmith_run_id` signature-contract +
+  column-nullability tests in `TestInvocationResultCostColumns`)
+- `tests/unit/services/test_velara_trace_shim.py` (modified — new `TestParentTraceHeaderPropagation`
+  class, 5 tests including the critical stream-nesting regression test)
+- `tests/unit/services/test_code_driven_executor.py` (modified — 3 new tests for
+  `_langsmith_parent_headers_env_value`)
+- `tests/integration/workers/test_execution_tasks.py` (modified — 4 new DB-backed tests: `langsmith_run_id`
+  persisted on completed/blocked paths, defaults null when omitted, fan-out parent never gets one)
 
 ## Change Log
 
@@ -449,3 +559,14 @@ name/run_type** unless you have a reason; keep it minimal (`"velara.invocation"`
   header bridge round-trips the whole `to_headers()` dict. `langsmith_run_id` persisted as a separate
   kwarg (NOT via `_extract_cost_fields`); `cost_is_estimated`/estimate write held for 17-7; reconciler
   read held for 17-8.
+- 2026-07-30: Implemented Story 17.6. Worker opens one `trace()` per leaf invocation around
+  `execute_skill`; captures the trace id via the on/off-safe `get_current_run_tree()` discriminator
+  (extracted into `_current_langsmith_trace_id()`); persists it as a new, separate `langsmith_run_id`
+  kwarg on `mark_completed`/`mark_blocked`. Cross-process bridge: the executor injects
+  `LANGSMITH_PARENT_HEADERS` (JSON `to_headers()`) into the sandbox subprocess env; the shim rebuilds the
+  parent via `RunTree.from_headers()` and threads `tracing_context(parent=...)` through both the
+  synchronous create/parse calls AND the lazy stream lifecycle (the pre-dev CRITICAL fix). Zero
+  cost-VALUE change; `cost_is_estimated`/estimate write/reconciler untouched (17-7/17-8 territory).
+  Gates: ruff clean; 856 unit passed (1 pre-existing unrelated failure) + 793 integration passed (3
+  pre-existing skips), 0 regressions; zero OpenAPI diff (verified via clean pre/post in-container spec
+  regeneration).

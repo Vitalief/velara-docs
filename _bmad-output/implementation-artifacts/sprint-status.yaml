@@ -54,6 +54,31 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-30
+# 2026-07-30: 17-6-invocation-scoped-trace-sandbox-header-propagation moved to review (dev-story).
+#   Worker opens ONE trace() per leaf invocation around execute_skill (the sole in-worker platform LLM
+#   funnel); trace id captured via the on/off-safe get_current_run_tree() discriminator (NOT rt.trace_id,
+#   which stays non-None even when tracing is off) in a new extracted helper
+#   _current_langsmith_trace_id() (mirrors the existing _tag_sentry_job extraction pattern for
+#   testability); persisted as a NEW separate langsmith_run_id kwarg on mark_completed/mark_blocked
+#   (never through _extract_cost_fields — orthogonal to cost). Cross-process bridge: executor injects
+#   LANGSMITH_PARENT_HEADERS (JSON-encoded to_headers() — the FULL dotted_order, not a bare trace_id) into
+#   the sandbox subprocess env only when a trace is active; sandbox shim's _wrap_if_available reconstructs
+#   the parent via RunTree.from_headers() behind its existing guarded langsmith import, holds it in a
+#   strong module-global (_parent_run — tracing_context stores a weakref), and threads
+#   tracing_context(parent=...) through BOTH the synchronous create/parse calls AND the lazy stream
+#   lifecycle (_UsageStream.__enter__ opens it via a held ExitStack, __exit__ closes it) — the pre-dev
+#   CRITICAL fix, since wrap_anthropic's stream run is created lazily on enter/iteration/
+#   get_final_message(), not at .stream() construction time; scoping only the construction call would have
+#   silently re-opened Hole 2 for every streaming skill (AC6's own extractor streams). Zero cost-VALUE
+#   change; cost_is_estimated/estimate write/reconciler read untouched (17-7/17-8 territory, verified by
+#   grep). No migration (17-4's columns already exist). Gates: ruff clean; 856 unit passed (1
+#   PRE-EXISTING unrelated failure — test_config.py::test_default_value_is_false, container .env leaks
+#   LANGSMITH_TRACING/LANGSMITH_TRACE_CONTENT=true into process env, config.py/its test untouched, same
+#   leak documented in 17.5) + 793 integration passed (3 pre-existing skips), 0 regressions; zero OpenAPI
+#   diff (verified via a clean pre/post-17.6 in-container spec regeneration-and-diff, sidestepping the
+#   container's separately-stale baked image vs the repo's tracked docs/api-spec.json). AC6 (live
+#   LangSmith end-to-end verification) is a manual/dev step per the story's own guidance — not executed
+#   this session (no live key), flagged for a follow-up check before a LangSmith-configured environment.
 # 2026-07-30: 17-6-invocation-scoped-trace-sandbox-header-propagation moved to in-progress (dev-story).
 # 2026-07-30: 17-6-invocation-scoped-trace-sandbox-header-propagation moved to ready-for-dev (create-story). See per-story note below.
 # 2026-07-30: 17-5-wrap-anthropic-seam-delete-hand-rolled-tracing moved to done (code-review).
@@ -693,7 +718,7 @@ development_status:
   #   (C4) corrected worker test path tests/unit/workers/ (not /services/). Sharp scope lines to 17-7
   #   (estimate/cost_is_estimated/pricing.py — untouched) and 17-8 (list_runs/total_cost/reconciler —
   #   untouched). No migration (columns exist from 17-4); no OpenAPI diff (exposure is 17-9).
-  17-6-invocation-scoped-trace-sandbox-header-propagation: in-progress
+  17-6-invocation-scoped-trace-sandbox-header-propagation: review
   17-7-estimate-write-hot-path-slim-pricing: backlog
   17-8-deferred-cost-reconciler-task: backlog
   17-9-cost-consumers-read-new-states: backlog
