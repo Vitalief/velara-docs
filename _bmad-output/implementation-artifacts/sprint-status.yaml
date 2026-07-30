@@ -53,7 +53,20 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-02
-last_updated: 2026-07-29
+last_updated: 2026-07-30
+# 2026-07-30: 17-4-cost-tracking-schema-run-id-and-estimated-flag moved to ready-for-dev
+#   (create-story). First story of the 2026-07-29 cost re-architecture (17-4..17-9); dependency-free,
+#   unblocks 17-7 (estimate write) + 17-8 (reconciler). Schema-only: adds langsmith_run_id (String(64),
+#   nullable — holds the LangSmith TRACE id per AD-7) + cost_is_estimated (Boolean, NOT NULL,
+#   server_default=false) to invocation_results, mirrored on the InvocationResult model, chained off
+#   head 0030_dry_run_config_study as 0031. Governing AD-5 (cost states: estimated/reconciled/NULL,
+#   never fabricated $0). Zero behavior change, zero API/OpenAPI/FE change (exposure is 17-9's job —
+#   AC5 requires api-spec.json zero-diff). Two critical traps called out from source verification: (1)
+#   migration MUST be sa.inspect-guarded idempotent to survive the stamp-and-replay harness (the exact
+#   0029 bug flagged twice in this log); (2) DB server_default=false backfills historical rows as
+#   authoritative, but the app-write default of true is deferred to 17-7 — do not set Python default=.
+#   Baseline velara-api HEAD c702131 is the SUPERSEDED 17.2 wip (deleted by 17-5..17-8) but does NOT
+#   touch the model or any migration, so this story's surfaces sit on a clean baseline.
 # 2026-07-29: 17-2-ai-adapter-emits-langsmith-traced-skill-bundles moved to done (code-review).
 #   Two patches applied during review: (1) _emit_span force-redacts call_site="code_driven_hybrid"
 #   so AC3's metadata-only guarantee is structural, not reliant on record_code_driven_span leaving
@@ -555,7 +568,7 @@ development_status:
   #   (run bmad-create-story to fill full context before dev). This SUPERSEDES the
   #   worker-side/hand-rolled tracing of 17.1/17.2. Recommended first: 17-5
   #   (wrap_anthropic seam, dependency-free, fixes the live cost bug).
-  17-4-cost-tracking-schema-run-id-and-estimated-flag: backlog
+  17-4-cost-tracking-schema-run-id-and-estimated-flag: ready-for-dev
   17-5-wrap-anthropic-seam-delete-hand-rolled-tracing: backlog
   17-6-invocation-scoped-trace-sandbox-header-propagation: backlog
   17-7-estimate-write-hot-path-slim-pricing: backlog
