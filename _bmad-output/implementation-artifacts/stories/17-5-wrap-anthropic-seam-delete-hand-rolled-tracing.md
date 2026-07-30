@@ -16,7 +16,7 @@ status_note: >
 
 # Story 17.5: `wrap_anthropic` Seam — Delete Hand-Rolled Tracing
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -256,6 +256,13 @@ and both return wrapped clients.
         what the adapter writes (it should not — client()/totals() survive).
   - [x] `ruff check .` clean; run the affected unit + integration suites; `python scripts/export_openapi.py`
         → zero `docs/api-spec.json` diff.
+
+### Review Findings
+
+- [x] [Review][Patch] Sandbox skill content (PHI + skill IP) leaks to LangSmith when tracing is on [app/services/sandbox_assets/velara_trace.py:240] — `_wrap_if_available` calls `wrap_anthropic(raw)` with no `tracing_extra`/explicit `Client`; langsmith defaults `hide_inputs`/`hide_outputs` to `False`, and the sandbox env never injects `LANGSMITH_TRACE_CONTENT` or `HIDE_INPUTS`/`HIDE_OUTPUTS` — full skill prompt/response content ships to LangSmith whenever tracing is enabled, violating AC2's metadata-only PHI floor. No test in this diff exercises the sandbox wrap with real hide_inputs/hide_outputs assertions. **Fixed:** `_wrap_if_available` now builds an explicit `Client(hide_inputs=True, hide_outputs=True)` and passes it via `tracing_extra`; added `test_wrap_anthropic_call_hides_content_unconditionally` + a construction-failure regression test.
+- [x] [Review][Patch] `_get_ls_client()` constructs a real network client unconditionally, even when tracing is off [app/integrations/anthropic_client.py:194] — evaluated as a plain function argument before `wrap_anthropic` runs, so a real `langsmith.Client()` (background thread + outbound `GET /info`) is built on every `AnthropicProvider` construction regardless of `LANGSMITH_TRACING`/`LANGSMITH_API_KEY` — contradicts AC4/AD-6's zero-network-I/O-when-off guarantee. Every test mocks `_get_ls_client` away, so the genuinely-off path is untested. **Fixed:** added `_tracing_enabled()` gate; `_get_ls_client()` returns `None` when unconfigured, and the call site omits the `client` key from `tracing_extra` entirely (not `client=None`) rather than passing it through. Added 3 regression tests proving `langsmith.Client` is never constructed when tracing is off.
+- [x] [Review][Patch] `messages.parse` usage is accumulated but silently never traced [app/services/sandbox_assets/velara_trace.py:245-253] — `wrap_anthropic` does not patch top-level non-beta `messages.parse`; the shim docstring implies uniform create/stream/parse coverage, true for usage accumulation but false for tracing. **Fixed:** docstring reworded to clarify `.parse()` is usage-only, not traced by the underlying wrap.
+- [x] [Review][Patch] `LANGSMITH_PROJECT` injected into sandbox env but never read [app/services/code_driven_executor.py:512] — flagged as dead config; on inspection it's read directly by the langsmith SDK/`wrap_anthropic` for run routing, not truly dead. **Fixed:** corrected the comment to describe this accurately instead of removing the injection.
 
 ## Dev Notes
 

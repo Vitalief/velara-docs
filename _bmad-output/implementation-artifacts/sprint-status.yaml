@@ -54,6 +54,24 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-30
+# 2026-07-30: 17-5-wrap-anthropic-seam-delete-hand-rolled-tracing moved to done (code-review).
+#   Two high-severity findings patched: (1) sandbox wrap_anthropic call had no hide_inputs/
+#   hide_outputs — real skill prompt/response content (PHI + skill IP) would ship to LangSmith
+#   whenever tracing was enabled, despite the module's own "metadata-only unconditionally"
+#   claim; fixed by building an explicit Client(hide_inputs=True, hide_outputs=True) at the
+#   sandbox wrap site. (2) _get_ls_client() built a real langsmith.Client (background thread +
+#   outbound network call) unconditionally on every AnthropicProvider construction, even with
+#   tracing off — contradicted AD-6's zero-network-I/O-when-off guarantee; fixed with a
+#   _tracing_enabled() gate, returning None and omitting "client" from tracing_extra when
+#   unconfigured. Both bugs were invisible to the story's own test suite (every test mocked
+#   _get_ls_client/wrap_anthropic away) — 6 new regression tests added that exercise the
+#   genuinely-off and genuinely-content-hidden paths without those mocks. 2 additional low/
+#   medium cosmetic patches (messages.parse tracing-coverage docstring, LANGSMITH_PROJECT
+#   comment accuracy). Full affected suite green in-container (117/117); repo-wide ruff clean;
+#   842/843 unit tests pass (1 pre-existing unrelated container-env failure per Story 17.4's
+#   note). 17.4 leftovers (invocation.py, migration 0031, its test) were sitting uncommitted in
+#   the same working tree — committed separately (fe35ce2) before this review to avoid scope
+#   bleed, per never-push-subrepos (only code-review commits velara-api).
 # 2026-07-30: 17-5-wrap-anthropic-seam-delete-hand-rolled-tracing moved to review (dev-story).
 #   Deleted app/core/tracing.py (361 lines, whole file — zero remaining importers confirmed before
 #   delete) + the sandbox velara_trace.py's bespoke _TracedClient/_TracedStream/_StreamProxy/
@@ -651,7 +669,7 @@ development_status:
   #   worker-side/hand-rolled tracing of 17.1/17.2. Recommended first: 17-5
   #   (wrap_anthropic seam, dependency-free, fixes the live cost bug).
   17-4-cost-tracking-schema-run-id-and-estimated-flag: done
-  17-5-wrap-anthropic-seam-delete-hand-rolled-tracing: review
+  17-5-wrap-anthropic-seam-delete-hand-rolled-tracing: done
   17-6-invocation-scoped-trace-sandbox-header-propagation: backlog
   17-7-estimate-write-hot-path-slim-pricing: backlog
   17-8-deferred-cost-reconciler-task: backlog
