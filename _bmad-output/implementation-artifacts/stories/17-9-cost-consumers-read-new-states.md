@@ -24,7 +24,7 @@ status_note: >
 
 # Story 17.9: Cost Consumers Read the New States
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -637,8 +637,48 @@ note):
 - `src/features/run/components/RunConsole.test.tsx` — 4 new indicator tests.
 - `src/features/run/components/JobsHistory.test.tsx` — 3 new indicator tests.
 
+### Review Findings
+
+**Code review 2026-07-30 — ✅ CLEAN.** Three parallel adversarial layers (Blind Hunter
+[`bmad-review-adversarial-general`], Edge Case Hunter [`bmad-review-edge-case-hunter`],
+Acceptance Auditor [full spec + AD-5/AD-9 audit]) ran against the uncommitted diff in both
+subrepos (velara-api 8 files, velara-web 5 files). **Zero surviving findings** — all raised
+observations dismissed as noise:
+
+- [x] [Review][Dismiss] List table-row shows no "estimated" indicator (`JobsHistory.tsx:229`)
+  — working as designed per decision **D3**: the indicator is deliberately confined to the two
+  detail panels; the 80px table cell can't fit it without colliding with exact-match cost tests.
+  `JobSummary.cost_is_estimated` is threaded for wire/type parity by design. Both hunters
+  independently classified this as a deliberate scope choice, not a defect.
+- [x] [Review][Dismiss] AC1 tests assert `_token_cost`/`_top_skills` via `overview()`, not
+  `list_users` directly (`test_analytics.py:723-854`) — `list_users` shares the byte-identical
+  SUM-level `func.coalesce(func.sum(cost_usd), 0)` under the same `_invocation_where` filter
+  (analytics_service.py is zero-diff, verified), so a duplicate assertion covers no distinct
+  branch. Auditor itself rated it "structurally covered, not a violation."
+- [x] [Review][Dismiss] Story's "baseline trap" caution is stale — 17-8's 6 files are now
+  committed at HEAD `12f1f1c`, not uncommitted; the velara-api tree holds exactly 17-9's 8 files,
+  so no diff separation was needed at commit time. Documentation staleness, not a code issue.
+
+**Independently verified during triage:** OpenAPI diff isolated to exactly the two additive
+`cost_is_estimated` `anyOf[boolean,null]` properties on `JobResult`/`JobSummary` (AC6); the
+4-tuple `list_jobs` arity change updates all four unpack sites (2 production + 2 test) with no
+stale 3-tuple remaining; the client-portal IP drop is real (field-by-field `ClientJobSummary`
+build, not a `model_copy`) and asserted non-vacuously (seeded `True`); NULL cost never coalesced
+to `$0`; FE indicator gated strictly on `=== true` as a separate DOM node. **AC7 remains the one
+flagged MANUAL live-LangSmith spot-check** — to be closed in the single combined session with 17-6
+AC6 + 17-8 AC9 before Epic 17 is closed. Status → `done`.
+
 ## Change Log
 
+- 2026-07-30: **Code review complete (Status → done).** Three-layer adversarial review (Blind
+  Hunter + Edge Case Hunter + Acceptance Auditor) against the uncommitted full-stack diff — zero
+  surviving findings; three observations all dismissed as design decisions (D3), structurally-
+  redundant coverage, or stale story narrative. OpenAPI isolation, 4-tuple arity across all four
+  unpack sites, client-portal IP drop, NULL≠$0, and the `=== true`-gated separate-DOM-node
+  indicator all independently confirmed during triage. The baseline trap resolved itself: 17-8's
+  files were committed at HEAD `12f1f1c` before this review, so the working tree held exactly
+  17-9's files with no separation needed. AC7 live-LangSmith spot-check stays flagged MANUAL for
+  the one combined session that also closes 17-6 AC6 + 17-8 AC9 at epic close.
 - 2026-07-30: **Implemented by dev-story (Status → review).** Read-side exposure of the AD-5 cost
   states landed full-stack: `list_jobs` widened to a 4-tuple threading `cost_is_estimated`;
   `JobResult`/`JobSummary` gained the nullable bool (no serializer); `docs/api-spec.json`

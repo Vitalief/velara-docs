@@ -886,7 +886,22 @@ development_status:
   #   eslint 0 err, vitest 814 passed (807+7). AC7 live LangSmith check flagged MANUAL — one combined
   #   session closes 17-6 AC6 + 17-8 AC9 + 17-9 AC7 before epic close. ⚠️ 17-8's 6 uncommitted files
   #   still in the velara-api tree — excluded from 17-9's File List, reviewer separates diffs.
-  17-9-cost-consumers-read-new-states: review
+  # 2026-07-30: 17-9-cost-consumers-read-new-states → DONE (code-review). 3 parallel adversarial
+  #   layers (Blind Hunter + Edge Case Hunter + Acceptance Auditor) on the uncommitted full-stack
+  #   diff (velara-api 8 files, velara-web 5 files) — ZERO surviving findings. Three observations
+  #   all dismissed: (1) list table-row has no indicator = decision D3 (detail-panels-only, 80px
+  #   cell can't fit it without breaking exact-match cost tests); (2) AC1 tests hit _token_cost/
+  #   _top_skills not list_users directly — byte-identical COALESCE-SUM under same _invocation_where,
+  #   zero distinct branch; (3) story's "baseline trap" note is STALE — 17-8's 6 files were committed
+  #   at HEAD 12f1f1c before this review, so the velara-api tree held EXACTLY 17-9's 8 files, no diff
+  #   separation needed. Verified in triage: OpenAPI diff isolated to the two additive
+  #   cost_is_estimated anyOf[bool,null] props on JobResult/JobSummary; 4-tuple list_jobs arity
+  #   fixed at all 4 unpack sites (2 prod + 2 test, no stale 3-tuple); client-portal IP drop real
+  #   (field-by-field ClientJobSummary build, seeded True → non-vacuous); NULL never coalesced to $0;
+  #   FE indicator gated ===true as a separate DOM node. ⭐ LAST cost-chain story DONE — Epic 17 now
+  #   gated ONLY on the single combined live-LangSmith session (17-6 AC6 + 17-8 AC9 + 17-9 AC7, all
+  #   flagged MANUAL) before epic close.
+  17-9-cost-consumers-read-new-states: done
   # 2026-07-30: 17-10-bundle-output-sha256-for-cert-gate drafted (create-story) → ready-for-dev.
   #   Follow-up to 17-3 closing its knowingly-deferred "NULL-hash bundle skills can't be technically
   #   certified" watch item. Field-diagnosed while certifying the velara-protocol-extractor bundle:
