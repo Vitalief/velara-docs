@@ -54,6 +54,25 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-30
+# 2026-07-30: 17-4-cost-tracking-schema-run-id-and-estimated-flag moved to done (code-review).
+#   3-layer adversarial review (Blind Hunter + Edge Case Hunter + Acceptance Auditor). Acceptance
+#   Auditor: all 5 ACs PASS, zero scope violations — migration DDL + model change are clean (grep-
+#   confirmed ZERO other readers/writers of the two columns; unguarded downgrade() matches the 0024/0030
+#   convention it mirrors). All findings were test-quality on the new migration test: 5 patch, 2 defer,
+#   5 dismissed. Patches applied + empirically proven in-container (docker cp — no bind mount; note the
+#   container ran the stale baked test until copied): (1) idempotency test's dead DuplicateColumn assert
+#   → returncode is the real gate + added a count(*)==2 "columns survived replay" positive assert;
+#   (2) idempotent test was order-coupled/vacuous in isolation → made self-seeding (proven passes
+#   standalone); (3) seed rows committed+never cleaned (sibling harness DOES clean) → added _cleanup_seed
+#   in finally (proven leak 0, was +1/run); (4) drop-then-upgrade could corrupt live schema on failure →
+#   try/finally + _restore_cost_state_columns (proven: cleanup fires even on the failing String(16) run);
+#   (5) loose asserts (varchar length + server_default unchecked) → assert maxlen==64 + column_default
+#   contains false (proven: String(16) mutation now FAILS the test, previously passed). Gates: ruff clean;
+#   all 9 dir migration tests pass (0 regressions). Deferred (2): no index on langsmith_run_id (reconciler
+#   is 17-8, its call); _postgres_reachable() silent-skip on unparseable URL (pre-existing, copied from
+#   0026/0027 — test-infra pass). NOTE: an unrelated uncommitted velara-web SkillForm.tsx change sits in
+#   the tree — NOT part of this backend-only story; do not commit it as 17.4. Not committed to velara-api
+#   subrepo by review yet — see on_complete.
 # 2026-07-30: 17-4-cost-tracking-schema-run-id-and-estimated-flag moved to review (dev-story).
 #   Schema-only implementation exactly as scoped: added langsmith_run_id (String(64), nullable) +
 #   cost_is_estimated (Boolean NOT NULL, server_default=false) to invocation_results via new idempotent
@@ -582,7 +601,7 @@ development_status:
   #   (run bmad-create-story to fill full context before dev). This SUPERSEDES the
   #   worker-side/hand-rolled tracing of 17.1/17.2. Recommended first: 17-5
   #   (wrap_anthropic seam, dependency-free, fixes the live cost bug).
-  17-4-cost-tracking-schema-run-id-and-estimated-flag: review
+  17-4-cost-tracking-schema-run-id-and-estimated-flag: done
   17-5-wrap-anthropic-seam-delete-hand-rolled-tracing: backlog
   17-6-invocation-scoped-trace-sandbox-header-propagation: backlog
   17-7-estimate-write-hot-path-slim-pricing: backlog

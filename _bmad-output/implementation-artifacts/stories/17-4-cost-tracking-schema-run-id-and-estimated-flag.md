@@ -21,7 +21,7 @@ status_note: >
 
 # Story 17.4: Cost-Tracking Schema — `langsmith_run_id` + `cost_is_estimated`
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -278,6 +278,31 @@ You are only *documenting* these on the model this story; 17-7/17-8/17-9 enforce
 - [Source: _bmad-output/implementation-artifacts/sprint-status.yaml] — 2026-07-29 re-architecture note (17-4..17-9); "recommended first: 17-5"
 - [Memory: project-velara-api-container-test-env] — `.env.test` + clean `velara_test` DB required for integration/migration tests
 - [Memory: project-story-15-5-review / project-llm-pricing-table] — the None-as-$0 fabrication bug class this schema's NULL-semantics exist to prevent
+
+## Review Findings
+
+Code review 2026-07-30 (3-layer adversarial: Blind Hunter + Edge Case Hunter + Acceptance Auditor). Acceptance Auditor: **all 5 ACs PASS, zero scope violations** in the story-scoped files. Findings below are all test-quality hardening on the new migration test — the migration DDL and model changes themselves are clean. 5 patch, 2 defer, 5 dismissed.
+
+### Patch (applied 2026-07-30)
+
+- [x] [Review][Patch] Idempotency test's `DuplicateColumn` assertion is dead — `_run_alembic` runs with `expect_success=True`, which asserts `returncode == 0` first, so `assert "DuplicateColumn" not in output` (line 215) can never fire; the real gate is the generic returncode check. The test proves "upgrade head exits 0", which the first test already establishes — not idempotency specifically. [tests/integration/services/test_invocation_cost_states_migration.py:214-215] — FIXED: returncode assertion now documented as the real gate (`expect_success`) + a positive `count(*)==2` "both columns survived the replay intact" assertion added so the test confirms the replay-against-existing-columns path, not just a clean exit.
+- [x] [Review][Patch] `test_migration_0031_upgrade_head_is_idempotent` is order-coupled and passes vacuously in isolation — it has no drop/seed of its own and relies on "live schema already at head from the previous test". Run first, with `-k`, or after the drop-test failed, it exercises the *add* path (guard's else-branch), not the replay path it claims to test, and still passes green. Make it self-seeding. [tests/integration/services/test_invocation_cost_states_migration.py:206-215] — FIXED: test now calls `_restore_cost_state_columns()` first (guarantees both columns present), so it exercises the replay path regardless of order/isolation. Proven: passes standalone via `-k test_migration_0031_upgrade_head_is_idempotent`.
+- [x] [Review][Patch] Seeded rows are committed and never cleaned up — permanently pollutes `velara_test`; the sibling harness this story was told to mirror (`test_client_only_grants_migration.py:267-276`) explicitly `DELETE`s its seeded rows. [tests/integration/services/test_invocation_cost_states_migration.py:105,164] — FIXED: added `_cleanup_seed()` (DELETEs the seeded result+job+skill) invoked in a `finally`. Proven: post-run seed-row leak count is 0 (was accumulating +1/run).
+- [x] [Review][Patch] `test_migration_0031_adds_cost_state_columns` can leave the live schema corrupted on failure — it `DROP COLUMN`s both columns and commits *before* re-running the migration; on upgrade failure/interrupt `velara_test` is left missing columns the ORM model declares, and the fixture teardown only re-stamps bookkeeping. [tests/integration/services/test_invocation_cost_states_migration.py:155-166] — FIXED: whole drop→seed→upgrade wrapped in try/`finally`; `_restore_cost_state_columns()` (ADD COLUMN IF NOT EXISTS) runs in the finally so a failed run leaves the schema whole. Proven: the String(16) mutation run (which fails the test) still fired the cleanup+restore DELETEs.
+- [x] [Review][Patch] Column-shape assertions were too loose — `data_type == "character varying"` passes for any varchar length; the boolean's `column_default` was selected but never asserted. [tests/integration/services/test_invocation_cost_states_migration.py:184,186] — FIXED: now asserts `character_maximum_length == 64` and that `cost_is_estimated`'s `column_default` contains `false`. Proven: mutating the migration to `String(16)` makes the test FAIL (old test passed it).
+
+### Deferred (pre-existing / out of scope)
+
+- [x] [Review][Defer] No index on `langsmith_run_id` despite the docstring describing it as the 17-8 reconciler's lookup key — a full-table-scan foot-gun once the table grows. [app/models/invocation.py:216] — deferred: reconciler is Story 17-8; the index (likely partial, `WHERE langsmith_run_id IS NOT NULL`) is 17-8's call, and this story is schema-only. Belongs with the query surface that introduces it.
+- [x] [Review][Defer] `_postgres_reachable()` silently skips the whole module (via bare `except: return False`) on any DATABASE_URL that lacks `@`/explicit `:port`, reporting a misleading "Postgres not reachable" — a CI misconfig could make the migration silently untested and green. [tests/integration/services/test_invocation_cost_states_migration.py:33-57] — deferred, pre-existing: copied verbatim from the 0026/0027 sibling migration tests; fixing it belongs to a test-infra pass across all migration tests, not this story.
+
+### Dismissed (5)
+
+- `String(64)` truncation risk on the external LangSmith id — spec AC1 explicitly mandates `String(64)`; ids are UUID-shaped (36 chars). Deliberate, documented.
+- `downgrade()` unguarded while `upgrade()` guarded — the template (0024) and mirror-reference (0030) both use bare unguarded `op.drop_column`; the harness only replays *upgrade* against a head DB, never downgrade. Convention-consistent, not a defect.
+- Idempotency guard checks column name not type/shape — consistent with 0030's precedent; shape-drift in `velara_test` is not a reachable production path.
+- `server_default` without a paired Python `default=` leaves `cost_is_estimated` as None on an unrefreshed instance — spec AC3/Dev Notes explicitly forbid the Python default (reserved for 17-7), and grep confirms **zero** in-session readers of the column this story. Deliberate + unreachable.
+- Subprocess doesn't inherit test DB env — false positive; `_run_alembic` passes `env=os.environ`, which carries the test's DATABASE_URL/.env.test through.
 
 ## Dev Agent Record
 
