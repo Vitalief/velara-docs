@@ -624,7 +624,7 @@ development_status:
   #   worker-side/hand-rolled tracing of 17.1/17.2. Recommended first: 17-5
   #   (wrap_anthropic seam, dependency-free, fixes the live cost bug).
   17-4-cost-tracking-schema-run-id-and-estimated-flag: done
-  17-5-wrap-anthropic-seam-delete-hand-rolled-tracing: ready-for-dev
+  17-5-wrap-anthropic-seam-delete-hand-rolled-tracing: in-progress
   17-6-invocation-scoped-trace-sandbox-header-propagation: backlog
   17-7-estimate-write-hot-path-slim-pricing: backlog
   17-8-deferred-cost-reconciler-task: backlog
