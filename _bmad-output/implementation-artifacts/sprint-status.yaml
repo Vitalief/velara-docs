@@ -54,6 +54,28 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-30
+# 2026-07-30: 17-5-wrap-anthropic-seam-delete-hand-rolled-tracing moved to ready-for-dev (create-story).
+#   Epic-17 recommended-first (dependency-free; fixes the LIVE wrong-cost bug — hand-rolled
+#   stream/multi-model capture recorded only 1 of N calls). Deletion-and-replace refactor of the tracing
+#   SEAM only: delete app/core/tracing.py (whole file) + the sandbox velara_trace.py bespoke span/stream
+#   classes; route every Anthropic client through langsmith.wrappers.wrap_anthropic. ZERO product/cost-
+#   VALUE change (cost value stays on the old pricing/envelope path until 17-7/17-8). Two operator
+#   decisions folded: (1) SLIM the sandbox shim now + KEEP totals() so interim cost isn't left worse
+#   (trace-NESTING deferred to 17-6); (2) run_kind execution/adaptation becomes STATIC per-factory wrap
+#   tags (get_llm_provider=execution, get_adapter_llm_provider=adaptation — already 2 lru_cache clients),
+#   dropping the traced_run_kind ContextVar. Ground-truthed wrap_anthropic 0.10.10 in-container: explicit
+#   LS Client via tracing_extra={"client":...} (key never in os.environ — solves the _get_ls_client
+#   problem); Client(hide_inputs/hide_outputs) reinstates the metadata-only PHI floor (wrap_anthropic
+#   sends full content incl. system-prompt by DEFAULT — hiding is MANDATORY); covers .create/.stream/
+#   beta.* natively (the N-of-N fix). Full call-site sweep: sole tracing.py importers = anthropic_client
+#   .py/code_driven_executor.py/skill_integration_assistant.py (all rewired); delete 2 test files, rewrite
+#   span-assertions in 3. Scope line to 17-6 (AD-7 one-parent-trace + from_headers/langsmith_run_id) drawn
+#   sharp — do NOT cross it. Corrected the stub's wrong path (app/core/→app/integrations/anthropic_client
+#   .py). Independent fresh-context validation pass caught + fixed 2 CRITICALs pre-dev: (C1) AC7 wrongly
+#   said adapter sets result["usage"]=totals() — the prompt actually FORBIDS it and the runner auto-injects
+#   (code_driven_executor.py:199-206); (C2) langsmith is NOT platform-injected into the sandbox venv (built
+#   from manifest.requirements) — wrap_anthropic import MUST be guarded. NOTE: unrelated uncommitted
+#   velara-web SkillForm.tsx still in tree — not part of this story.
 # 2026-07-30: 17-4-cost-tracking-schema-run-id-and-estimated-flag moved to done (code-review).
 #   3-layer adversarial review (Blind Hunter + Edge Case Hunter + Acceptance Auditor). Acceptance
 #   Auditor: all 5 ACs PASS, zero scope violations — migration DDL + model change are clean (grep-
@@ -602,7 +624,7 @@ development_status:
   #   worker-side/hand-rolled tracing of 17.1/17.2. Recommended first: 17-5
   #   (wrap_anthropic seam, dependency-free, fixes the live cost bug).
   17-4-cost-tracking-schema-run-id-and-estimated-flag: done
-  17-5-wrap-anthropic-seam-delete-hand-rolled-tracing: backlog
+  17-5-wrap-anthropic-seam-delete-hand-rolled-tracing: ready-for-dev
   17-6-invocation-scoped-trace-sandbox-header-propagation: backlog
   17-7-estimate-write-hot-path-slim-pricing: backlog
   17-8-deferred-cost-reconciler-task: backlog
