@@ -851,3 +851,15 @@ development_status:
   #   — not executed this session (no live key).
   17-8-deferred-cost-reconciler-task: done
   17-9-cost-consumers-read-new-states: backlog
+  # 2026-07-30: 17-10-bundle-output-sha256-for-cert-gate drafted (create-story) → ready-for-dev.
+  #   Follow-up to 17-3 closing its knowingly-deferred "NULL-hash bundle skills can't be technically
+  #   certified" watch item. Field-diagnosed while certifying the velara-protocol-extractor bundle:
+  #   4 successful bundle dry-runs all had output_sha256=NULL → count_sufficient_dry_run_evidence
+  #   returns 0 → technical key can NEVER be turned for ANY code-driven-hybrid bundle skill (the
+  #   platform's primary adapter-onboarding path). Root cause: code_driven_executor's bundle
+  #   output-persist step never writes output_sha256 (only execution_service._persist_output does,
+  #   for prompt/LLM runtimes). Backend-only, NO migration (0029's column exists) / NO API / NO FE:
+  #   emit output_sha256 = sha256(canonical_bytes) from run_code_driven_hybrid into result_metadata;
+  #   the existing 17-3 worker→gate chain does the rest. Independent of cost stories 17-4..17-9
+  #   (different code path). See deferred-work.md 2026-07-30 "CERT BLOCKER" entry for repro.
+  17-10-bundle-output-sha256-for-cert-gate: in-progress
