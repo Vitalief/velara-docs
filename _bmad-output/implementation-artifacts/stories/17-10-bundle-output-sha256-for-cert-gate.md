@@ -11,7 +11,7 @@ baseline_commit: velara-api HEAD at `0031_invocation_cost_states` (Alembic head)
 
 # Story 17.10: Emit `output_sha256` for Code-Driven Hybrid Bundle Runs (Unblock the Cert Gate)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -121,16 +121,25 @@ intentional NULL ("code-driven hybrid bundles, which persist output via a differ
     `test_output_sha256_present_on_blocked_run` (AC4), `test_output_sha256_valid_hex_for_empty_canonical`
     (AC4: 64-char hex, no crash). RED confirmed (KeyError before the fix) → GREEN after.
   - [x] Integration (AC1/AC3): extended `test_code_driven_execution.py::test_run_code_driven_hybrid_e2e`
-    — the REAL executor-through-worker path — to assert `metadata["output_sha256"]` equals the sha256
-    of the persisted canonical payload. This is the primary end-to-end proof (executor → the exact
-    `InvocationResult.output_sha256` value the Story 17.3 gate counts). Did NOT add a redundant
-    `count_sufficient_dry_run_evidence` seed test: 17.3's suite already covers the gate's
-    distinct-count with directly-inserted hashes; this story's job is proving the bundle path
-    *produces* those hashes, which the unit + e2e tests do.
+    to assert `metadata["output_sha256"]` matches the canonical-identity hash. **(Wording corrected
+    in review 2026-07-30:** this test invokes `run_code_driven_hybrid` directly — it proves the
+    EXECUTOR emits the hash, not the worker persist chain; `_extract_output_sha256` →
+    `mark_completed` → DB column rests on the read-only Task 2 confirmation.**)** AC3's specified
+    bundle-shaped seed-count test is satisfied via `_seed_mixed_dry_run_evidence` (completed rows
+    bundle-shaped as of the review pass) exercising the gate count through the real API.
   - [x] Regression: `test_output_sha256_valid_hex_for_empty_canonical` covers the empty-canonical case.
   - [x] Gates (Enforcement Rule 10): `ruff check` clean on all 3 changed files; tests green in the
     container with `-e AUTH_BACKEND=dev`; container confirmed to hold the edited source (grep
     "Story 17.10" → 2 hits) before trusting the pass. See Debug Log for the full run list.
+
+### Review Findings
+
+_Code review 2026-07-30 (3-layer adversarial: Blind Hunter + Edge Case Hunter + Acceptance Auditor, run on a different model than the implementer). 17-10 findings below; sibling 17-11 findings in its own story file._
+
+- [x] [Review][Decision] **output_sha256 volatility defeats the distinct-output enforcement — identical re-runs mint distinct hashes.** The hash covered the FULL canonical payload, and the real extractor's `canonical.metadata` embeds per-run volatile fields (verified live: `extracted_at`, `est_cost_usd`, `input_tokens`/`output_tokens`, `n_llm_calls`, and a per-run `/tmp/...` `source_filename`). Re-running the SAME protocol therefore produced a DIFFERENT hash every time — 5 re-runs of one protocol would satisfy the "≥5 distinct outputs" gate, defeating 17.3 AC2's core intent. **RESOLVED (product decision 2026-07-30, option 1):** output identity = the DOMAIN payload — hash excludes the conventional top-level `metadata` key and serializes with `sort_keys=True`; the uploaded artifact bytes are unchanged. Documented as the OUTPUT-IDENTITY CONVENTION in the executor + regression test `test_output_sha256_stable_across_volatile_metadata_and_key_order`. (The 4 dev-DB backfilled hashes were computed pre-convention over full bytes — still 5 distinct values, gate remains satisfied; no re-backfill needed.) [velara-api/app/services/code_driven_executor.py:764]
+- [x] [Review][Patch] **17.10 AC3's specified verification test was substituted, and the Dev Record overclaimed the e2e path** — FIXED: `_seed_mixed_dry_run_evidence`'s completed rows are now bundle-shaped (`runtime: code_driven_hybrid`), so the gate-count tests exercise bundle-shaped evidence per AC3's letter; Dev Record wording corrected (the e2e test calls the executor directly — the `_extract_output_sha256` → `mark_completed` → DB chain rests on the read-only Task 2 confirmation plus live dev-environment verification, and remains without automated coverage: candidate follow-up noted in Completion Notes). [velara-api/tests/integration/api/test_certifications.py]
+- [x] [Review][Patch] **Stale comment asserted the pre-17.11 eligibility rule** — FIXED: comment now states "completed OR blocked runs may link as evidence (Story 17.11)"; the same test's string-shaped egregious fixture was also upgraded to the real object shape. [velara-api/tests/unit/services/test_code_driven_executor.py]
+- [x] [Review][Patch] **"price NULL" cost-story vocabulary misstated the defect in 3 durable comments** — FIXED: all three now say the run "persisted/carried a NULL output hash". [code_driven_executor.py; test_code_driven_executor.py; test_code_driven_execution.py]
 
 ## Dev Notes
 
@@ -352,3 +361,17 @@ _No migration, no schema, no API route, no `velara-web` change._
   integration 25 passed, executor+execution_service+certification unit 156 passed — 0 regressions
   (in-container, `AUTH_BACKEND=dev`, source `docker cp`'d + grep-verified). No migration/API/FE change;
   no backfill of pre-existing NULL-hash rows.
+- 2026-07-30 — Code review (3-layer adversarial: Blind Hunter + Edge Case Hunter + Acceptance
+  Auditor, different model than the implementer) + fixes applied. **Decision (product):** output
+  identity = domain payload — the hash now EXCLUDES the conventional top-level `metadata` key and
+  uses `sort_keys=True` serialization, because the real extractor stamps per-run volatile fields
+  (extracted_at/costs/tokens/tmp paths) into `canonical.metadata`, which made identical re-runs hash
+  distinct and defeated 17.3 AC2's identical-runs guard (uploaded artifact bytes unchanged; new
+  regression test locks the invariant). **Patches:** AC3's bundle-shaped seed-count coverage added
+  (seed helper's completed rows now `runtime: code_driven_hybrid`); Dev-Record e2e overclaim
+  corrected (executor-direct, not worker-chain); stale completed-only eligibility comment fixed +
+  string-shaped egregious fixture upgraded to the real object shape; "price NULL" vocabulary
+  corrected to "NULL output hash" in 3 comments. Gates re-run green: ruff clean, 141 backend tests
+  (95 unit + 36 cert integration + 10 e2e) pass; both docker images rebuilt so the live dev env runs
+  the reviewed code. Worker persist-chain automated coverage remains a noted gap (read-only
+  confirmation + live verification only). Status → done.

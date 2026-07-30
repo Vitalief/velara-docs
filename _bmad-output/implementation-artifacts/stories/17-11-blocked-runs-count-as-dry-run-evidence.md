@@ -9,7 +9,7 @@ baseline_commit: velara-api HEAD at `0031_invocation_cost_states` (Alembic head)
 
 # Story 17.11: Count `blocked` Dry-Runs as Evidence (Capped) + Surface the QA Reason
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -155,6 +155,18 @@ genuinely add distinct outputs, they don't collapse to one empty hash.
   - [x] Gates (Enforcement Rule 10): ruff clean; backend cert unit 40 + integration 34 + skills/audit
     = 338 passed (fresh `velara_test`, `AUTH_BACKEND=dev`, source `docker cp`'d + grep-verified);
     `tsc`/`eslint` clean; `vitest` 807 passed; `docs/api-spec.json` regenerated. See Debug Log.
+
+### Review Findings
+
+_Code review 2026-07-30 (3-layer adversarial: Blind Hunter + Edge Case Hunter + Acceptance Auditor, run on a different model than the implementer). 17-11 findings below; sibling 17-10 findings in its own story file._
+
+- [x] [Review][Patch] **HIGH — the UI never linked blocked runs: the headline feature was unreachable end-to-end.** FIXED: `runOne()` now links on `completed` OR `blocked` (mirroring `EVIDENCE_ELIGIBLE_STATUSES`); `failed`/`cancelled`/`timeout` still never link. Single Run and Run-All both link blocked evidence now. [velara-web/src/features/certification/components/CertificationDryRunTrail.tsx:216]
+- [x] [Review][Patch] **qa_reason shape contract fragile: strings rendered as blank chips.** FIXED both ends: `_extract_qa_reason` now NORMALIZES — dict flags pass through, string flags coerce to `{code, message, location: None, severity: "egregious"}`, garbage entries drop (all-garbage → None); FE type widened to `Array<QaFlag | string>` with optional fields, render falls back `string ? flag : message ?? code ?? 'QA flag'`, empty/None reason shows "Blocked: reason unavailable", chips truncate at 420px with full text in the hover title. Integration test now asserts every returned flag is an object with a message. [certification_service.py `_extract_qa_reason`; CertificationDryRunTrail.tsx; api/certifications.ts]
+- [x] [Review][Patch] **Link-eligibility widening had zero API-level test coverage.** FIXED: new `_seed_unlinked_job` helper + 2 integration tests through the real endpoint — blocked job links 201 (returns `job_status: "blocked"`), failed job still 422 `DRY_RUN_EVIDENCE_JOB_NOT_ELIGIBLE`. [velara-api/tests/integration/api/test_certifications.py]
+- [x] [Review][Patch] **Remediation copy omitted "distinct" in all three surfaces.** FIXED: backend error, `errors.ts` message, and the FE floor copy all now say "successful (completed) with distinct outputs — blocked runs alone cannot satisfy the trail." [certification_service.py; errors.ts; CertificationDryRunTrail.tsx]
+- [x] [Review][Patch] **FE floor re-derivation could contradict the backend verdict + Dev-Record claim inaccurate.** FIXED: `completedFloorUnmet` is now guarded on `!isSufficient &&` (copy can never contradict the backend verdict), the local constants are documented as display-only mirrors of the backend source of truth, and the Dev-Record claim is corrected below. [CertificationDryRunTrail.tsx]
+- [x] [Review][Defer] **NULL-hash runs are linkable but can never count (silent dead evidence), and qa_reason is None for non-bundle runtimes** — link checks status only, never hash presence; pre-17.10 bundle rows and any hash-less runtime link 201 but are skipped by `COUNT(DISTINCT)` NULL semantics with no feedback; `_extract_qa_reason` only understands the bundle `qa.egregious` nesting. Largely the pre-existing 17.3 pattern (completed links never checked hash either); no-backfill discipline applies. — deferred, pre-existing pattern [certification_service.py:905-912]
+- [x] [Review][Defer] **Two-part gate is a two-query read (TOCTOU) and the list endpoint's rows/counts come from three separate queries** — under READ COMMITTED, concurrent evidence-linking between statements can pass a state that never existed, or return items inconsistent with counts. Introduced by this change but accepted as low-risk (transient, self-correcting, human-paced gate); candidate fix is a single SELECT with `FILTER (WHERE status='completed')` aggregation. — deferred, accepted low-risk [certification_service.py:635-644, 1021-1027]
 
 ## Dev Notes
 
@@ -303,9 +315,12 @@ Claude Opus 4.8 (claude-opus-4-8[1m])
 - **Shared count helper.** Factored the completed-only and completed+blocked counts through one
   `_count_distinct_evidence(statuses=...)` so they can't drift — the eligibility set is defined ONCE
   (`EVIDENCE_ELIGIBLE_STATUSES`) and reused by link + count + list.
-- **`is_sufficient` now encodes the full cap server-side.** `list_dry_run_evidence` returns it already
-  reflecting total≥5 AND completed≥3, so the FE key-enablement never re-implements the rule (matches
-  17.3's "FE doesn't re-derive the gate" principle).
+- **`is_sufficient` encodes the full cap server-side; FE floor COPY uses local display mirrors.**
+  (Wording corrected in review 2026-07-30: the original "cap NOT re-derived in FE" claim was too
+  strong.) Key ENABLEMENT is driven solely by the backend `is_sufficient`; the FE additionally holds
+  display-only mirrors of the two thresholds (5/3) to choose WHICH explanatory copy to show, now
+  guarded on `!isSufficient` so the copy can never contradict the backend verdict even if the
+  constants drift.
 - **`_extract_qa_reason` is deliberately defensive** — only blocked rows, reads `qa.egregious`
   tolerantly, degrades to None on any absent/non-dict shape (never assumes a fixed nested structure;
   mirrors the None-tolerant billing-input discipline). Non-bundle runtimes with a different qa shape
@@ -374,3 +389,15 @@ _No migration._
   unit 40 + integration 34 + skills/audit = 338 passed; tsc/eslint clean; vitest 807 passed;
   api-spec.json regenerated (also catches up pre-existing 17.3 spec drift). Depends on 17-10 (both
   staged for combined review).
+- 2026-07-30 — Code review (3-layer adversarial, different model than the implementer) + fixes
+  applied. **HIGH fix:** `runOne()` now links blocked runs (was completed-only — the widened backend
+  eligibility was unreachable from the UI's own run flow). **Other patches:** `_extract_qa_reason`
+  normalizes string flags → objects (blank-chip bug); FE renders defensively with truncation +
+  "reason unavailable" fallback and the `qa_reason` type honestly widened; 2 new integration tests
+  exercise the real `POST /dry-run-evidence` endpoint (blocked → 201, failed → 422); all three
+  remediation-copy surfaces now name DISTINCT outputs; floor copy guarded on `!isSufficient`;
+  Dev-Record "cap not re-derived" claim corrected. **Deferred (logged):** NULL-hash links never
+  count silently (pre-existing pattern); two-query gate TOCTOU (accepted low-risk). **Dismissed:**
+  distinct_output_count semantic widening (by design, spec'd); chip key-by-index (static list).
+  Gates re-run green: ruff clean, 141 backend tests pass, tsc/eslint clean, 51 certification FE
+  tests pass; both docker images rebuilt (live dev env runs the reviewed code). Status → done.

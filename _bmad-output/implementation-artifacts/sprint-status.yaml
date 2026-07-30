@@ -870,7 +870,25 @@ development_status:
   #   code-driven-hybrid bundle skill class (COUNT(DISTINCT output_sha256) was 0 for bundles). Tests:
   #   4 new unit (RED→GREEN) + extended e2e integration assertion; ruff clean; executor 52 / e2e 10 /
   #   worker 25 / cert+exec-svc+executor unit 156 passed, 0 regressions. No backfill of prior NULL rows.
-  17-10-bundle-output-sha256-for-cert-gate: review
+  # 2026-07-30: 17-10 + 17-11 → DONE (combined code review, 3 parallel adversarial layers on a
+  #   DIFFERENT model than the implementer). 1 decision + 8 patches + 2 defers + 2 dismissed.
+  #   DECISION (product): output identity = DOMAIN payload — hash excludes top-level canonical
+  #   `metadata` (per-run volatile: extracted_at/costs/tokens/tmp paths) + sort_keys, closing the
+  #   "identical re-runs mint distinct evidence" hole that would have defeated 17.3 AC2's
+  #   identical-runs guard. HIGH patch: FE runOne now links blocked terminals (the widened backend
+  #   eligibility was unreachable from the UI's own run flow). Other patches: qa_reason string-flag
+  #   normalization → objects (blank-chip bug), defensive FE render + truncation + reason-unavailable
+  #   fallback, API-level link tests (blocked 201 / failed 422 — endpoint had ZERO test coverage),
+  #   bundle-shaped seed evidence (17.10 AC3 letter), distinct-outputs remediation copy in 3
+  #   surfaces, !isSufficient floor-copy guard, Dev-Record claim corrections, comment/vocabulary
+  #   fixes. Deferred (logged): NULL-hash links silently never count (pre-existing pattern);
+  #   two-query gate TOCTOU (accepted low-risk). Gates: repo-wide ruff clean; backend 1716/1718
+  #   (2 confirmed pre-existing environmental: LANGSMITH container-env leak documented since 17.4;
+  #   audit-dedup passes on a clean velara_test); FE 807/807. Subrepos COMMITTED+PUSHED post-review
+  #   (velara-api b3afe21, velara-web d5b2bbe — scoped to story File Lists; 17-8 leftovers untouched).
+  #   Live dev images rebuilt on the reviewed code. api-spec.json regen also fixed the standing
+  #   RED OpenAPI CI gate (pre-existing 17.3 spec drift, see deferred-work).
+  17-10-bundle-output-sha256-for-cert-gate: done
   # 2026-07-30: 17-11-blocked-runs-count-as-dry-run-evidence drafted (create-story) → ready-for-dev.
   #   Product decision from the cert field session: a `blocked` dry-run (skill ran, QA gate correctly
   #   refused egregious output) is valid evidence the platform errors loudly, so it should COUNT — but
@@ -890,4 +908,4 @@ development_status:
   #   backfill. Depends on 17-10. Gates: ruff clean; backend cert unit 40 + integ 34 + skills/audit
   #   = 338 passed; tsc/eslint clean; vitest 807 passed; api-spec.json regenerated (also catches up
   #   pre-existing 17.3 spec drift). Both 17-10 + 17-11 staged for combined code-review.
-  17-11-blocked-runs-count-as-dry-run-evidence: review
+  17-11-blocked-runs-count-as-dry-run-evidence: done
