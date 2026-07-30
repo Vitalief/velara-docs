@@ -9,7 +9,7 @@ baseline_commit: velara-api HEAD at `0031_invocation_cost_states` (Alembic head)
 
 # Story 17.11: Count `blocked` Dry-Runs as Evidence (Capped) + Surface the QA Reason
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -104,65 +104,57 @@ genuinely add distinct outputs, they don't collapse to one empty hash.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Backend: shared eligibility set + loosen link (AC1, AC6)**
-  - [ ] Add module-level `EVIDENCE_ELIGIBLE_STATUSES = frozenset({"completed", "blocked"})` and
-    `MIN_COMPLETED_DRY_RUN_EVIDENCE_COUNT = 3` near `MIN_DRY_RUN_EVIDENCE_COUNT`
-    (`certification_service.py:40-42`).
-  - [ ] In `link_dry_run_evidence`, change the job query's `InvocationJob.status == "completed"` to
-    `InvocationJob.status.in_(EVIDENCE_ELIGIBLE_STATUSES)`. Keep the idempotent-duplicate and
-    version-match logic identical.
+- [x] **Task 1 — Backend: shared eligibility set + loosen link (AC1, AC6)**
+  - [x] Added `EVIDENCE_ELIGIBLE_STATUSES = frozenset({"completed", "blocked"})` and
+    `MIN_COMPLETED_DRY_RUN_EVIDENCE_COUNT = 3` next to `MIN_DRY_RUN_EVIDENCE_COUNT`.
+  - [x] `link_dry_run_evidence` now filters `InvocationJob.status.in_(EVIDENCE_ELIGIBLE_STATUSES)`;
+    idempotent-duplicate + version-match logic unchanged. Docstring updated.
 
-- [ ] **Task 2 — Backend: gate counts with a completed floor (AC2, AC3)**
-  - [ ] `count_sufficient_dry_run_evidence`: change the `status == "completed"` filter to
-    `status.in_(EVIDENCE_ELIGIBLE_STATUSES)`. Update its docstring (it currently states the
-    completed-only rationale).
-  - [ ] New `count_completed_dry_run_evidence(*, session, skill_version_id, org_id) -> int` — the
-    same query but `status == "completed"` only. (Factor the shared query body if clean; else a small
-    duplicate is fine per this repo's no-shared-helper convention.)
-  - [ ] `assert_dry_run_evidence_sufficient`: require BOTH total `>= MIN_DRY_RUN_EVIDENCE_COUNT` AND
-    completed `>= MIN_COMPLETED_DRY_RUN_EVIDENCE_COUNT`. Raise the total-insufficient error for the
-    first, and the all-blocked/floor error (AC3 decision) for the second.
-  - [ ] AC3 error: DECIDE — extend `CertificationEvidenceInsufficientError`'s message to be
-    floor-aware, or add `CertificationEvidenceAllBlockedError` (`CERTIFICATION_EVIDENCE_ALL_BLOCKED`,
-    422, same two-line constructor idiom). Document the choice + add any new code to the FE
-    `CERTIFICATION_ERROR_MESSAGES` map. Recommend a distinct code — the remediation differs ("run a
-    clean protocol" vs "run more protocols").
+- [x] **Task 2 — Backend: gate counts with a completed floor (AC2, AC3)**
+  - [x] `count_sufficient_dry_run_evidence` now counts `status IN EVIDENCE_ELIGIBLE_STATUSES`
+    (delegates to a new shared `_count_distinct_evidence(statuses=...)` helper so completed-only and
+    completed+blocked can never drift). Docstring updated.
+  - [x] New `count_completed_dry_run_evidence` (same helper, `statuses={"completed"}`).
+  - [x] `assert_dry_run_evidence_sufficient` requires BOTH total `>= MIN_DRY_RUN_EVIDENCE_COUNT`
+    (else `CertificationEvidenceInsufficientError`) AND completed `>= MIN_COMPLETED_DRY_RUN_EVIDENCE_COUNT`
+    (else `CertificationEvidenceAllBlockedError`).
+  - [x] AC3 error: added a DISTINCT `CertificationEvidenceAllBlockedError`
+    (`CERTIFICATION_EVIDENCE_ALL_BLOCKED`, 422) — the remediation differs from insufficient-total, so
+    a separate code + message. Added to the FE `CERTIFICATION_ERROR_MESSAGES` map.
 
-- [ ] **Task 3 — Backend: trail response carries block reason + completed count (AC4)**
-  - [ ] `list_dry_run_evidence`: add `qa_reason` per row — pull the linked
-    `InvocationResult.result_metadata->'qa'` (egregious/flags) for blocked rows (NULL for completed).
-    Add the `InvocationResult.result_metadata` to the select (or a targeted JSON accessor) alongside
-    the existing `output_sha256`. Add `completed_distinct_count` to the returned summary tuple.
-  - [ ] Update the response Pydantic schema (`schemas/certification.py`) with `qa_reason` (nullable)
-    and `completed_distinct_count`. This is an API-surface change → regenerate `docs/api-spec.json`
-    (`scripts/export_openapi.py`) as part of the story so CI's OpenAPI-diff gate stays green.
+- [x] **Task 3 — Backend: trail response carries block reason + completed count (AC4)**
+  - [x] `list_dry_run_evidence` now selects `InvocationResult.result_metadata` and derives `qa_reason`
+    per row via a new defensive `_extract_qa_reason` (blocked-only; reads `qa.egregious` tolerantly,
+    degrades to None). Return tuple now `(rows, distinct, completed_distinct, is_sufficient)`, and
+    `is_sufficient` encodes the FULL two-part rule (so the FE never re-derives the cap). Both API
+    call sites updated for the new arity.
+  - [x] Schemas: `CertificationDryRunEvidenceRead` gains `qa_reason: list | None`;
+    `CertificationDryRunEvidenceListData` gains `completed_distinct_count: int`. Regenerated
+    `docs/api-spec.json`.
 
-- [ ] **Task 4 — Frontend: trail card counts + reason (AC5)**
-  - [ ] `CertificationDryRunTrail.tsx`: consume the new `completed_distinct_count` + `qa_reason`
-    fields; render blocked runs with a distinct badge (reuse `JobStatusBadge`) and their `qa_reason`
-    (inline or expandable — reuse the existing detail-panel pattern). Trail count text shows
-    "X of 5 (Y successful)".
-  - [ ] Key enablement stays driven by backend `is_sufficient` (do NOT re-derive the cap in FE). When
-    insufficient due to the floor, show the specific message from the AC3 error/summary.
-  - [ ] Update `api/certifications.ts` types (`CertificationDryRunEvidenceItem` gains `qa_reason`;
-    summary gains `completed_distinct_count`).
+- [x] **Task 4 — Frontend: trail card counts + reason (AC5)**
+  - [x] `CertificationDryRunTrail.tsx`: count badge shows "X of 5 distinct outputs (Y successful)";
+    copy explains blocked runs count (capped) and shows a floor-specific message when the completed
+    floor is unmet; blocked evidence rows render their `qa_reason` egregious flags (danger-token
+    chips). Key enablement stays driven by backend `is_sufficient` (cap NOT re-derived in FE).
+  - [x] `api/certifications.ts` types updated (`qa_reason`, `completed_distinct_count`).
 
-- [ ] **Task 5 — Tests (all ACs)**
-  - [ ] Backend unit: eligibility-set constant; `count_completed_dry_run_evidence` query shape
-    (compiled-SQL assertion idiom, mirroring `TestDryRunEvidenceGate`); the two-part
-    `assert_dry_run_evidence_sufficient` truth table — (5 completed → pass), (3 completed + 2 blocked
-    → pass), (5 blocked + 0 completed → fail floor), (2 completed + 3 blocked → fail floor),
-    (4 total → fail total). AC3 error code/status test.
-  - [ ] Backend integration (`test_certifications.py`): extend the seed helper to seed blocked
-    evidence (a `blocked` job + `InvocationResult` with a distinct `output_sha256` + a `qa` metadata
-    block); assert the mixed-trail 201 path and the all-blocked 422 path end-to-end via the real API.
-    Assert `list_dry_run_evidence` returns `qa_reason` for a blocked row and NULL for a completed row.
-  - [ ] Frontend: `CertificationDryRunTrail.test.tsx` — blocked run renders its badge + qa_reason;
-    count text shows the "(Y successful)" split; key disabled with the floor-specific message when
-    all-blocked. `CertificationScreen.test.tsx` — key enablement follows the new `is_sufficient`.
-  - [ ] Gates (Enforcement Rule 10): `ruff` + `pytest` (fresh `velara_test`, `AUTH_BACKEND=dev`,
-    source `docker cp`'d/rebuilt + grep-verified in-container); `tsc`/`eslint`/`vitest`; regenerate
-    `docs/api-spec.json` and confirm the OpenAPI-diff CI gate is green.
+- [x] **Task 5 — Tests (all ACs)**
+  - [x] Backend unit: widened-status query-shape test (asserts both `completed` AND `blocked` in the
+    IN clause); `count_completed_dry_run_evidence` completed-only query-shape test; the full two-part
+    truth table (5c→pass, 3c+2b→pass, 2c+3b→all-blocked, 0c+5b→all-blocked, total<5→insufficient);
+    AllBlocked error code/status; `_extract_qa_reason` (completed→None, blocked→egregious list,
+    missing/non-dict qa→None, None metadata→None).
+  - [x] Backend integration (`test_certifications.py`): new `_seed_mixed_dry_run_evidence(n_completed,
+    n_blocked)` helper (blocked jobs carry a `qa.egregious` block); tests for mixed-trail 201,
+    all-blocked 422 (`CERTIFICATION_EVIDENCE_ALL_BLOCKED`), and the list surfacing `qa_reason`
+    (blocked) / None (completed) + `completed_distinct_count`.
+  - [x] Frontend: new `CertificationDryRunTrail.test.tsx` test (blocked run renders qa_reason + the
+    "(N successful)" count split); updated the pre-existing badge-text assertions + the two Screen
+    mocks for the new fields.
+  - [x] Gates (Enforcement Rule 10): ruff clean; backend cert unit 40 + integration 34 + skills/audit
+    = 338 passed (fresh `velara_test`, `AUTH_BACKEND=dev`, source `docker cp`'d + grep-verified);
+    `tsc`/`eslint` clean; `vitest` 807 passed; `docs/api-spec.json` regenerated. See Debug Log.
 
 ## Dev Notes
 
@@ -278,21 +270,92 @@ becomes countable once 17-10 is deployed so it carries a hash, then linked.)
 
 ### Agent Model Used
 
-_(dev-story to fill)_
+Claude Opus 4.8 (claude-opus-4-8[1m])
 
 ### Debug Log References
 
-_(dev-story to fill)_
+- Baseline docs-repo HEAD at start of dev: `66825df`. Story frontmatter `baseline_commit` is prose
+  (pre-existing) — preserved per Step 4.
+- Backend unit (in-container, `-e AUTH_BACKEND=dev`, source `docker cp`'d + `grep -c` verified = 19
+  markers): `test_certification_service.py` **40 passed** (new two-part truth table + `_extract_qa_reason`
+  + widened-status query shape; pre-existing 17.3 gate tests still green — the two-part gate is
+  backward-compatible because a 5-completed trail satisfies both total≥5 and completed≥3).
+- Backend integration: `test_certifications.py` **34 passed** (3 new 17.11 tests: mixed-trail 201,
+  all-blocked 422, list qa_reason/completed_count); + `test_skills.py` + `test_audit_service.py`
+  (they seed cert evidence) — combined run **338 passed**, 0 regressions, fresh `velara_test`.
+- ruff: clean on all 5 changed backend files.
+- OpenAPI: regenerated `docs/api-spec.json` via host `.venv/bin/python scripts/export_openapi.py`.
+  **Large diff (~698 insertions):** MOST is the PRE-EXISTING stale-spec drift already logged in
+  deferred-work.md (the committed spec was missing ALL of Story 17.3's dry-run routes/schemas); this
+  story's own additions are `qa_reason` + `completed_distinct_count` + the response-shape docstrings.
+  Regenerating necessarily pulls in both — the spec is now accurate; the reviewer should know the bulk
+  is 17.3 catch-up, not 17.11 surface.
+- FE: `tsc --noEmit` clean; `eslint` clean on changed files; `vitest run` **807 passed** (64 files),
+  incl. the new blocked-run trail test. Fixed a real slip found by the gate: I initially used a
+  non-existent `--color-warn` CSS token — corrected to the real `--color-danger`/`--color-danger-bg`.
 
 ### Completion Notes List
 
-_(dev-story to fill)_
+- **AC3 error decision: added a distinct `CERTIFICATION_EVIDENCE_ALL_BLOCKED` code** (not a reworded
+  `CERTIFICATION_EVIDENCE_INSUFFICIENT`), per the story recommendation — the remediation genuinely
+  differs ("run a successful protocol" vs "run more protocols"), so a shared generic message would
+  misdirect the certifier.
+- **Shared count helper.** Factored the completed-only and completed+blocked counts through one
+  `_count_distinct_evidence(statuses=...)` so they can't drift — the eligibility set is defined ONCE
+  (`EVIDENCE_ELIGIBLE_STATUSES`) and reused by link + count + list.
+- **`is_sufficient` now encodes the full cap server-side.** `list_dry_run_evidence` returns it already
+  reflecting total≥5 AND completed≥3, so the FE key-enablement never re-implements the rule (matches
+  17.3's "FE doesn't re-derive the gate" principle).
+- **`_extract_qa_reason` is deliberately defensive** — only blocked rows, reads `qa.egregious`
+  tolerantly, degrades to None on any absent/non-dict shape (never assumes a fixed nested structure;
+  mirrors the None-tolerant billing-input discipline). Non-bundle runtimes with a different qa shape
+  simply yield None rather than raising.
+- **failed/cancelled remain excluded** (verified: `EVIDENCE_ELIGIBLE_STATUSES` is exactly
+  {completed, blocked}). No migration, no backfill — existing blocked runs begin to count the moment
+  they are linked.
+- **Interaction NOT fixed here (as scoped):** the Run-All-aborts-after-blocked FE loop bug is
+  untouched — this story makes blocked runs COUNT and shows their reason, but a certifier may still
+  need to link a post-block run manually until that separate fix lands. Noted in Dev Notes.
+- **Depends on Story 17-10** (uncommitted in the working tree): a blocked BUNDLE run only carries a
+  distinct hash because 17-10 emits `output_sha256`. Both are staged for a combined review.
 
 ### File List
 
-_(dev-story to fill — expected backend: certification_service.py, schemas/certification.py, possibly a
-new exception; frontend: CertificationDryRunTrail.tsx, api/certifications.ts, errors.ts, + tests on
-both sides; docs/api-spec.json regenerated. No migration.)_
+**Backend (`velara-api/`):**
+- `app/services/certification_service.py` — MODIFIED. New constants (`EVIDENCE_ELIGIBLE_STATUSES`,
+  `MIN_COMPLETED_DRY_RUN_EVIDENCE_COUNT`); new `CertificationEvidenceAllBlockedError`; `link_dry_run_evidence`
+  eligibility widened; `count_sufficient_dry_run_evidence` widened + new `count_completed_dry_run_evidence`
+  + shared `_count_distinct_evidence`; two-part `assert_dry_run_evidence_sufficient`;
+  `list_dry_run_evidence` returns 4-tuple with `qa_reason` (via new `_extract_qa_reason`) +
+  `completed_distinct_count`.
+- `app/schemas/certification.py` — MODIFIED. `CertificationDryRunEvidenceRead.qa_reason`;
+  `CertificationDryRunEvidenceListData.completed_distinct_count`.
+- `app/api/v1/certifications.py` — MODIFIED. Both `list_dry_run_evidence` unpack sites updated for the
+  4-tuple; list handler passes `completed_distinct_count` into the response.
+- `docs/api-spec.json` — REGENERATED (adds 17.11 fields + catches up the pre-existing 17.3 dry-run
+  route/schema drift).
+- `tests/unit/services/test_certification_service.py` — MODIFIED. Two-part gate truth table,
+  completed-only query test, AllBlocked error test, `TestExtractQaReason`; removed a now-unused import.
+- `tests/integration/api/test_certifications.py` — MODIFIED. `_seed_mixed_dry_run_evidence` helper + 3
+  new 17.11 tests.
+
+**Frontend (`velara-web/`):**
+- `src/api/certifications.ts` — MODIFIED. `qa_reason` on the evidence item; `completed_distinct_count`
+  on the list data.
+- `src/features/certification/components/CertificationDryRunTrail.tsx` — MODIFIED. Completed-split
+  count badge + capped/floor copy + blocked-run `qa_reason` chips.
+- `src/shared/utils/errors.ts` — MODIFIED. `CERTIFICATION_EVIDENCE_ALL_BLOCKED` message.
+- `src/features/certification/components/CertificationDryRunTrail.test.tsx` — MODIFIED. New blocked-run
+  test + updated badge-text assertions + mock fields.
+- `src/features/certification/components/CertificationScreen.test.tsx` — MODIFIED. Mock fields +
+  badge-text assertions updated.
+
+_No migration._
+
+**Docs:**
+- `_bmad-output/implementation-artifacts/stories/17-11-blocked-runs-count-as-dry-run-evidence.md` — this file.
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — status transitions.
+- `_bmad-output/implementation-artifacts/deferred-work.md` — blocked-review-UI item marked partially superseded.
 
 ## Change Log
 
@@ -301,3 +364,13 @@ both sides; docs/api-spec.json regenerated. No migration.)_
   can't be all blocks) and surfaces each blocked run's QA reason in the trail card, per the product
   argument that a loud block is itself evidence the platform doesn't silently swallow bad data.
   Backend + FE, no migration; OpenAPI response-shape change (regen api-spec.json).
+- 2026-07-30 — Implemented (dev-story). Backend: shared `EVIDENCE_ELIGIBLE_STATUSES` (completed+blocked);
+  `link_dry_run_evidence` accepts blocked; two-part gate (total≥5 AND completed≥3) via new
+  `count_completed_dry_run_evidence` + shared `_count_distinct_evidence`; distinct
+  `CERTIFICATION_EVIDENCE_ALL_BLOCKED` 422; `list_dry_run_evidence` surfaces `qa_reason`
+  (defensive `_extract_qa_reason`) + `completed_distinct_count`, `is_sufficient` now encodes the full
+  cap. FE: count shows "(N successful)", capped/floor copy, blocked-run reason chips, new error
+  message. failed/cancelled stay excluded; no migration/backfill. Gates: ruff clean; backend cert
+  unit 40 + integration 34 + skills/audit = 338 passed; tsc/eslint clean; vitest 807 passed;
+  api-spec.json regenerated (also catches up pre-existing 17.3 spec drift). Depends on 17-10 (both
+  staged for combined review).

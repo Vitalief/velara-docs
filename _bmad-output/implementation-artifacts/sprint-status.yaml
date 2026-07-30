@@ -880,4 +880,14 @@ development_status:
   #   trail response) + FE (trail card counts blocked, shows reason). Depends on 17-10 (blocked bundle
   #   run only carries a distinct hash because 17-10 emits one). No migration; OpenAPI response-shape
   #   change (regen api-spec.json). failed/cancelled stay excluded (infra/user events, not a verdict).
-  17-11-blocked-runs-count-as-dry-run-evidence: in-progress
+  # 2026-07-30: 17-11-blocked-runs-count-as-dry-run-evidence moved to review (dev-story). Backend +
+  #   FE, no migration. blocked runs now count as dry-run evidence (capped: two-part gate total≥5 AND
+  #   completed≥3 via new count_completed_dry_run_evidence + shared _count_distinct_evidence);
+  #   link eligibility widened to EVIDENCE_ELIGIBLE_STATUSES={completed,blocked}; distinct
+  #   CERTIFICATION_EVIDENCE_ALL_BLOCKED 422; trail response gains qa_reason (defensive
+  #   _extract_qa_reason) + completed_distinct_count, is_sufficient encodes the full cap; FE shows
+  #   "(N successful)" + floor copy + blocked-run reason chips. failed/cancelled stay excluded; no
+  #   backfill. Depends on 17-10. Gates: ruff clean; backend cert unit 40 + integ 34 + skills/audit
+  #   = 338 passed; tsc/eslint clean; vitest 807 passed; api-spec.json regenerated (also catches up
+  #   pre-existing 17.3 spec drift). Both 17-10 + 17-11 staged for combined code-review.
+  17-11-blocked-runs-count-as-dry-run-evidence: review
