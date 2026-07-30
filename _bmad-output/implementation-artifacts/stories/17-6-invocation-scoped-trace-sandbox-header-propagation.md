@@ -16,7 +16,7 @@ status_note: >
 
 # Story 17.6: One Invocation-Scoped Trace + Sandbox Header Propagation
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -570,3 +570,16 @@ claude-sonnet-5
   Gates: ruff clean; 856 unit passed (1 pre-existing unrelated failure) + 793 integration passed (3
   pre-existing skips), 0 regressions; zero OpenAPI diff (verified via clean pre/post in-container spec
   regeneration).
+
+## Review Findings
+
+Code review 2026-07-30 (3 parallel adversarial layers: Blind Hunter, Edge Case Hunter, Acceptance
+Auditor). **Acceptance Auditor: all 7 ACs satisfied, forbidden scope (pricing/cost_is_estimated/
+reconciler/wrap-seam/migration) fully respected — no AC violations.** 1 patch, 3 deferred (all
+pre-existing 17-5 characteristics, not caused by this change), 3 dismissed as noise.
+
+- [x] [Review][Patch] **FIXED** — `_UsageStream.__enter__` leaked the tracing-context ExitStack if the inner stream open raised; tracing_context entry was also unguarded on create/parse [app/services/sandbox_assets/velara_trace.py:196-227, 109-146] — In `__enter__`, `_tracing_context_or_noop()` was entered BEFORE `self._cm.__enter__()`; if the wrap_anthropic stream open raised (verified reachable: `MessagesStreamManagerWrapper.__enter__` opens the HTTP stream), `__enter__` never returned → the `with` never called `__exit__` → the entered tracing_context leaked for the rest of the single-run subprocess. **Fix applied (2026-07-30):** (1) `_UsageStream.__enter__` now wraps the tracing-context entry + inner `.__enter__()` in a `try/except BaseException` that closes+clears the ExitStack and re-raises on any failure — no leak. (2) `_tracing_context_or_noop()` was converted to a `@contextlib.contextmanager` that guards BOTH construction AND `.__enter__()` of `tracing_context`, degrading to an un-nested call on any failure — so a truthy-but-broken `_parent_run` can no longer propagate an `__enter__` exception into the skill's own LLM call (honors the "a tracing failure NEVER breaks the skill's LLM call" contract). 2 regression tests added (`test_stream_open_failure_exits_tracing_context_no_leak`, `test_tracing_context_enter_failure_degrades_to_unnested_call`). Shim suite: 19 passed (was 17); ruff clean.
+
+- [x] [Review][Defer] Streaming `get_final_message()` raising mid-stream silently drops that call's usage in `totals()` [app/services/sandbox_assets/velara_trace.py:161-164, 209-214] — deferred, pre-existing (17-5 `totals()` recorder, unchanged by 17-6; the interim cost-VALUE path being superseded by the 17-8 LangSmith reconciler per AD-4/AD-5).
+- [x] [Review][Defer] `totals()` returns real tokens with `model=None` → run prices NULL ("--") [app/services/sandbox_assets/velara_trace.py:104-106, 361-367] — deferred, pre-existing (17-5 `_last_model` truthiness guard, unchanged by 17-6; superseded by 17-8 reconciler which sums LangSmith `total_cost` independent of the envelope model).
+- [x] [Review][Defer] `.parse`-only skills get no nested span (wrap_anthropic doesn't trace non-beta `.parse`) — Hole-2 residual for parse-only skills [app/services/sandbox_assets/velara_trace.py:243-247] — deferred, honest documented limitation (the code's own docstring :340-344 acknowledges it; usage is still accumulated). Real-world reach is low (skills stream/create); revisit if a parse-only code-driven-hybrid ships.

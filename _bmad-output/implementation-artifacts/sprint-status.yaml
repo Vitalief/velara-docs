@@ -54,6 +54,12 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-30
+# 2026-07-30: 17-6-invocation-scoped-trace-sandbox-header-propagation → DONE (code-review). 3 parallel
+#   adversarial layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor): all 7 ACs satisfied,
+#   forbidden scope respected. 1 patch applied+tested (velara_trace._UsageStream.__enter__ leaked the
+#   tracing-context ExitStack on inner-stream-open failure + unguarded tracing_context entry on
+#   create/parse → both hardened, 2 regression tests, shim suite 17→19 passed, ruff clean). 3 deferred
+#   (pre-existing 17-5 totals() traits, superseded by 17-8 reconciler); 3 dismissed as noise.
 # 2026-07-30: 17-6-invocation-scoped-trace-sandbox-header-propagation moved to review (dev-story).
 #   Worker opens ONE trace() per leaf invocation around execute_skill (the sole in-worker platform LLM
 #   funnel); trace id captured via the on/off-safe get_current_run_tree() discriminator (NOT rt.trace_id,
@@ -718,7 +724,7 @@ development_status:
   #   (C4) corrected worker test path tests/unit/workers/ (not /services/). Sharp scope lines to 17-7
   #   (estimate/cost_is_estimated/pricing.py — untouched) and 17-8 (list_runs/total_cost/reconciler —
   #   untouched). No migration (columns exist from 17-4); no OpenAPI diff (exposure is 17-9).
-  17-6-invocation-scoped-trace-sandbox-header-propagation: review
+  17-6-invocation-scoped-trace-sandbox-header-propagation: done
   17-7-estimate-write-hot-path-slim-pricing: backlog
   17-8-deferred-cost-reconciler-task: backlog
   17-9-cost-consumers-read-new-states: backlog
