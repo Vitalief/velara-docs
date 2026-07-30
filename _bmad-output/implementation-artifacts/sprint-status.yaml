@@ -880,4 +880,4 @@ development_status:
   #   trail response) + FE (trail card counts blocked, shows reason). Depends on 17-10 (blocked bundle
   #   run only carries a distinct hash because 17-10 emits one). No migration; OpenAPI response-shape
   #   change (regen api-spec.json). failed/cancelled stay excluded (infra/user events, not a verdict).
-  17-11-blocked-runs-count-as-dry-run-evidence: ready-for-dev
+  17-11-blocked-runs-count-as-dry-run-evidence: in-progress
