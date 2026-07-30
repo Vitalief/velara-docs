@@ -23,7 +23,7 @@ status_note: >
 
 # Story 17.7: Estimate Write on the Hot Path; Slim `pricing.py`
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -585,3 +585,55 @@ claude-sonnet-5 (Sonnet 5)
   and the dev must NOT extend `test_job_service.py:266-279`'s `default is None` loop with the
   `False`-defaulting `cost_is_estimated` kwarg. Model-column citation corrected to `:216`
   (langsmith_run_id) / `:217-219` (cost_is_estimated).
+
+### Review Findings
+
+Adversarial code review (2026-07-30) — 3 parallel layers (Blind Hunter, Edge Case Hunter, Acceptance
+Auditor) against the uncommitted diff. All 6 ACs verified FULLY SATISFIED within `velara-api`; every
+forbidden action avoided (no migration, no upsert, no analytics/jobs/client/schema touch, no LangSmith
+read, no `cost_is_estimated=false` on any LLM row, no wrap_anthropic/sandbox-shim touch). 2 patches
+applied + tested, 1 deferred to 17-8, 2 dismissed as verified false positives.
+
+- [x] [Review][Patch] Out-of-scope `velara-web/SkillForm.tsx` edit bundled into a backend-only story
+      [velara-web/src/features/skills/components/SkillForm.tsx:589] — **SCOPE VIOLATION (headline).** Story
+      17.7 is declared **backend-only (`velara-api`)** and its File List names exactly 6 velara-api files.
+      The diff carries a 7th file in the `velara-web` repo (a `setErrorIsStale(true)` in `AIAdapterReview`'s
+      `onApproved`). It touches no cost/pricing/`cost_is_estimated` path — it is unrelated AI-adapter-UX
+      drift. The change itself is coherent (mirrors the existing `errorIsStale` state machine) but was
+      incomplete on its own terms (see next finding). **Resolved by:** completing it (patch below) rather
+      than deleting authored work, and flagging it here — it should be split into its own FE story/commit
+      before publishing. The story's Completion Notes' "`git status --short` shows exactly 3 modified files"
+      claim is true only within `velara-api` and conceals this web edit.
+- [x] [Review][Patch] Stale AI-adapt trigger banner survives bundle re-upload / AI-adapt approval
+      [velara-web/src/features/skills/components/SkillForm.tsx:307-314] — **[blind+edge, confirmed against
+      source].** `setErrorIsStale(true)` (on re-upload `:519` and on adapt-approve `:589`) only gates the
+      AI-adapt *affordance* (`showAiAdaptAffordance`, `:235-239`). The form-level `formError` banner
+      (`:307-314`, rendered `:621`) is derived directly from `apiCode` with NO `errorIsStale` guard, so the
+      red "entrypoint doesn't match contract" banner lingered over a bundle that was just adapted to fix
+      exactly that condition — the diff's own comment ("that error is now stale") described a suppression
+      the code did not perform. **Fixed:** `formError` now returns `null` for the three AI-adapt trigger
+      codes when `errorIsStale` is true, mirroring the affordance's `!errorIsStale` gate; the next submit
+      re-fires a fresh error if the new bundle still fails. `tsc --noEmit` + `eslint` clean.
+- [x] [Review][Patch] `mark_blocked` redelivery/no-flip-back guard was unproven (only `mark_completed`
+      tested) [velara-api/tests/integration/workers/test_execution_tasks.py] — **[blind, confirmed].** AC3's
+      structural guarantee (`_guard_not_terminal` fresh-INSERT, no upsert) is shared by BOTH writer entry
+      points, but only `mark_completed` had a redelivery regression test. **Fixed:** added
+      `test_redelivered_mark_blocked_does_not_flip_reconciled_row_back_to_estimated` mirroring the
+      `mark_completed` one (redelivered `mark_blocked(cost_is_estimated=True)` on a terminal job is a no-op:
+      exactly 1 row, stays `False`, original `output_file_key` unchanged). Passes in-container under
+      `.env.test`; ruff clean.
+- [x] [Review][Defer] Reconciler (17-8) row-selection predicate must couple `cost_is_estimated=True AND
+      langsmith_run_id IS NOT NULL` [velara-api/app/models/invocation.py:205-212] — **deferred, 17-8
+      territory.** This story correctly writes the spec-mandated `cost_is_estimated=True` + `cost_usd=NULL`
+      state for unknown-model / partial-report LLM rows (AC2 is explicit that a NULL cost on an LLM row is
+      still an estimate). That state is intended, not a bug. But it means 17-8's reconciler must NOT select
+      rows by `cost_is_estimated=True` alone — an unknown-model row with no trace has no `langsmith_run_id`
+      to reconcile against. Recorded as a constraint for Story 17-8's selection query; out of scope here.
+
+Dismissed as verified false positives (2): (a) "a non-LLM `code` run carrying a `model`/token key is
+mislabeled `cost_is_estimated=True` because the token-present branch never re-checks `runtime`" — real
+`code`-run `result_metadata` (`execution_service._run_code`→`_persist_output`) contains NO `runtime` and
+NO `model`/token keys; only the three LLM paths inject `model` (and those are correctly `True`). The
+mislabel input is unreachable by any production write path — a latent fragility, not a live defect. (b)
+"no integration test for the LLM-no-usage NULL-estimate branch via the real seam" — the unit suite covers
+that branch directly (`TestExtractCostFields`); redundant to add an integration case.

@@ -54,6 +54,18 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-30
+# 2026-07-30: 17-7-estimate-write-hot-path-slim-pricing → DONE (code-review). 3 parallel adversarial
+#   layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor): all 6 ACs SATISFIED, all forbidden
+#   actions avoided (within velara-api). 2 patches applied+tested: (1) HEADLINE — an out-of-scope
+#   velara-web SkillForm.tsx edit (setErrorIsStale in AIAdapterReview.onApproved) was bundled into this
+#   backend-only story AND was incomplete (the stale AI-adapt trigger banner stayed visible because
+#   formError wasn't gated on errorIsStale) → completed the gate, flagged for split into an FE story;
+#   (2) added a mark_blocked redelivery no-flip-back regression test (mark_completed had one, mark_blocked
+#   didn't — shared _guard_not_terminal now proven for both). Gates: worker integration 25 passed, touched
+#   unit suites 88 passed, ruff clean, tsc+eslint clean on the web file. 1 deferred (17-8 reconciler must
+#   select `cost_is_estimated=true AND langsmith_run_id IS NOT NULL` — an unknown-model row is True+NULL,
+#   reconcilable only if traced). 2 dismissed as verified false positives (code-run-with-model-key mislabel
+#   is unreachable by any production write path; the NULL-estimate branch is unit-covered).
 # 2026-07-30: 17-7-estimate-write-hot-path-slim-pricing moved to review (dev-story). pricing.py
 #   docstrings demoted to the provisional-estimate role (AD-1, prose-only). _extract_cost_fields
 #   returns cost_is_estimated riding the existing runtime-in-_LLM_USING_RUNTIMES predicate: True for
@@ -764,6 +776,6 @@ development_status:
   #   confirmed all file:line citations + the three load-bearing scope claims against live source; folded
   #   in 2 test-guidance fixes (per-branch _extract_cost_fields unit tests are NET-NEW, not existing;
   #   don't extend test_job_service's default-is-None loop with the False-defaulting kwarg).
-  17-7-estimate-write-hot-path-slim-pricing: review
+  17-7-estimate-write-hot-path-slim-pricing: done
   17-8-deferred-cost-reconciler-task: backlog
   17-9-cost-consumers-read-new-states: backlog
