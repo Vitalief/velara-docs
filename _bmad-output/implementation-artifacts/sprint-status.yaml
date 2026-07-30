@@ -54,6 +54,7 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-30
+# 2026-07-30: 17-6-invocation-scoped-trace-sandbox-header-propagation moved to ready-for-dev (create-story). See per-story note below.
 # 2026-07-30: 17-5-wrap-anthropic-seam-delete-hand-rolled-tracing moved to done (code-review).
 #   Two high-severity findings patched: (1) sandbox wrap_anthropic call had no hide_inputs/
 #   hide_outputs — real skill prompt/response content (PHI + skill IP) would ship to LangSmith
@@ -670,7 +671,28 @@ development_status:
   #   (wrap_anthropic seam, dependency-free, fixes the live cost bug).
   17-4-cost-tracking-schema-run-id-and-estimated-flag: done
   17-5-wrap-anthropic-seam-delete-hand-rolled-tracing: done
-  17-6-invocation-scoped-trace-sandbox-header-propagation: backlog
+  # 2026-07-30: 17-6-invocation-scoped-trace-sandbox-header-propagation moved to ready-for-dev
+  #   (create-story). Governing AD-7. Filled from STUB against live source at baseline fa1e96b
+  #   (post-17.5) via three parallel call-site sweeps + langsmith 0.10.10 installed-venv ground-truth.
+  #   TWO edits only: (1) worker opens ONE trace() around execute_skill (the sole in-worker platform
+  #   LLM funnel) so N calls across M models nest under one trace_id; captures it via
+  #   get_current_run_tree() INSIDE the block (None when tracing off — NOT rt.trace_id, which is
+  #   non-None even when off and would persist a bogus id) and persists to InvocationResult
+  #   .langsmith_run_id (17-4's column) via a NEW separate kwarg on mark_completed/mark_blocked — NOT
+  #   through _extract_cost_fields (langsmith_run_id is not a cost field). (2) cross-process bridge:
+  #   worker injects json.dumps(get_current_run_tree().to_headers()) as LANGSMITH_PARENT_HEADERS at
+  #   code_driven_executor's existing LANGSMITH_* env block; sandbox shim's _wrap_if_available rebuilds
+  #   RunTree.from_headers()+tracing_context(parent=) behind its existing guarded langsmith import.
+  #   CRITICAL SDK fact folded: to_headers() carries the full dotted_order (not a bare trace_id) — must
+  #   round-trip the whole dict. Independent fresh-context validator caught + fixed pre-dev: (C1)
+  #   tracing_context must stay active across _UsageStream.__enter__/iteration/get_final_message (NOT
+  #   just around .stream() construction — wrap_anthropic's stream run is created lazily on enter/iter),
+  #   else streaming skills silently re-open Hole 2; (C2) get_current_run_tree()-not-rt.trace_id rule
+  #   for AC4 correctness; (C3) strong-ref the reconstructed parent (tracing_context stores a weakref);
+  #   (C4) corrected worker test path tests/unit/workers/ (not /services/). Sharp scope lines to 17-7
+  #   (estimate/cost_is_estimated/pricing.py — untouched) and 17-8 (list_runs/total_cost/reconciler —
+  #   untouched). No migration (columns exist from 17-4); no OpenAPI diff (exposure is 17-9).
+  17-6-invocation-scoped-trace-sandbox-header-propagation: ready-for-dev
   17-7-estimate-write-hot-path-slim-pricing: backlog
   17-8-deferred-cost-reconciler-task: backlog
   17-9-cost-consumers-read-new-states: backlog
