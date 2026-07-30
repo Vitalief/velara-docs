@@ -871,3 +871,13 @@ development_status:
   #   4 new unit (RED→GREEN) + extended e2e integration assertion; ruff clean; executor 52 / e2e 10 /
   #   worker 25 / cert+exec-svc+executor unit 156 passed, 0 regressions. No backfill of prior NULL rows.
   17-10-bundle-output-sha256-for-cert-gate: review
+  # 2026-07-30: 17-11-blocked-runs-count-as-dry-run-evidence drafted (create-story) → ready-for-dev.
+  #   Product decision from the cert field session: a `blocked` dry-run (skill ran, QA gate correctly
+  #   refused egregious output) is valid evidence the platform errors loudly, so it should COUNT — but
+  #   CAPPED (require ≥3 completed distinct outputs so a trail can't be all blocks), and the block
+  #   REASON (qa_flags) must be visible to the Part 11 certifier. Backend (loosen link eligibility +
+  #   two-part gate: total≥5 AND completed≥3 + new count_completed_dry_run_evidence + qa_reason in
+  #   trail response) + FE (trail card counts blocked, shows reason). Depends on 17-10 (blocked bundle
+  #   run only carries a distinct hash because 17-10 emits one). No migration; OpenAPI response-shape
+  #   change (regen api-spec.json). failed/cancelled stay excluded (infra/user events, not a verdict).
+  17-11-blocked-runs-count-as-dry-run-evidence: ready-for-dev
