@@ -24,7 +24,7 @@ status_note: >
 
 # Story 17.9: Cost Consumers Read the New States
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -178,62 +178,62 @@ invariant (parent=0, children carry cost) must still hold after reconciliation.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Backend: widen `job_service.list_jobs` and thread the flag** (AC: 3)
-  - [ ] `app/services/job_service.py`: add `InvocationResult.cost_is_estimated` to the list select
+- [x] **Task 1 — Backend: widen `job_service.list_jobs` and thread the flag** (AC: 3)
+  - [x] `app/services/job_service.py`: add `InvocationResult.cost_is_estimated` to the list select
         (`:342-346`); update the return-type annotation (`:279`) to
         `tuple[list[tuple[InvocationJob, str | None, Decimal | None, bool | None]], int]`.
-  - [ ] `app/api/v1/jobs.py:155-158`: unpack the 4-tuple; add `"cost_is_estimated":
+  - [x] `app/api/v1/jobs.py:155-158`: unpack the 4-tuple; add `"cost_is_estimated":
         cost_is_estimated` to the `model_copy(update={...})`.
-  - [ ] `app/api/v1/client.py:240`: unpack the 4-tuple, dropping BOTH cost values
+  - [x] `app/api/v1/client.py:240`: unpack the 4-tuple, dropping BOTH cost values
         (`for job, skill_name, _cost_usd, _cost_is_estimated in rows`); extend the IP-safety
         comment at `:238-239` to name the flag.
-  - [ ] Update the two DIRECT `job_service.list_jobs` callers in tests that unpack the 3-tuple —
+  - [x] Update the two DIRECT `job_service.list_jobs` callers in tests that unpack the 3-tuple —
         `tests/integration/api/test_jobs.py:1319` (`for job, _, _ in node_only_rows`) and `:1338`
         (`for job, _, _ in rows`, the Story 16.6 AND-composition test). These are the only other
         `list_jobs` call sites in the repo (production callers are exactly `jobs.py:144` and
         `client.py:223`). `tests/unit/services/test_job_service.py` has no `list_jobs` calls and
         is unaffected.
-- [ ] **Task 2 — Backend: schema exposure** (AC: 3, 6)
-  - [ ] `app/schemas/job.py`: add `cost_is_estimated: bool | None = None` to `JobResult` (after
+- [x] **Task 2 — Backend: schema exposure** (AC: 3, 6)
+  - [x] `app/schemas/job.py`: add `cost_is_estimated: bool | None = None` to `JobResult` (after
         `:68`) and `JobSummary` (after `:179`), each with a short AD-5 docstring line
         (`true`=provisional / `false`+non-NULL=authoritative / `None`=no result row yet). No
         serializer (bool, not Decimal). Do NOT touch the `ClientJob*` schemas (`:215-283`).
-  - [ ] `app/api/v1/jobs.py:301-310` (`get_job`): populate from `job.result.cost_is_estimated`
+  - [x] `app/api/v1/jobs.py:301-310` (`get_job`): populate from `job.result.cost_is_estimated`
         exactly where `cost_usd` is read (`:309`); confirm the queued-job path leaves it `None`.
-  - [ ] Regenerate `docs/api-spec.json` (`python scripts/export_openapi.py`); verify the diff is
+  - [x] Regenerate `docs/api-spec.json` (`python scripts/export_openapi.py`); verify the diff is
         isolated to the two schemas (AC6) — this is the chain's one owned OpenAPI diff.
-- [ ] **Task 3 — Backend: analytics invariant verification tests** (AC: 1)
-  - [ ] In `tests/integration/api/test_analytics.py`, extend `_seed_invocation_result` (`:217`)
+- [x] **Task 3 — Backend: analytics invariant verification tests** (AC: 1)
+  - [x] In `tests/integration/api/test_analytics.py`, extend `_seed_invocation_result` (`:217`)
         with a `cost_is_estimated` kwarg (default matching today's behavior) and add the three AC1
         tests (fan-out-parent+reconciled-children no-double-count; estimated+reconciled mixed sum;
         NULL-cost estimated row contributes 0 without error). Model them on the existing cost tests
         (`:507-856`).
-  - [ ] Confirm `analytics_service.py` + `schemas/analytics.py` show zero diff (`git diff --stat`).
-- [ ] **Task 4 — Backend: client IP-safety re-assertion** (AC: 3)
-  - [ ] Extend `test_client_jobs_list_priced_job_has_no_cost_field` (`test_client_surface.py:2296`)
+  - [x] Confirm `analytics_service.py` + `schemas/analytics.py` show zero diff (`git diff --stat`).
+- [x] **Task 4 — Backend: client IP-safety re-assertion** (AC: 3)
+  - [x] Extend `test_client_jobs_list_priced_job_has_no_cost_field` (`test_client_surface.py:2296`)
         and `test_client_job_detail_priced_job_has_no_cost_field` (`:2319`) to include
         `cost_is_estimated` in the forbidden-strings assertion (`:2336` pattern); seed the row with
         `cost_is_estimated=True` so the test has teeth.
-- [ ] **Task 5 — Frontend: types + indicator** (AC: 5)
-  - [ ] `src/api/jobs.ts`: `cost_is_estimated: boolean | null` on `JobResult` (insert after `:57`
+- [x] **Task 5 — Frontend: types + indicator** (AC: 5)
+  - [x] `src/api/jobs.ts`: `cost_is_estimated: boolean | null` on `JobResult` (insert after `:57`
         — `cost_usd` is the interface's LAST field at `:57` and `:58` is the closing brace) and
         `JobSummary` (after `:119`), with the AD-5 comment convention the file already uses
         (`:56`). No hook/mapper change needed — `getJob`/`listJobs` return parsed JSON directly
         (`:160-168`).
-  - [ ] `RunConsole.tsx` cost card (`:1378-1400`): render the indicator as a sibling node of the
+  - [x] `RunConsole.tsx` cost card (`:1378-1400`): render the indicator as a sibling node of the
         cost span (`:1382`) when `job.result.cost_is_estimated === true`. Suggested shape: a muted
         `<span className="text-[11px] text-faint">estimated</span>` (match the panel's existing
         muted-label styling); a `title` tooltip like "Provisional estimate — reconciled with
         LangSmith shortly" is welcome. Plain text preferred over an icon (see AC5 icon trap).
-  - [ ] `JobsHistory.tsx` detail panel (`:81-103`): same indicator next to the cost row (`:85`).
+  - [x] `JobsHistory.tsx` detail panel (`:81-103`): same indicator next to the cost row (`:85`).
         The table row (`:214`) and header (`:324`) stay untouched (D3).
-- [ ] **Task 6 — Frontend: tests** (AC: 5)
-  - [ ] `RunConsole.test.tsx`: extend the Story 15.2 cost block (`:1283-1393`) — indicator present
+- [x] **Task 6 — Frontend: tests** (AC: 5)
+  - [x] `RunConsole.test.tsx`: extend the Story 15.2 cost block (`:1283-1393`) — indicator present
         for a `cost_is_estimated: true` fixture; absent for `false` and for `null`; existing
         `$0.00`/`—`/no-`$NaN` assertions still pass unmodified.
-  - [ ] `JobsHistory.test.tsx`: same coverage on the detail panel (`:200-304` block); add
+  - [x] `JobsHistory.test.tsx`: same coverage on the detail panel (`:200-304` block); add
         `cost_is_estimated` to the fixtures (`:73,:87` and the detail fixture at `:250-253`).
-  - [ ] Fixture reality check: `tsc` will NOT enumerate the fixtures for you — every existing
+  - [x] Fixture reality check: `tsc` will NOT enumerate the fixtures for you — every existing
         job fixture bypasses the type (`as unknown as JobReadWithResult` casts throughout
         `RunConsole.test.tsx` / `JobsHistory.test.tsx`; untyped `mockJobs`/`mockRuns` literals in
         `JobsHistory.test.tsx:60-89` and `RecentRunsPanel.test.tsx:41-70`; `as never` mocks in
@@ -241,14 +241,14 @@ invariant (parent=0, children carry cost) must still hold after reconciliation.
         the forced-edit count is ~0 — and manually add `cost_is_estimated` to the fixtures your
         new/extended tests exercise. Untouched legacy fixtures stay green because an absent field
         reads `undefined` → no indicator (the intended `false`-like rendering).
-- [ ] **Task 7 — Gates + scope confirmation** (AC: 6, 7)
-  - [ ] Backend in-container (see Testing): `ruff check .`; affected suites (`test_jobs.py`,
+- [x] **Task 7 — Gates + scope confirmation** (AC: 6, 7)
+  - [x] Backend in-container (see Testing): `ruff check .`; affected suites (`test_jobs.py`,
         `test_client_surface.py`, `test_analytics.py`, `test_job_service.py`) + full regression on
         a fresh `velara_test`; OpenAPI regen + diff isolation check.
-  - [ ] Frontend: `tsc --noEmit`, eslint, `vitest run` (expect ~807 baseline tests + new ones).
-  - [ ] `git status --short` in BOTH subrepos; confirm this story's File List contains ONLY this
+  - [x] Frontend: `tsc --noEmit`, eslint, `vitest run` (expect ~807 baseline tests + new ones).
+  - [x] `git status --short` in BOTH subrepos; confirm this story's File List contains ONLY this
         story's edits (17-8's uncommitted files excluded and flagged to the reviewer).
-  - [ ] Record AC7 as a flagged manual step alongside 17-6 AC6 / 17-8 AC9 (one live LangSmith
+  - [x] Record AC7 as a flagged manual step alongside 17-6 AC6 / 17-8 AC9 (one live LangSmith
         session closes all three).
 
 ## Dev Notes
@@ -508,14 +508,151 @@ on the interface and fixture edits are manual, scoped to the tests you touch.
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (Claude Opus 4.8, 1M context) — bmad-dev-story workflow.
+
 ### Debug Log References
+
+- **OpenAPI diff isolation (AC6):** Regenerated the spec via the container's
+  `scripts/export_openapi.py` (`PYTHONPATH=/app`). Because the baked image has no
+  bind mount, used the clean pre/post methodology: extracted pristine HEAD copies
+  of the 4 edited backend files, `docker cp`'d them in, regenerated a BASELINE
+  spec, then restored the edited files and regenerated the CHANGED spec. `diff`
+  of the two showed **exactly** two additive 11-line blocks — the
+  `cost_is_estimated` `anyOf[boolean,null]` property on `JobResult` and
+  `JobSummary`, nothing else. A per-schema JSON comparison confirmed the only two
+  changed schemas are `JobResult` and `JobSummary` (no analytics/client/cert
+  drift). Tracked `docs/api-spec.json` updated → `git diff --stat` = 22 insertions,
+  0 deletions.
+- **Container test env (memory: project-velara-api-container-test-env /
+  project-container-stale-baked-test-file):** recreated `velara_test` clean
+  (`DROP … WITH FORCE` + `CREATE` + `alembic upgrade head` → 0031 applied, which
+  provides `cost_is_estimated`), ran all suites with `set -a; . ./.env.test`
+  (AUTH_BACKEND=dev). `docker cp`'d every edited source/test file in and
+  grep-verified the new symbol before trusting results. Also `docker cp`'d 17-8's
+  6 uncommitted leftovers (incl. `cost_reconciler.py`, absent from the baked
+  image) so the full suite's reconciler-test imports resolved — built on top of
+  them, did NOT absorb them into this story.
+- **Full backend regression:** `pytest tests/` → **1726 passed, 3 skipped, 0
+  failures** in 161s (the 3 skips are the standard Postgres/env-gated ones; the
+  documented `test_config.py::test_default_value_is_false` env-leak did NOT
+  surface on this clean run).
+- **Frontend gates:** `tsc --noEmit` clean; `eslint` 0 errors (2 PRE-EXISTING
+  `react-refresh/only-export-components` warnings on JobsHistory.tsx:13,:25 —
+  the exported helper fns predate this story, untouched); `vitest run` → **814
+  passed** (807 baseline + 7 new), 64 files, 0 regressions.
+- **One test fix during dev:** the two new JobsHistory detail-panel tests
+  initially used `getByText('$0.02')`, which is ambiguous — `mockJobs[0].cost_usd
+  = 0.0175` renders `$0.02` in BOTH the table row and the detail panel (same
+  reason the existing detail test at :232 avoids that assertion). Switched to
+  `getAllByText('$0.02').length > 0`; the `estimated` indicator remains the
+  unambiguous assertion. RunConsole tests were unaffected (that component renders
+  no table).
 
 ### Completion Notes List
 
+Implemented the full-stack, read-side exposure of the AD-5 cost states. Summary
+by AC:
+
+- **AC1 (analytics leaf-sum survives reconciler):** `analytics_service.py` +
+  `schemas/analytics.py` at **zero diff** (verified `git diff --stat` empty).
+  Added 3 integration tests proving, against post-reconciler-shaped rows: (a) a
+  fan-out parent (excluded via `_invocation_where`'s `outcome.isnot(None)`) plus
+  two reconciled children sums to exactly the children's total — no double count;
+  (b) a mixed estimated+reconciled population sums both (estimate-blind SUM); (c)
+  a NULL-cost estimated (unknown-model) row contributes $0 via the SUM-level
+  COALESCE and never errors. All green.
+- **AC2 (decline "includes N estimated"):** declined per D1 — no analytics
+  schema/FE change shipped. Rationale recorded in D1 and here.
+- **AC3 (jobs API exposes flag; client portal does NOT):** `JobResult` and
+  `JobSummary` each gained `cost_is_estimated: bool | None = None` (no
+  serializer — plain bool). `list_jobs` widened to a 4-tuple (select +
+  return-type annotation + docstring); all 4 unpack sites updated (2 production:
+  `jobs.py`, `client.py`; 2 test: `test_jobs.py:1319,:1338`). `client.py` drops
+  the new value alongside cost with an extended IP-safety comment. 5 new backend
+  tests: detail exposes true/false; legacy `false`+NULL renders correctly (D4);
+  unknown-model `true`+NULL valid; list rows expose the flag incl. queued→`None`.
+- **AC4 (certification confirmation):** N/A-by-construction (D2) — certification
+  stores no cost anywhere; no code change. Confirmed via the receipts in Dev
+  Notes. The spine's Deferred snapshot item is closed for Epic 17.
+- **AC5 (FE indicator; NULL never $0):** `jobs.ts` types gained
+  `cost_is_estimated: boolean | null` (required, matching the story's
+  fixture-reality guidance — 0 forced edits). RunConsole cost card and
+  JobsHistory detail panel each render a muted `<span>estimated</span>` **iff
+  `cost_is_estimated === true`**, as a SEPARATE DOM sibling of the cost value
+  (exact-match cost assertions intact). `false`/`null`/absent → no indicator.
+  NULL cost still renders "—" via untouched `fmtCost`. No emoji/icon — plain
+  muted text (per no-emoji rule + the AC5 icon trap). Third render surface
+  (`RecentRunsPanel` reusing JobsHistory's `JobDetailPanel`, Story 16.6) inherits
+  the indicator by design. 7 new FE tests.
+- **AC6 (gates + OpenAPI diff isolation + zero scope drift):** all green (see
+  Debug Log). OpenAPI diff = exactly the two job schemas. `git status --short`
+  in both subrepos shows ONLY this story's files plus the pre-existing 17-8
+  leftovers.
+- **AC7 (live spot-check):** **FLAGGED MANUAL** — no live LangSmith key in CI
+  (same posture as 17-6 AC6 / 17-8 AC9). The automated suite proves the rendering
+  with fixture data. As the LAST story of the 17-4..17-9 chain, this owes a single
+  combined live-LangSmith session that can close 17-6 AC6 + 17-8 AC9 + 17-9 AC7
+  together before Epic 17 is closed.
+
+**⚠️ Reviewer note — baseline trap:** the velara-api tree at baseline `b3afe21`
+ALSO holds Story 17-8's 6 done-but-uncommitted files (`M celery_app.py`,
+`M execution_tasks.py`, `M tests/unit/workers/test_execution_tasks.py`,
+`?? cost_reconciler.py`, `?? tests/integration/workers/test_cost_reconciler.py`,
+`?? tests/unit/workers/test_cost_reconciler.py`). They are EXCLUDED from this
+story's File List below; separate the diffs at commit time (per
+never-push-subrepos, only code-review commits the subrepos).
+
+**Decisions (documented, not silently picked):** D1 (decline analytics
+"includes N estimated"), D2 (certification N/A-by-construction), D3 (nullable
+wire flag + detail-panels-only indicator), D4 (legacy `false`+NULL renders
+unchanged) — all as specified in the story, no deviations.
+
 ### File List
+
+**velara-api** (this story's edits only — 17-8 leftovers excluded, see reviewer
+note):
+- `app/services/job_service.py` — `list_jobs` 4-tuple: select + return-type
+  annotation + docstring.
+- `app/api/v1/jobs.py` — list 4-tuple unpack + `model_copy` update; `get_job`
+  detail populates `cost_is_estimated`.
+- `app/api/v1/client.py` — 4-tuple unpack dropping the new value; extended
+  IP-safety comment.
+- `app/schemas/job.py` — `cost_is_estimated: bool | None = None` on `JobResult`
+  and `JobSummary` (with AD-5 docstrings; no serializer).
+- `docs/api-spec.json` — regenerated; diff isolated to the two job schemas.
+- `tests/integration/api/test_jobs.py` — helper `cost_is_estimated` kwarg; 5 new
+  exposure tests; 2 arity-fix unpacks.
+- `tests/integration/api/test_client_surface.py` — helper `cost_is_estimated`
+  kwarg; 2 IP tests seeded `True` + flag added to forbidden strings.
+- `tests/integration/api/test_analytics.py` — `_seed_invocation_result`
+  `cost_is_estimated` kwarg; 3 new AC1 invariant tests.
+
+**velara-web:**
+- `src/api/jobs.ts` — `cost_is_estimated: boolean | null` on `JobResult` +
+  `JobSummary`.
+- `src/features/run/components/RunConsole.tsx` — estimated indicator on the cost
+  card.
+- `src/features/run/components/JobsHistory.tsx` — estimated indicator on the
+  detail panel.
+- `src/features/run/components/RunConsole.test.tsx` — 4 new indicator tests.
+- `src/features/run/components/JobsHistory.test.tsx` — 3 new indicator tests.
 
 ## Change Log
 
+- 2026-07-30: **Implemented by dev-story (Status → review).** Read-side exposure of the AD-5 cost
+  states landed full-stack: `list_jobs` widened to a 4-tuple threading `cost_is_estimated`;
+  `JobResult`/`JobSummary` gained the nullable bool (no serializer); `docs/api-spec.json`
+  regenerated with the diff isolated to exactly those two schemas (verified via clean pre/post
+  regen-and-diff). Client portal drops the new value at the unpack (IP boundary preserved + tests
+  given teeth by seeding `True`). Analytics service/schemas at zero diff; 3 new AC1 invariant tests
+  prove the leaf-sum survives reconciliation. FE indicator ("estimated") added as a separate DOM
+  node on the RunConsole cost card + JobsHistory detail panel, rendered iff `=== true`, no
+  emoji/icon. D1–D4 followed exactly. Gates: ruff clean; backend 1726 passed / 3 skipped / 0
+  failures on a fresh `velara_test`; FE tsc clean, eslint 0 errors, vitest 814 passed (807 baseline
+  + 7 new). AC7 (live LangSmith spot-check) flagged MANUAL — one combined session closes 17-6 AC6 +
+  17-8 AC9 + 17-9 AC7 before Epic 17 closes. ⚠️ 17-8's 6 uncommitted leftover files remain in the
+  velara-api tree, excluded from this story's File List and flagged for reviewer-time diff
+  separation.
 - 2026-07-30: Story drafted from STUB by create-story. Governing AD-5/AD-9. Both dependencies
   (17-7 estimate write, 17-8 reconciler) done, so both wire states exist. Scope fixed by two
   parallel live-source sweeps (velara-api read-consumers/schemas/certification; velara-web render

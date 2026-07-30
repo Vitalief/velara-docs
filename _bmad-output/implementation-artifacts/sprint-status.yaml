@@ -876,7 +876,17 @@ development_status:
   #   done-but-uncommitted in velara-api — excluded from 17-9's File List, reviewer separates
   #   diffs at commit time.
   # 2026-07-30: 17-9-cost-consumers-read-new-states moved to in-progress (dev-story).
-  17-9-cost-consumers-read-new-states: in-progress
+  # 2026-07-30: 17-9-cost-consumers-read-new-states moved to review (dev-story). Read-side
+  #   AD-5 exposure landed full-stack: list_jobs 4-tuple threads cost_is_estimated; JobResult/
+  #   JobSummary expose the nullable bool (no serializer); api-spec.json diff isolated to exactly
+  #   those two schemas. Client portal drops the value at the unpack (IP tests seeded True). Analytics
+  #   service/schemas zero-diff + 3 AC1 leaf-sum-survives-reconciler tests. FE "estimated" indicator
+  #   (separate DOM node, iff ===true, no emoji) on RunConsole cost card + JobsHistory detail panel.
+  #   Gates: ruff clean; backend 1726 passed/3 skipped/0 fail (fresh velara_test); FE tsc clean,
+  #   eslint 0 err, vitest 814 passed (807+7). AC7 live LangSmith check flagged MANUAL — one combined
+  #   session closes 17-6 AC6 + 17-8 AC9 + 17-9 AC7 before epic close. ⚠️ 17-8's 6 uncommitted files
+  #   still in the velara-api tree — excluded from 17-9's File List, reviewer separates diffs.
+  17-9-cost-consumers-read-new-states: review
   # 2026-07-30: 17-10-bundle-output-sha256-for-cert-gate drafted (create-story) → ready-for-dev.
   #   Follow-up to 17-3 closing its knowingly-deferred "NULL-hash bundle skills can't be technically
   #   certified" watch item. Field-diagnosed while certifying the velara-protocol-extractor bundle:
