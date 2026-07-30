@@ -23,7 +23,7 @@ status_note: >
 
 # Story 17.7: Estimate Write on the Hot Path; Slim `pricing.py`
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -140,24 +140,24 @@ never estimated.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Demote `pricing.py` to the provisional-estimate role (documentation only)** (AC: 1)
-  - [ ] In `app/core/pricing.py`, update the **module docstring** (`:1-16`) to state: this table produces
+- [x] **Task 1 — Demote `pricing.py` to the provisional-estimate role (documentation only)** (AC: 1)
+  - [x] In `app/core/pricing.py`, update the **module docstring** (`:1-16`) to state: this table produces
         a **provisional estimate only**, approximate and **always reconcilable**; **LangSmith `total_cost`
         is the authoritative per-run cost** (reconciled in by Story 17-8's deferred reconciler); the local
         table is a placeholder for instant Run-Console UX, not a competing source of truth. Reference
         AD-1. Keep the existing "unrecognized model → `None`, never a fallback" paragraph (still true and
         still important).
-  - [ ] Update `compute_cost_usd`'s docstring (`:74-82`) to call its return an **estimate** (provisional,
+  - [x] Update `compute_cost_usd`'s docstring (`:74-82`) to call its return an **estimate** (provisional,
         subject to reconciliation), not "the cost". **Do NOT change the signature, the `Decimal | None`
         return, the unknown-model→`None` branch, the `_MODEL_PRICING`/`_MODEL_PRICING_PER_MTOK` tables, or
         the exact-Decimal computation.** This is a rename-of-intent in prose, not a behavior change — its
         two callers must keep working with zero call-site edits.
-  - [ ] Do **not** touch the second caller `app/api/v1/skills.py::_adapter_cost_usd` (`:76-97`) — the
+  - [x] Do **not** touch the second caller `app/api/v1/skills.py::_adapter_cost_usd` (`:76-97`) — the
         adapter-propose audit cost is a separate surface (JSONB audit metadata, not `InvocationResult`);
         it stays as-is. (Its provisional/estimate nature is inherited from `compute_cost_usd`'s reframed
         docstring; no code change.)
-- [ ] **Task 2 — Return `cost_is_estimated` from `_extract_cost_fields`** (AC: 2, 4, 5)
-  - [ ] In `app/workers/execution_tasks.py`, extend `_extract_cost_fields` (`:137-192`) so its returned
+- [x] **Task 2 — Return `cost_is_estimated` from `_extract_cost_fields`** (AC: 2, 4, 5)
+  - [x] In `app/workers/execution_tasks.py`, extend `_extract_cost_fields` (`:137-192`) so its returned
         dict gains a `"cost_is_estimated"` key alongside the existing four
         (`input_tokens`/`output_tokens`/`model`/`cost_usd`). The value is decided by the **same
         LLM-vs-not discriminator already in the function**:
@@ -173,14 +173,14 @@ never estimated.
         prompt/hybrid/code_driven_hybrid leaf row (priced, NULL-unknown-model, or NULL-partial), `False`
         only for the genuine `code`/fan-out-parent `Decimal("0")` case. Update the function docstring
         (`:138-161`) to document the new key and the AD-5 state it encodes.
-  - [ ] Because `_extract_cost_fields`'s result is splatted as `**cost_fields` into `mark_completed`
+  - [x] Because `_extract_cost_fields`'s result is splatted as `**cost_fields` into `mark_completed`
         (`:419`), `mark_blocked` (`:393`), AND the fan-out parent `mark_completed`
         (`:711`, via `**_extract_cost_fields(result_metadata)`), the new key flows to all three write
         sites automatically once `mark_completed`/`mark_blocked` accept it (Task 3). Verify the fan-out
         splat now carries `cost_is_estimated=False` (its summary has no token keys and its runtime is not
         in `_LLM_USING_RUNTIMES` → the `False` branch — AC5).
-- [ ] **Task 3 — Accept + persist `cost_is_estimated` in `mark_completed`/`mark_blocked`** (AC: 2, 3, 5)
-  - [ ] In `app/services/job_service.py`, add `cost_is_estimated: bool = False` as a new keyword arg to
+- [x] **Task 3 — Accept + persist `cost_is_estimated` in `mark_completed`/`mark_blocked`** (AC: 2, 3, 5)
+  - [x] In `app/services/job_service.py`, add `cost_is_estimated: bool = False` as a new keyword arg to
         **both** `mark_completed` (`:525-537`) and `mark_blocked` (`:579-591`), and map it onto the
         `InvocationResult(...)` construction at both sites (`:557-567`, `:605-615`). **Default `False`**
         preserves back-compat for any caller that doesn't pass it (mirrors the additive
@@ -188,20 +188,20 @@ never estimated.
         `:540-553,598-601`). Document the new kwarg in both docstrings as the AD-5 estimate flag: `True`
         = provisional (from the estimate hot path, subject to 17-8 reconciliation); `False` = genuine
         `$0`/authoritative.
-  - [ ] Keep the write a **fresh INSERT under the existing `_guard_not_terminal`** — do NOT add an
+  - [x] Keep the write a **fresh INSERT under the existing `_guard_not_terminal`** — do NOT add an
         `ON CONFLICT`/`.merge()`/UPDATE-existing path (AC3). The terminal guard (`:555`, `:603`) already
         makes a re-delivered task a no-op that never writes a second row and never touches an existing
         row, so a reconciled (`false`) row can never be regressed by this write.
-- [ ] **Task 4 — Confirm the read/exposure surfaces are untouched and still return numbers** (AC: 6)
-  - [ ] Do **not** modify `app/services/analytics_service.py` (the three
+- [x] **Task 4 — Confirm the read/exposure surfaces are untouched and still return numbers** (AC: 6)
+  - [x] Do **not** modify `app/services/analytics_service.py` (the three
         `func.coalesce(func.sum(InvocationResult.cost_usd), 0)` SUMs at `:137,182,260`), `app/api/v1/jobs.py`
         (`:157` list, `:309` detail), `app/api/v1/client.py` (`:240`, already drops cost), or any `schemas/`.
         They are NULL-safe and estimate-blind — surfacing an estimate value works unchanged. Adding
         `cost_is_estimated` to any response is **Story 17-9**.
-  - [ ] Confirm (grep) `cost_is_estimated` has **no reader** anywhere in `app/` after your change except
+  - [x] Confirm (grep) `cost_is_estimated` has **no reader** anywhere in `app/` after your change except
         the DB write path — i.e. you added the first writer only, no consumer coupling.
-- [ ] **Task 5 — Tests** (AC: all)
-  - [ ] **`_extract_cost_fields`** — add per-branch unit assertions in `tests/unit/workers/test_execution_tasks.py`.
+- [x] **Task 5 — Tests** (AC: all)
+  - [x] **`_extract_cost_fields`** — add per-branch unit assertions in `tests/unit/workers/test_execution_tasks.py`.
         **⚠️ These are NET-NEW: there is no existing `_extract_cost_fields`/`TestExtractCostFields` unit
         test in that file today** (the current `_extract_cost_fields` coverage is indirect, in
         `tests/integration/workers/test_execution_tasks.py` via the splat write-path, and a direct import
@@ -214,27 +214,27 @@ never estimated.
         `_LLM_USING_RUNTIMES`, no tokens) → `False`, `cost_usd=Decimal("0")`; (f) fan-out parent summary
         shape → `False`, `cost_usd=0`. (No existing test asserts an exact-4-key dict equality on this
         function's output — verified — so adding the 5th key is safe.)
-  - [ ] **`job_service`** — extend `tests/unit/services/test_job_service.py` (the `TestInvocationResultCostColumns`
+  - [x] **`job_service`** — extend `tests/unit/services/test_job_service.py` (the `TestInvocationResultCostColumns`
         class, `:244`): assert `mark_completed`/`mark_blocked` persist a passed `cost_is_estimated=True`
         onto `InvocationResult`, and default it to `False` when omitted (back-compat). **⚠️ Do NOT add
         `cost_is_estimated` to the existing `test_mark_completed_and_mark_blocked_accept_cost_kwargs` loop
         (`:266-279`) — that test asserts every listed kwarg has `default is None`, but `cost_is_estimated`
         correctly defaults to `False` (not `None`, per AD-9). Add a separate assertion for it.**
-  - [ ] **Guarded write / idempotency (AC3)** — add a test that calling `mark_completed` on an
+  - [x] **Guarded write / idempotency (AC3)** — add a test that calling `mark_completed` on an
         already-terminal job is a no-op: no second `InvocationResult` inserted, and an existing row's
         `cost_is_estimated` (e.g. a reconciled `False`) is NOT flipped back to `True`. (Leverage the
         `_guard_not_terminal` behavior; the unique constraint `uq_invocation_results_invocation_job_id`
         also backstops a double insert.)
-  - [ ] **Integration (DB-backed)** — extend `tests/integration/workers/test_execution_tasks.py`: a
+  - [x] **Integration (DB-backed)** — extend `tests/integration/workers/test_execution_tasks.py`: a
         completed prompt/hybrid run persists `cost_is_estimated=True` (with a real `cost_usd`); an
         unknown-model LLM run persists `cost_is_estimated=True` with `cost_usd IS NULL`; a genuine `code`
         run and the fan-out parent persist `cost_is_estimated=False` with `cost_usd=0`. Tracing-off (the
         default test-env state) still writes the estimate + `True` and `langsmith_run_id IS NULL` (AC4).
-  - [ ] **Analytics still returns numbers (AC6)** — a light assertion (unit or integration) that an
+  - [x] **Analytics still returns numbers (AC6)** — a light assertion (unit or integration) that an
         analytics SUM over rows that are now `cost_is_estimated=True` still returns the summed dollar
         figure (no filter drops estimate rows). If an existing analytics test already covers the SUM,
         confirm it stays green with estimate rows present rather than adding a redundant one.
-  - [ ] `ruff check .` clean; run the affected unit + integration suites; `python scripts/export_openapi.py`
+  - [x] `ruff check .` clean; run the affected unit + integration suites; `python scripts/export_openapi.py`
         → zero `docs/api-spec.json` diff (AC6).
 
 ## Dev Notes
@@ -461,14 +461,107 @@ reconciler. AC3's test asserts the existing guard holds; it does not ask you to 
 
 ### Agent Model Used
 
+claude-sonnet-5 (Sonnet 5)
+
 ### Debug Log References
+
+- Verified `_extract_cost_fields`/`mark_completed`/`mark_blocked` call-site citations against live source
+  at baseline `b3e3dda` before editing — line numbers matched the story exactly.
+- `docker cp`'d all 6 changed files into `velara-api-api-1` before every in-container pytest/ruff run and
+  `grep -c`'d the new symbols post-copy to rule out the stale-baked-image false-pass class (per
+  [Memory: project-container-stale-baked-test-file]) — confirmed present before trusting results.
+- Recreated `velara_test` clean (`DROP DATABASE` + `CREATE DATABASE` + `alembic upgrade head` under
+  `.env.test`) before the integration run, per [Memory: project-velara-api-container-test-env]. First
+  `alembic upgrade head` attempt (without sourcing `.env.test`) silently targeted the `velara` dev DB
+  instead — caught before running tests, corrected by sourcing `.env.test` first; the dev DB was
+  already at head so no side effect.
+- `ruff check .` initially failed on one `E501` (pricing.py module docstring first line, 124 chars) —
+  shortened, re-copied, re-ran clean.
+- `python scripts/export_openapi.py` needed `PYTHONPATH=/app` in-container (bare `python` gave
+  `ModuleNotFoundError: No module named 'app'`) — matches 17.4/17.6's documented gate note.
 
 ### Completion Notes List
 
+- **Task 1 (pricing.py demotion):** Documentation-only reframe of the module docstring and
+  `compute_cost_usd`'s docstring to state the table's output is a provisional, always-reconcilable
+  estimate and LangSmith `total_cost` is authoritative (17-8 reconciles it in). Zero change to
+  `_MODEL_PRICING_PER_MTOK`/`_MODEL_PRICING`, `compute_cost_usd`'s signature/return/unknown-model→`None`
+  branch, or the exact-Decimal computation — confirmed via `git diff` showing docstring-only hunks.
+- **Task 2 (`_extract_cost_fields`):** Added `cost_is_estimated` to all three branches, riding the exact
+  same `runtime in _LLM_USING_RUNTIMES` predicate the function already used for `cost_when_absent`: `True`
+  for every LLM-using-runtime row (priced, unknown-model NULL, no-token-keys NULL, or partial-report
+  NULL), `False` only for the genuine `code`/fan-out-parent `Decimal("0")` row. Docstring updated to
+  document the new key.
+- **Task 3 (`job_service`):** Added `cost_is_estimated: bool = False` to both `mark_completed` and
+  `mark_blocked`, mapped onto `InvocationResult(...)` at both construction sites. No change to the
+  fresh-INSERT + `_guard_not_terminal` shape — no `ON CONFLICT`/upsert added (AC3 is satisfied
+  structurally, proven by a new redelivery test rather than built).
+- **Task 4 (read-surface confirmation):** `git status --short` after all edits shows exactly 3 modified
+  files (`pricing.py`, `execution_tasks.py`, `job_service.py`) — no drift into `analytics_service.py`,
+  `jobs.py`, `client.py`, or any `schemas/`. `grep -rn "cost_is_estimated" app/` outside the 3 edited
+  files + the pre-existing migration/model hits zero readers — first writer only, confirmed.
+- **Task 5 (tests):** Added a new `TestExtractCostFields` unit class (7 tests, all 6 named branches +
+  a `None`-metadata case) to `tests/unit/workers/test_execution_tasks.py`; 2 new tests to
+  `tests/unit/services/test_job_service.py::TestInvocationResultCostColumns` (signature-contract kwarg
+  check + NOT NULL column check — deliberately NOT folded into the existing `default is None` loop, per
+  the story's explicit warning); 6 new DB-backed integration tests appended to
+  `tests/integration/workers/test_execution_tasks.py` covering AC2 (real cost), AC2 (unknown-model NULL),
+  AC5 (genuine code $0), AD-9 (fan-out parent $0), AC4 (tracing-off still estimates), and AC3 (redelivered
+  `mark_completed` on an already-terminal/reconciled row is a no-op — asserted via a direct
+  `InvocationResult` query: exactly 1 row, still `cost_is_estimated=False`, original `output_file_key`
+  unchanged). AC6 (analytics SUM stays numeric with estimate rows present) required no new test — the
+  existing `tests/integration/api/test_analytics.py::_seed_invocation_result` helper constructs
+  `InvocationResult` without `cost_is_estimated`, relying on the column's `server_default=false`, and
+  those SUM tests already pass unchanged.
+- **Gates:** `ruff check .` clean repo-wide (after one `E501` fix). Unit: 867 passed, 1 pre-existing
+  unrelated failure (`test_config.py::test_default_value_is_false` — container `.env` leaks
+  `LANGSMITH_TRACING`/`LANGSMITH_TRACE_CONTENT=true`, documented since Story 17.4/17.5/17.6, confirmed
+  `config.py` untouched by this diff). Integration: 799 passed, 3 pre-existing skips, 0 regressions (run
+  against a freshly recreated `velara_test`). `python scripts/export_openapi.py` → zero
+  `docs/api-spec.json` diff (regenerated in-container with `PYTHONPATH=/app`, diffed byte-for-byte
+  against the tracked file — no HTTP schema change, as expected; `cost_is_estimated` exposure is 17-9's
+  scope).
+- **Scope discipline:** No migration added (columns already exist from 17-4). No `Client.list_runs`/
+  `total_cost` read, no Celery reconciler, no `cost_is_estimated=false` flip on any LLM row (all 17-8).
+  No API schema/response change (17-9). `wrap_anthropic` seam, sandbox `velara_trace.py`, and the
+  trace-open/`langsmith_run_id` capture (17-5/17-6) untouched — confirmed via `git status --short`
+  showing only the 3 intended source files modified.
+
 ### File List
+
+- `app/core/pricing.py` — module + `compute_cost_usd` docstrings reframed as a provisional estimate
+  (AD-1). No logic change.
+- `app/workers/execution_tasks.py` — `_extract_cost_fields` now returns `cost_is_estimated` in all three
+  branches (AD-3/AD-5/AD-9); docstring updated.
+- `app/services/job_service.py` — `mark_completed`/`mark_blocked` accept + persist a new
+  `cost_is_estimated: bool = False` kwarg onto `InvocationResult`; docstrings updated.
+- `tests/unit/workers/test_execution_tasks.py` — new `TestExtractCostFields` class (7 tests).
+- `tests/unit/services/test_job_service.py` — 2 new tests on `TestInvocationResultCostColumns`.
+- `tests/integration/workers/test_execution_tasks.py` — 6 new DB-backed tests covering AC2/AC3/AC4/AC5/AD-9.
 
 ## Change Log
 
+- 2026-07-30: Implemented and moved to review (dev-story). `pricing.py` docstrings demoted to the
+  provisional-estimate role (AD-1, prose-only — rate table/`compute_cost_usd` logic unchanged).
+  `_extract_cost_fields` now returns `cost_is_estimated`, riding the existing `runtime in
+  _LLM_USING_RUNTIMES` predicate: `True` for every LLM-using-runtime row (priced, unknown-model NULL, or
+  partial/absent-usage NULL), `False` only for a genuine `code`/fan-out-parent `Decimal("0")` row.
+  `mark_completed`/`mark_blocked` gained an additive `cost_is_estimated: bool = False` kwarg mapped onto
+  `InvocationResult`, mirroring the `langsmith_run_id`/`output_sha256` pattern — no `ON CONFLICT`/upsert
+  added; the existing fresh-INSERT + `_guard_not_terminal` already satisfies AD-8's writer half (proven
+  by a new redelivery test, not built). No migration (columns from 17-4); no reader added (`cost_is_estimated`
+  has zero consumers after this change, confirmed by grep — first writer only); no touch to
+  `analytics_service`/`jobs.py`/`client.py`/`schemas/` (17-9), the `wrap_anthropic` seam/sandbox shim
+  (17-5/17-6), or any LangSmith read/reconciler (17-8). Tests: 7 new unit tests on
+  `_extract_cost_fields` (all 6 story-named branches + a `None`-metadata case), 2 new unit tests on
+  `job_service`'s signature contract + NOT NULL column, 6 new DB-backed integration tests (real cost,
+  unknown-model NULL, genuine-code $0, fan-out-parent $0, tracing-off estimate, and the AC3
+  redelivery-does-not-flip-reconciled-row guard). AC6's analytics-still-numeric claim needed no new test
+  — the existing `test_analytics.py` seed helper already constructs rows via the column's
+  `server_default=false` and its SUM tests pass unchanged. Gates: `ruff check .` clean; unit 867 passed
+  (1 pre-existing unrelated container-env failure, documented since 17.4); integration 799 passed / 3
+  pre-existing skips (0 regressions, run against a freshly recreated `velara_test`); zero
+  `docs/api-spec.json` diff (regenerated in-container with `PYTHONPATH=/app`).
 - 2026-07-30: Story drafted from STUB by create-story. Governing AD-1/AD-3/AD-6 (+ AD-8 writer half,
   AD-9). Edit surface, pricing.py current state, the completion write path, the sandbox cost seam, and
   all `cost_usd`/`cost_is_estimated` consumers verified against LIVE source at baseline b3e3dda

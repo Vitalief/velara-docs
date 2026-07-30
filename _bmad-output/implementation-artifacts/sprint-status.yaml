@@ -54,6 +54,20 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-30
+# 2026-07-30: 17-7-estimate-write-hot-path-slim-pricing moved to review (dev-story). pricing.py
+#   docstrings demoted to the provisional-estimate role (AD-1, prose-only). _extract_cost_fields
+#   returns cost_is_estimated riding the existing runtime-in-_LLM_USING_RUNTIMES predicate: True for
+#   every LLM-using-runtime row (priced/unknown-model-NULL/absent-or-partial-NULL), False only for
+#   genuine code/fan-out-parent $0. mark_completed/mark_blocked gained an additive
+#   cost_is_estimated=False kwarg mirroring langsmith_run_id/output_sha256 — no ON CONFLICT/upsert
+#   (fresh-INSERT + _guard_not_terminal already satisfies AD-8's writer half, proven by a new
+#   redelivery test). No migration (17-4's columns); zero readers added (first writer only, grep-
+#   confirmed); analytics/jobs/client/schemas (17-9), wrap_anthropic/sandbox shim (17-5/17-6), and any
+#   LangSmith read/reconciler (17-8) all untouched. Tests: 7 new _extract_cost_fields unit tests, 2 new
+#   job_service unit tests, 6 new DB-backed integration tests (incl. the AC3 redelivery-guard). Gates:
+#   ruff clean; unit 867 passed (1 pre-existing unrelated container-env failure, documented since
+#   17.4); integration 799 passed / 3 pre-existing skips, 0 regressions (fresh velara_test); zero
+#   api-spec.json diff.
 # 2026-07-30: 17-7-estimate-write-hot-path-slim-pricing moved to in-progress (dev-story).
 # 2026-07-30: 17-6-invocation-scoped-trace-sandbox-header-propagation → DONE (code-review). 3 parallel
 #   adversarial layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor): all 7 ACs satisfied,
@@ -750,6 +764,6 @@ development_status:
   #   confirmed all file:line citations + the three load-bearing scope claims against live source; folded
   #   in 2 test-guidance fixes (per-branch _extract_cost_fields unit tests are NET-NEW, not existing;
   #   don't extend test_job_service's default-is-None loop with the False-defaulting kwarg).
-  17-7-estimate-write-hot-path-slim-pricing: in-progress
+  17-7-estimate-write-hot-path-slim-pricing: review
   17-8-deferred-cost-reconciler-task: backlog
   17-9-cost-consumers-read-new-states: backlog
