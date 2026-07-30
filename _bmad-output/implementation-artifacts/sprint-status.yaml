@@ -862,4 +862,12 @@ development_status:
   #   emit output_sha256 = sha256(canonical_bytes) from run_code_driven_hybrid into result_metadata;
   #   the existing 17-3 worker→gate chain does the rest. Independent of cost stories 17-4..17-9
   #   (different code path). See deferred-work.md 2026-07-30 "CERT BLOCKER" entry for repro.
-  17-10-bundle-output-sha256-for-cert-gate: in-progress
+  # 2026-07-30: 17-10-bundle-output-sha256-for-cert-gate moved to review (dev-story). Backend-only,
+  #   no migration/API/FE: added `import hashlib` + output_sha256 = sha256(canonical_bytes) in
+  #   run_code_driven_hybrid Step 9 → top-level result_metadata["output_sha256"]. The existing 17.3
+  #   worker chain (_extract_output_sha256 → mark_completed/mark_blocked → InvocationResult.output_sha256)
+  #   carries it through unchanged (confirmed, no wiring change). Unblocks technical cert for the entire
+  #   code-driven-hybrid bundle skill class (COUNT(DISTINCT output_sha256) was 0 for bundles). Tests:
+  #   4 new unit (RED→GREEN) + extended e2e integration assertion; ruff clean; executor 52 / e2e 10 /
+  #   worker 25 / cert+exec-svc+executor unit 156 passed, 0 regressions. No backfill of prior NULL rows.
+  17-10-bundle-output-sha256-for-cert-gate: review
