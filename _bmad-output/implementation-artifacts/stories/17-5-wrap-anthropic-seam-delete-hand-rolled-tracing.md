@@ -16,7 +16,7 @@ status_note: >
 
 # Story 17.5: `wrap_anthropic` Seam — Delete Hand-Rolled Tracing
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -187,13 +187,13 @@ and both return wrapped clients.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Rewrite `anthropic_client.py` onto `wrap_anthropic`** (AC: 1, 2, 3, 4)
-  - [ ] Remove `from app.core.tracing import trace_llm_call` (`:27`).
-  - [ ] Add a lazy, cached, settings-sourced LangSmith `Client` builder at module scope (port
+- [x] **Task 1 — Rewrite `anthropic_client.py` onto `wrap_anthropic`** (AC: 1, 2, 3, 4)
+  - [x] Remove `from app.core.tracing import trace_llm_call` (`:27`).
+  - [x] Add a lazy, cached, settings-sourced LangSmith `Client` builder at module scope (port
         `_get_ls_client`'s explicit-key rationale verbatim into a comment — the key is never in
         `os.environ`). Build it with `hide_inputs = not settings.LANGSMITH_TRACE_CONTENT`,
         `hide_outputs = not settings.LANGSMITH_TRACE_CONTENT`.
-  - [ ] Add a `run_kind: str` parameter to `AnthropicProvider.__init__`. After building
+  - [x] Add a `run_kind: str` parameter to `AnthropicProvider.__init__`. After building
         `anthropic.Anthropic(...)` (`:143-148`), wrap it:
         `self._client = wrap_anthropic(raw, tracing_extra={"client": _ls_client(), "tags": [f"run_kind:{run_kind}"]})`
         — but ONLY wrap when tracing is enabled/available; when unconfigured, `wrap_anthropic` is a safe
@@ -201,60 +201,60 @@ and both return wrapped clients.
         unconditional wrap for simplicity, matching the "no client reaches a call site un-wrapped"
         invariant. (Import `wrap_anthropic` lazily inside `__init__`, mirroring the existing lazy
         `import anthropic` at `:130`, so a non-tracing process/test still imports nothing new eagerly.)
-  - [ ] In `complete` (`:150-200`) and `create_message` (`:202-262`): delete the
+  - [x] In `complete` (`:150-200`) and `create_message` (`:202-262`): delete the
         `with trace_llm_call(...) as span:` blocks and both `span.record(...)` calls. The body
         (`self._client.messages.create(...)` + result extraction + the existing PHI-safe `logger.info`)
         stays exactly as-is — the wrapped client traces transparently. Keep the "DO NOT pass
         temperature/top_p/..." comments.
-  - [ ] `get_llm_provider()` (`:266`) passes `run_kind="execution"`; `get_adapter_llm_provider()`
+  - [x] `get_llm_provider()` (`:266`) passes `run_kind="execution"`; `get_adapter_llm_provider()`
         (`:278`) passes `run_kind="adaptation"`. Keep both `@lru_cache(maxsize=1)`.
-- [ ] **Task 2 — Delete `app/core/tracing.py`** (AC: 5)
-  - [ ] `git rm app/core/tracing.py`. Confirm no remaining importers (grep `from app.core.tracing`,
+- [x] **Task 2 — Delete `app/core/tracing.py`** (AC: 5)
+  - [x] `git rm app/core/tracing.py`. Confirm no remaining importers (grep `from app.core.tracing`,
         `import app.core.tracing` → zero after Tasks 1/3/4).
-- [ ] **Task 3 — Rewire `code_driven_executor.py`** (AC: 5, 6)
-  - [ ] Delete the `from app.core.tracing import record_code_driven_span` import + the
+- [x] **Task 3 — Rewire `code_driven_executor.py`** (AC: 5, 6)
+  - [x] Delete the `from app.core.tracing import record_code_driven_span` import + the
         `record_code_driven_span(...)` call (`:859-866`). Keep the surrounding priceable-usage gate and
         the `reports_usage`-violation log below it.
-  - [ ] Keep `_write_velara_trace_shim` (`:210-233`), the shim write into `bundle_dir` (`:587`), the
+  - [x] Keep `_write_velara_trace_shim` (`:210-233`), the shim write into `bundle_dir` (`:587`), the
         `import velara_trace` backstop in `_RUNNER_SCRIPT` (`:180-187`), the `totals()`→`result["usage"]`
         injection (`:199-206`), and the `LANGSMITH_*` env injection (`:507-511`) — all still needed
         (AC6). No change here beyond removing the span call.
-- [ ] **Task 4 — Rewire `skill_integration_assistant.py`** (AC: 1, 7)
-  - [ ] Remove `from app.core.tracing import RUN_KIND_ADAPTATION, traced_run_kind` (`:36`).
-  - [ ] Delete the `with traced_run_kind(RUN_KIND_ADAPTATION):` wrappers at `:808, :900, :1115` (leave
+- [x] **Task 4 — Rewire `skill_integration_assistant.py`** (AC: 1, 7)
+  - [x] Remove `from app.core.tracing import RUN_KIND_ADAPTATION, traced_run_kind` (`:36`).
+  - [x] Delete the `with traced_run_kind(RUN_KIND_ADAPTATION):` wrappers at `:808, :900, :1115` (leave
         the LLM calls inside — they already use `get_adapter_llm_provider()`, now statically tagged
         `run_kind:adaptation`).
-  - [ ] Review the prompt clauses mentioning `velara_trace` (`:244,251,269,270,678,1055`) — per AC7 the
+  - [x] Review the prompt clauses mentioning `velara_trace` (`:244,251,269,270,678,1055`) — per AC7 the
         adapter contract is UNCHANGED (adapter does NOT set `usage`; runner auto-injects `totals()`), and
         none of these clauses describes bespoke span internals, so they most likely need **no edit**.
         Only reword a clause if the slimmed shim actually changed the behavior it states. Do NOT invent a
         "set `usage`" instruction — that would contradict the prompt (`:242,:335`) and the runner
         (`code_driven_executor.py:199-206`).
-- [ ] **Task 5 — Slim the sandbox `velara_trace.py`** (AC: 5, 6)
-  - [ ] Delete `_TracedClient`, `_TracedStream`, `_StreamProxy`, `_TracedMessages`, module-local
+- [x] **Task 5 — Slim the sandbox `velara_trace.py`** (AC: 5, 6)
+  - [x] Delete `_TracedClient`, `_TracedStream`, `_StreamProxy`, `_TracedMessages`, module-local
         `_emit_span`, `_record_from_response`.
-  - [ ] Rebuild `client()` and `install()` on `wrap_anthropic(anthropic.Anthropic(...))`. Keep the
+  - [x] Rebuild `client()` and `install()` on `wrap_anthropic(anthropic.Anthropic(...))`. Keep the
         `import anthropic` local, the `ANTHROPIC_API_KEY`-from-env read, and the auto-`install()` on
         import + idempotency guard.
-  - [ ] KEEP `_record_usage`, the 4 module globals, and `totals()`. Wire the accumulator with a thin
+  - [x] KEEP `_record_usage`, the 4 module globals, and `totals()`. Wire the accumulator with a thin
         usage-only recorder around the wrapped client's `messages.create/.stream/.parse` responses (NO
         span emission — wrap_anthropic owns spans). `totals()` shape unchanged
         (`{input_tokens, output_tokens, model}` or `None` when `_call_count == 0`).
-  - [ ] This module still has NO `app.*` import (runs in the sandbox venv). `wrap_anthropic`
+  - [x] This module still has NO `app.*` import (runs in the sandbox venv). `wrap_anthropic`
         (`langsmith.wrappers`) is **not guaranteed installed** in that venv (it's built from
         `manifest.requirements` only — the platform injects env vars, not packages). **Guard the
         `wrap_anthropic` import** so that when `langsmith` is absent the client is the raw
         `anthropic.Anthropic` (still accumulates usage via the recorder, just no spans) — mirror the
         existing swallowed-`ImportError` shape at `velara_trace.py:98-99`.
-- [ ] **Task 6 — Tests + gates** (AC: 8)
-  - [ ] `git rm tests/unit/core/test_tracing.py tests/unit/services/test_velara_trace_shim.py`.
-  - [ ] Rewrite span assertions in `test_anthropic_client.py` (`TestProviderTracing`),
+- [x] **Task 6 — Tests + gates** (AC: 8)
+  - [x] `git rm tests/unit/core/test_tracing.py tests/unit/services/test_velara_trace_shim.py`.
+  - [x] Rewrite span assertions in `test_anthropic_client.py` (`TestProviderTracing`),
         `test_code_driven_executor.py` (span block), `test_skill_integration_assistant.py` (run_kind +
         velara_trace). Assert wrapping + tag presence + no-op-off + usage accumulation; do NOT assert on
         `RunTree`/`_emit_span`.
-  - [ ] Update `_CONFORMING_ADAPTER_SOURCE` in `test_skills.py` only if the slimmed contract changed
+  - [x] Update `_CONFORMING_ADAPTER_SOURCE` in `test_skills.py` only if the slimmed contract changed
         what the adapter writes (it should not — client()/totals() survive).
-  - [ ] `ruff check .` clean; run the affected unit + integration suites; `python scripts/export_openapi.py`
+  - [x] `ruff check .` clean; run the affected unit + integration suites; `python scripts/export_openapi.py`
         → zero `docs/api-spec.json` diff.
 
 ## Dev Notes
@@ -401,11 +401,104 @@ LangSmith's per-run `total_cost`.
 
 ### Agent Model Used
 
+claude-sonnet-5
+
 ### Debug Log References
+
+- Container bakes source (no bind mount) — per [Memory: project-container-stale-baked-test-file],
+  `docker cp`'d every changed file into the `api` container after each edit and verified sync (grep a
+  new symbol / compare line counts) before trusting any in-container `pytest`/`ruff` run. A blanket
+  `docker cp . <container>:/app` was used once mid-run as a full-workspace resync; confirmed healthy via
+  `ruff check` + a smoke import afterward.
+- Recreated `velara_test` clean (`DROP DATABASE` + `CREATE DATABASE ... OWNER velara`) and ran
+  `alembic upgrade head` before the integration suite, per the container-test-env convention.
+- `test_wrap_anthropic_is_called_unconditionally` initially failed (0 calls recorded) — root cause: the
+  test called the `_make_provider()` helper, which itself opens a *nested* `patch("langsmith.wrappers
+  .wrap_anthropic", ...)` context that shadows the outer test's patch, so the outer mock never observes
+  the call. Fixed by constructing `AnthropicProvider` directly in the test instead of through the helper.
+- `tests/unit/core/test_config.py::test_default_value_is_false` fails in this container — confirmed
+  PRE-EXISTING and unrelated to this story: `config.py` and `test_config.py` are untouched by the diff
+  (`git diff --stat HEAD -- app/core/config.py tests/unit/core/test_config.py` is empty). Root cause is
+  a container-environment leak: the `api` container's `.env` sets `LANGSMITH_TRACING=true` and
+  `LANGSMITH_TRACE_CONTENT=true` in the actual process environment, and `Settings(_env_file=None, ...)`
+  still reads live `os.environ` (pydantic-settings does not gate on `_env_file` for process env vars) —
+  so the test's "defaults are false" assertion fails against this container's env regardless of code.
+  Verified with `unset LANGSMITH_TRACE_CONTENT` — still fails on `LANGSMITH_TRACING`. Left unfixed
+  (out of this story's scope; `config.py` is explicitly on the "do not touch" list).
 
 ### Completion Notes List
 
+- **AC1** — `AnthropicProvider.__init__` gained a required `run_kind: str` param; `get_llm_provider()`
+  passes `"execution"`, `get_adapter_llm_provider()` passes `"adaptation"`. Both remain
+  `@lru_cache(maxsize=1)` singletons, so the tag is baked once per factory at construction — no
+  ContextVar. The 3 `skill_integration_assistant.py` adapter-propose sites (`:808→`, `:900→` (now
+  `:807`, `:898` after unwrap-dedent), `:1108→`) dropped their `with traced_run_kind(...)` blocks; they
+  already call through the injected adapter provider.
+- **AC2/AC3** — `_get_ls_client()` (module-scope in `anthropic_client.py`, replacing the deleted
+  `tracing.py`'s version) builds an explicit `langsmith.Client(api_key=settings.LANGSMITH_API_KEY,
+  hide_inputs=not LANGSMITH_TRACE_CONTENT, hide_outputs=not LANGSMITH_TRACE_CONTENT)`, cached
+  module-globally. Injected into every wrap via `tracing_extra={"client": ..., "tags": [...]}`.
+- **AC4** — `wrap_anthropic` is called unconditionally in `AnthropicProvider.__init__` (imported lazily
+  inside `__init__`, mirroring the existing lazy `anthropic`/`httpx` imports); `complete`/`create_message`
+  lost their `with trace_llm_call(...)`/`span.record(...)` blocks entirely — the wrapped client traces
+  transparently. No story-authored stream/multi-model capture remains.
+- **AC5** — `app/core/tracing.py` deleted whole-file (361 lines; confirmed zero remaining importers via
+  grep before deletion). `record_code_driven_span` import+call removed from `code_driven_executor.py`
+  (the platform-side "span from self-reported usage" mechanism is gone — in-sandbox calls now trace
+  directly via the slimmed shim's own `wrap_anthropic` use). `traced_run_kind`/`RUN_KIND_ADAPTATION`
+  import + all 3 call sites removed from `skill_integration_assistant.py`.
+- **AC6** — Sandbox `velara_trace.py` rebuilt: bespoke `_TracedClient`/`_TracedStream`/`_StreamProxy`/
+  `_TracedMessages`/module `_emit_span` deleted; replaced with `_UsageClient`/`_UsageStream`/
+  `_UsageStreamProxy`/`_UsageMessages` (usage-accumulation only, no span code) wrapping a client that
+  `_wrap_if_available()` traces via `wrap_anthropic` IF BOTH the tracing env vars are set AND
+  `langsmith.wrappers` is importable — guarded with a bare `except Exception`, falling back to the raw
+  untraced client (usage accumulation still works either way). `totals()`/`_record_usage`/the 4 module
+  globals are unchanged in shape and behavior. `client()` and `install()` both route through
+  `_wrap_if_available`. Confirmed via test that the guarded import genuinely tolerates `langsmith`
+  being absent (simulated via a `builtins.__import__` block, not just an exception side-effect on an
+  already-imported name).
+- **AC7** — Verified (not assumed) that none of the 6 `velara_trace` prompt clauses in
+  `skill_integration_assistant.py` describe bespoke span internals — they describe interception/wiring,
+  which is unchanged externally by the slimmed shim. Zero prompt text edits were needed; only the one
+  stale in-code comment referencing `app.core.tracing` (in `code_driven_executor.py`'s env-injection
+  block) was reworded for accuracy.
+- **AC8** — Deleted `tests/unit/core/test_tracing.py` and the old `tests/unit/services/
+  test_velara_trace_shim.py` (both tested removed internals wholesale); wrote a new
+  `test_velara_trace_shim.py` covering the slimmed shim's usage accumulation (create/stream/
+  get_final_message-at-stream-end/exit-fallback), the guarded `wrap_anthropic` import (env-gate-closed,
+  langsmith-absent, wrap-failure — all three fall back to accumulation-only), and `install()` idempotency.
+  Rewrote `test_anthropic_client.py`'s `TestProviderTracing` to assert wrap CONFIGURATION (explicit
+  client, redaction flags, run_kind tag, unconditional wrap) instead of `RunTree` construction. Removed
+  the now-dead span-emission test block from `test_code_driven_executor.py` (the mechanism it tested no
+  longer exists) and its `app.core.tracing` import. Rewrote the one `run_kind`-dependent test in
+  `test_skill_integration_assistant.py` (the old test read an ambient ContextVar the `FakeLLMProvider`
+  double can no longer observe — the tag is now static-per-real-provider, orthogonal to test doubles).
+  `test_config.py` needed no change (confirmed, see Debug Log for its one pre-existing unrelated
+  failure). `_CONFORMING_ADAPTER_SOURCE` in `test_skills.py` needed no change (its `velara_trace.client()`
+  + `totals()` usage is the harmless adapter-set-usage case the runner still respects).
+- **Gates**: `ruff check .` clean repo-wide. Full suite: 837 unit + 789 integration = 1626 passed, 3
+  pre-existing skips, 1 pre-existing FAILURE unrelated to this diff (`test_config.py::
+  test_default_value_is_false`, container-env leak — see Debug Log). `python scripts/export_openapi.py`
+  → zero diff to `docs/api-spec.json` (confirmed via `git diff --exit-code`).
+- **Zero product behavior change** confirmed: cost VALUE still flows through the unchanged
+  `pricing.py`/envelope path; no other production file outside the story's declared surface was touched.
+- **Scope boundary held**: no `get_current_run_tree()`/`to_headers()`/`from_headers()`/
+  `tracing_context()`/`langsmith_run_id` write anywhere in the diff (verified by grep) — AD-7/Story 17-6
+  territory was not entered. `pricing.py`, `execution_tasks.py`'s completion write, and
+  `cost_is_estimated` were not touched (17-7 territory).
+
 ### File List
+
+- `app/integrations/anthropic_client.py` (modified — wrap_anthropic seam, explicit LS client, run_kind param)
+- `app/core/tracing.py` (deleted — 361 lines, whole file)
+- `app/services/code_driven_executor.py` (modified — removed record_code_driven_span import+call; kept shim writer/env-injection/totals-injection; reworded one stale comment)
+- `app/services/skill_integration_assistant.py` (modified — removed traced_run_kind import + 3 call sites; no prompt text changes needed)
+- `app/services/sandbox_assets/velara_trace.py` (modified — bespoke span/stream classes deleted; rebuilt on wrap_anthropic with guarded import; usage accumulator/totals() kept)
+- `tests/unit/core/test_tracing.py` (deleted)
+- `tests/unit/services/test_velara_trace_shim.py` (rewritten — new tests for the slimmed shim)
+- `tests/unit/integrations/test_anthropic_client.py` (rewritten — TestProviderTracing asserts wrap config, not RunTree; run_kind param added to all provider constructions)
+- `tests/unit/services/test_code_driven_executor.py` (modified — removed dead span-emission test block + tracing import)
+- `tests/unit/services/test_skill_integration_assistant.py` (modified — rewrote the run_kind-dependent test; FakeLLMProvider no longer reads the deleted ContextVar)
 
 ## Change Log
 
@@ -413,3 +506,11 @@ LangSmith's per-run `total_cost`.
   slim-shim-keep-totals (interim cost preserved) + static-per-factory run_kind tags. Deletion surface,
   wrap_anthropic behavior, and the 17-5/17-6 boundary verified against live source + container-installed
   langsmith 0.10.10.
+- 2026-07-30: Implemented Story 17.5. Deleted app/core/tracing.py (361 lines) and the sandbox
+  velara_trace.py's bespoke span/stream classes; every Anthropic client now routes through
+  langsmith.wrappers.wrap_anthropic with an explicit LangSmith Client (metadata-only PHI floor via
+  hide_inputs/hide_outputs) and a static run_kind wrap-time tag (execution/adaptation), replacing the
+  ContextVar. Sandbox shim slimmed to usage-accumulation + a guarded wrap_anthropic monkeypatch (falls
+  back to untraced when langsmith is absent from the skill's own venv — it is never platform-injected).
+  Zero product/cost-VALUE change. Gates: ruff clean, 1626/1627 tests passed (1 pre-existing, unrelated
+  container-env failure), zero OpenAPI diff.

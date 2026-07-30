@@ -54,6 +54,33 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-30
+# 2026-07-30: 17-5-wrap-anthropic-seam-delete-hand-rolled-tracing moved to review (dev-story).
+#   Deleted app/core/tracing.py (361 lines, whole file — zero remaining importers confirmed before
+#   delete) + the sandbox velara_trace.py's bespoke _TracedClient/_TracedStream/_StreamProxy/
+#   _TracedMessages/_emit_span. Every Anthropic client now routes through langsmith.wrappers
+#   .wrap_anthropic: platform AnthropicProvider wraps unconditionally with an explicit LangSmith Client
+#   (never os.environ auth) carrying hide_inputs/hide_outputs=not LANGSMITH_TRACE_CONTENT (reinstates the
+#   metadata-only PHI floor — wrap_anthropic sends full content incl. system-prompt by default) and a
+#   STATIC run_kind tag (execution/adaptation, baked per-factory since both are @lru_cache singletons —
+#   replaces the traced_run_kind ContextVar). Sandbox shim slimmed to a thin usage-only accumulator
+#   wrapping a client that's wrap_anthropic-traced IFF both tracing env vars are set AND langsmith is
+#   importable (guarded — langsmith is NEVER platform-injected into the sandbox venv, only env vars are;
+#   confirmed via a builtins.__import__-blocking test, not just an exception side-effect). totals()/cost
+#   VALUE path unchanged (interim trace-nesting deferred to 17-6, per spine). Verified zero scope leak
+#   into 17-6 (no get_current_run_tree/to_headers/from_headers/tracing_context/langsmith_run_id write) or
+#   17-7 (pricing.py/execution_tasks untouched). Tests: deleted 2 files testing removed internals
+#   wholesale, wrote a new test_velara_trace_shim.py for the slimmed shim, rewrote TestProviderTracing to
+#   assert wrap CONFIGURATION not RunTree construction, removed a dead span-assertion block from
+#   test_code_driven_executor.py, fixed one FakeLLMProvider test that read the now-deleted ContextVar.
+#   Gates: ruff clean repo-wide; 837 unit + 789 integration = 1626 passed, 3 pre-existing skips, 1
+#   PRE-EXISTING unrelated failure (test_config.py::test_default_value_is_false — container .env leaks
+#   LANGSMITH_TRACING/LANGSMITH_TRACE_CONTENT=true into process env; config.py/its test are untouched by
+#   this diff, confirmed via empty `git diff --stat`); zero OpenAPI diff. NOTE: velara-api has other
+#   uncommitted changes from Story 17.4's review (invocation.py, migration 0031, its test) sitting in the
+#   working tree — NOT part of 17.5, correctly excluded from this story's File List; per
+#   never-push-subrepos only code-review commits velara-api. Also still uncommitted: unrelated
+#   velara-web SkillForm.tsx.
+# 2026-07-30: 17-5-wrap-anthropic-seam-delete-hand-rolled-tracing moved to in-progress (dev-story).
 # 2026-07-30: 17-5-wrap-anthropic-seam-delete-hand-rolled-tracing moved to ready-for-dev (create-story).
 #   Epic-17 recommended-first (dependency-free; fixes the LIVE wrong-cost bug — hand-rolled
 #   stream/multi-model capture recorded only 1 of N calls). Deletion-and-replace refactor of the tracing
@@ -624,7 +651,7 @@ development_status:
   #   worker-side/hand-rolled tracing of 17.1/17.2. Recommended first: 17-5
   #   (wrap_anthropic seam, dependency-free, fixes the live cost bug).
   17-4-cost-tracking-schema-run-id-and-estimated-flag: done
-  17-5-wrap-anthropic-seam-delete-hand-rolled-tracing: in-progress
+  17-5-wrap-anthropic-seam-delete-hand-rolled-tracing: review
   17-6-invocation-scoped-trace-sandbox-header-propagation: backlog
   17-7-estimate-write-hot-path-slim-pricing: backlog
   17-8-deferred-cost-reconciler-task: backlog
