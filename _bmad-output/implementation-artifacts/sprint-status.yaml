@@ -54,6 +54,7 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-30
+# 2026-07-30: 17-7-estimate-write-hot-path-slim-pricing moved to in-progress (dev-story).
 # 2026-07-30: 17-6-invocation-scoped-trace-sandbox-header-propagation → DONE (code-review). 3 parallel
 #   adversarial layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor): all 7 ACs satisfied,
 #   forbidden scope respected. 1 patch applied+tested (velara_trace._UsageStream.__enter__ leaked the
@@ -749,6 +750,6 @@ development_status:
   #   confirmed all file:line citations + the three load-bearing scope claims against live source; folded
   #   in 2 test-guidance fixes (per-branch _extract_cost_fields unit tests are NET-NEW, not existing;
   #   don't extend test_job_service's default-is-None loop with the False-defaulting kwarg).
-  17-7-estimate-write-hot-path-slim-pricing: ready-for-dev
+  17-7-estimate-write-hot-path-slim-pricing: in-progress
   17-8-deferred-cost-reconciler-task: backlog
   17-9-cost-consumers-read-new-states: backlog

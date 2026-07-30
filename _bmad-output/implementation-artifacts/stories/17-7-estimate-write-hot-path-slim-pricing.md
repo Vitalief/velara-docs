@@ -23,7 +23,7 @@ status_note: >
 
 # Story 17.7: Estimate Write on the Hot Path; Slim `pricing.py`
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
