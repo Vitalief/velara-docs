@@ -777,5 +777,35 @@ development_status:
   #   in 2 test-guidance fixes (per-branch _extract_cost_fields unit tests are NET-NEW, not existing;
   #   don't extend test_job_service's default-is-None loop with the False-defaulting kwarg).
   17-7-estimate-write-hot-path-slim-pricing: done
-  17-8-deferred-cost-reconciler-task: backlog
+  # 2026-07-30: 17-8-deferred-cost-reconciler-task moved to ready-for-dev (create-story). Filled from
+  #   STUB against live source at baseline d6bc4bc (post-17.7). Governing AD-4/AD-8/AD-9 (+ AD-6
+  #   no-op-without-trace, AD-7 trace_id/list_runs). GREENFIELD cold path: no reconciler / list_runs /
+  #   total_cost exists in app/ today. ONE new task app/workers/cost_reconciler.py that (a) is
+  #   enqueued AFTER the estimate row commits at completion (self-scheduled apply_async(countdown~60)
+  #   via run_in_threadpool — the invocations.py:496-515 after-commit .delay template; periodic beat
+  #   sweep REJECTED), only when a langsmith_run_id was captured (tracing on); (b) builds a SEPARATE
+  #   read-only langsmith.Client (mirror anthropic_client._tracing_enabled/_get_ls_client at :49-79 —
+  #   do NOT reuse the cached write client), calls list_runs(trace_id=<langsmith_run_id>,
+  #   run_type="llm", select=["total_cost"], project_name=LANGSMITH_PROJECT) and SUMS total_cost across
+  #   all llm runs (N calls/M models); (c) completeness-gates (all runs present + each total_cost
+  #   non-NULL) else bounded self.retry (the parse_document ingest_tasks.py:41-42,305-311 idiom), on
+  #   exhaustion leaves the estimate; (d) compare-and-set UPDATE ... SET cost_usd=<sum>,
+  #   cost_is_estimated=false WHERE invocation_job_id=<job> AND cost_is_estimated=true — a redelivery is
+  #   a 0-row no-op, never regresses a reconciled row (AD-8 writer symmetry; the hot-path INSERT is the
+  #   only other writer). Candidate predicate is DB-STRUCTURAL: cost_is_estimated=true AND
+  #   langsmith_run_id IS NOT NULL structurally excludes fan-out parents + code runs (born false+NULL-
+  #   trace; no fan_out/runtime column on invocation_results) and tracing-off rows (AD-6/AD-9). New
+  #   module MUST be added to celery_app.py include=[...] (no autodiscovery) or it silently never
+  #   registers. langsmith_run_id is a TRACE id → list_runs(trace_id=...), never read_run. Sharp scope
+  #   lines: estimate write/_extract_cost_fields/pricing.py (17-7), wrap seam/sandbox shim (17-5/17-6),
+  #   analytics/jobs/client/schemas + API exposure (17-9) all UNTOUCHED; no migration (columns from
+  #   17-4); zero api-spec.json diff. Carries 17-7's Review [Defer] constraint verbatim (couple the flag
+  #   with langsmith_run_id IS NOT NULL). AC9 live end-to-end is a manual/dev step (no CI key), same
+  #   posture as 17-6's AC6. Two parallel call-site sweeps + an independent fresh-context validation pass
+  #   (langsmith 0.10.10 list_runs/Run.total_cost verified in-container) confirmed every load-bearing
+  #   claim; 3 refinements folded in (tracing-off-not-unknown-model predicate rationale; enqueuer holds
+  #   the InvocationJob not the result id so the reconciler re-derives via the unique constraint; the
+  #   dispatch sits inside run_skill's outer try whose except marks the job FAILED, so swallowing a
+  #   broker-dispatch failure is mandatory).
+  17-8-deferred-cost-reconciler-task: ready-for-dev
   17-9-cost-consumers-read-new-states: backlog
