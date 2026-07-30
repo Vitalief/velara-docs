@@ -807,5 +807,31 @@ development_status:
   #   the InvocationJob not the result id so the reconciler re-derives via the unique constraint; the
   #   dispatch sits inside run_skill's outer try whose except marks the job FAILED, so swallowing a
   #   broker-dispatch failure is mandatory).
-  17-8-deferred-cost-reconciler-task: in-progress
+  # 2026-07-30: 17-8-deferred-cost-reconciler-task moved to review (dev-story). New
+  #   app/workers/cost_reconciler.py: reconcile_invocation_cost (bind=True) builds a dedicated read-only
+  #   langsmith.Client (mirrors anthropic_client's tracing gate, never reuses the cached write client),
+  #   re-derives the job's one InvocationResult via invocation_job_id, re-checks the candidate predicate
+  #   (cost_is_estimated=True AND langsmith_run_id is not None — structurally excludes fan-out/code/
+  #   tracing-off rows), calls list_runs(trace_id=..., run_type="llm", select=["total_cost"]), sums
+  #   total_cost across all llm runs (Decimal-exact via str() coercion), and issues a single
+  #   compare-and-set UPDATE ... WHERE cost_is_estimated=true. Incomplete cost triggers bounded
+  #   self.retry(countdown=30, max_retries=8) mirroring parse_document's idiom; exhaustion leaves the
+  #   estimate permanently. Registered in celery_app.py's include=[...]. Enqueue hook extracted as a
+  #   standalone _maybe_enqueue_cost_reconciler helper in execution_tasks.py (unit-testable, mirrors
+  #   _tag_sentry_job), called after the estimate row's session_scope block exits; dispatches via
+  #   apply_async(countdown=60) through run_in_threadpool with a MANDATORY swallowing try/except (the call
+  #   site sits inside run_skill's outer failure-handling try). Discovered mid-implementation that
+  #   directly invoking the real bound task from an async pytest-asyncio test raises "asyncio.run() cannot
+  #   be called from a running event loop" — fixed via a fresh-thread+event-loop runner mirroring
+  #   test_ingest.py's established parse_document pattern, applied consistently to every reconciler task
+  #   invocation (not just the retry tests). Tests: 12 new unit (_tracing_enabled/_build_read_client/
+  #   _sum_total_cost) + 3 new unit (_maybe_enqueue_cost_reconciler) + 8 new DB-backed integration (CAS
+  #   flip, redelivery no-op, AD-9 fan-out skip, AD-6 tracing-off skip, missing-row, not-configured,
+  #   incomplete-cost retry, retry-exhaustion give-up). No migration (17-4's columns); zero drift into
+  #   pricing.py/_extract_cost_fields/analytics_service/jobs/client/schemas/wrap-seam/velara_trace.py.
+  #   Gates: ruff clean; unit 883 passed (1 pre-existing unrelated container-env failure, documented since
+  #   17.4); integration 808 passed / 3 pre-existing skips (0 regressions, fresh velara_test); zero
+  #   api-spec.json diff. AC9 (live end-to-end LangSmith verification) is a manual/dev step per the story
+  #   — not executed this session (no live key).
+  17-8-deferred-cost-reconciler-task: review
   17-9-cost-consumers-read-new-states: backlog
