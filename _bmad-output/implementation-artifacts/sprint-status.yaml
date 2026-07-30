@@ -54,6 +54,8 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-30
+# 2026-07-30: 17-9-cost-consumers-read-new-states moved to ready-for-dev (create-story) — the LAST
+#   story of the 17-4..17-9 cost re-architecture chain. See per-story note below (Epic 17 section).
 # 2026-07-30: 17-8-deferred-cost-reconciler-task → DONE (code-review). 3 parallel adversarial layers
 #   (Blind Hunter, Edge Case Hunter, Acceptance Auditor) + triage: 1 decision-needed, 2 patch, 2 defer,
 #   4 dismissed. All decision+patch fixes applied & re-tested in-container; velara-web clean (no bundle).
@@ -850,7 +852,30 @@ development_status:
   #   api-spec.json diff. AC9 (live end-to-end LangSmith verification) is a manual/dev step per the story
   #   — not executed this session (no live key).
   17-8-deferred-cost-reconciler-task: done
-  17-9-cost-consumers-read-new-states: backlog
+  # 2026-07-30: 17-9-cost-consumers-read-new-states moved to ready-for-dev (create-story). LAST
+  #   story of the 17-4..17-9 cost re-architecture chain (deps 17-7 + 17-8 both done). Governing
+  #   AD-5/AD-9. Filled from STUB against live source (velara-api b3afe21 dev / velara-web d5b2bbe
+  #   dev) via two parallel repo sweeps + an independent fresh-context validation pass (0 CRITICAL,
+  #   6 refinements folded in). Read-side only: expose InvocationResult.cost_is_estimated on
+  #   JobResult + JobSummary (nullable — a queued job's outerjoin row is None; False would lie
+  #   "authoritative", AD-5's exact bug class) via a 4-tuple widening of job_service.list_jobs
+  #   (arity breaks 4 unpack sites: jobs.py:155, client.py:240 + test_jobs.py:1319,:1338); FE
+  #   renders an "estimated" indicator on RunConsole cost card + JobsHistory detail panel ONLY
+  #   (separate DOM node — exact-match $ tests; no emoji; third surface RecentRunsPanel inherits by
+  #   JobDetailPanel reuse, by design). This story owns the chain's ONE api-spec.json diff —
+  #   isolated to the two job schemas. Four decisions documented: D1 decline AD-5's optional
+  #   "includes N estimated" analytics affordance (reconcile lands ~60-90s; zero analytics diff
+  #   REQUIRED — the 3 SUM sites are already estimate-blind/NULL-safe, AC1 is verification tests
+  #   only); D2 certification snapshots NO cost (verified zero cost refs in cert models/schemas/
+  #   service) — spine's Deferred flag closed by confirmation, no code change; D3 nullable wire
+  #   flag + detail-panels-only indicator; D4 legacy false+NULL rows render "—" unchanged (false
+  #   does NOT imply priced). Client-portal IP boundary re-asserted with the new flag (seed
+  #   cost_is_estimated=True so absence is non-vacuous). AC7 live estimate→reconciled Run Console
+  #   spot-check is manual (no CI key) — flagged alongside 17-6 AC6 + 17-8 AC9 for ONE combined
+  #   LangSmith-configured session before the epic closes. ⚠️ Baseline trap: 17-8's 6 files sit
+  #   done-but-uncommitted in velara-api — excluded from 17-9's File List, reviewer separates
+  #   diffs at commit time.
+  17-9-cost-consumers-read-new-states: ready-for-dev
   # 2026-07-30: 17-10-bundle-output-sha256-for-cert-gate drafted (create-story) → ready-for-dev.
   #   Follow-up to 17-3 closing its knowingly-deferred "NULL-hash bundle skills can't be technically
   #   certified" watch item. Field-diagnosed while certifying the velara-protocol-extractor bundle:
