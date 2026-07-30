@@ -725,6 +725,30 @@ development_status:
   #   (estimate/cost_is_estimated/pricing.py — untouched) and 17-8 (list_runs/total_cost/reconciler —
   #   untouched). No migration (columns exist from 17-4); no OpenAPI diff (exposure is 17-9).
   17-6-invocation-scoped-trace-sandbox-header-propagation: done
-  17-7-estimate-write-hot-path-slim-pricing: backlog
+  # 2026-07-30: 17-7-estimate-write-hot-path-slim-pricing moved to ready-for-dev (create-story).
+  #   Governing AD-1/AD-3/AD-6 (+ AD-8 writer half, AD-9). Filled from STUB against live source at
+  #   baseline b3e3dda (post-17.6) via three parallel call-site sweeps (pricing.py + all callers; the
+  #   completion write path; sandbox cost + all cost_usd read-consumers). TWO ground-truth corrections
+  #   shape the scope: (1) app/core/pricing.py is ALREADY minimal/correct for the estimate role — the
+  #   "slim/demote" (AD-1) is a DOCUMENTATION reframe of the module/compute_cost_usd docstrings (output
+  #   is a provisional estimate, always reconcilable; LangSmith authoritative), NOT a rewrite of the rate
+  #   table or logic (rewriting would break its two working callers — _extract_cost_fields and the adapter
+  #   audit path — and reinvent a correctness-hardened wheel). (2) the completion write is a FRESH INSERT
+  #   under _guard_not_terminal (one row per job, unique-constrained; NO UPDATE-of-existing-row path
+  #   exists), so AD-8's "never overwrite a reconciled row" is satisfied STRUCTURALLY — do NOT add an
+  #   ON CONFLICT upsert (redundant + could race the 17-8 reconciler). The actual behavioral work: wire
+  #   the FIRST writer of cost_is_estimated (zero writers/readers today; relies on server_default false) —
+  #   _extract_cost_fields returns cost_is_estimated riding its existing runtime-in-_LLM_USING_RUNTIMES
+  #   predicate (True for every LLM leaf row incl. NULL-cost unknown-model/partial; False only for genuine
+  #   code/fan-out $0 rows), threaded via a new additive kwarg on mark_completed/mark_blocked (mirrors
+  #   17-6's langsmith_run_id / 17-3's output_sha256 pattern). Sharp scope lines: reconciler read /
+  #   flip-to-false held for 17-8; API/schema exposure held for 17-9 (their api-spec.json diff, not here);
+  #   wrap seam + sandbox velara_trace.py untouched (17-5/17-6 — sandbox reports tokens+model only, worker
+  #   prices); NO migration (columns from 17-4). Analytics/jobs read-consumers verified NULL-safe and
+  #   estimate-blind — SUM(cost_usd) still returns numbers unchanged. Independent fresh-context validator
+  #   confirmed all file:line citations + the three load-bearing scope claims against live source; folded
+  #   in 2 test-guidance fixes (per-branch _extract_cost_fields unit tests are NET-NEW, not existing;
+  #   don't extend test_job_service's default-is-None loop with the False-defaulting kwarg).
+  17-7-estimate-write-hot-path-slim-pricing: ready-for-dev
   17-8-deferred-cost-reconciler-task: backlog
   17-9-cost-consumers-read-new-states: backlog
