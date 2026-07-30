@@ -54,6 +54,7 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-30
+# 2026-07-30: 17-6-invocation-scoped-trace-sandbox-header-propagation moved to in-progress (dev-story).
 # 2026-07-30: 17-6-invocation-scoped-trace-sandbox-header-propagation moved to ready-for-dev (create-story). See per-story note below.
 # 2026-07-30: 17-5-wrap-anthropic-seam-delete-hand-rolled-tracing moved to done (code-review).
 #   Two high-severity findings patched: (1) sandbox wrap_anthropic call had no hide_inputs/
@@ -692,7 +693,7 @@ development_status:
   #   (C4) corrected worker test path tests/unit/workers/ (not /services/). Sharp scope lines to 17-7
   #   (estimate/cost_is_estimated/pricing.py — untouched) and 17-8 (list_runs/total_cost/reconciler —
   #   untouched). No migration (columns exist from 17-4); no OpenAPI diff (exposure is 17-9).
-  17-6-invocation-scoped-trace-sandbox-header-propagation: ready-for-dev
+  17-6-invocation-scoped-trace-sandbox-header-propagation: in-progress
   17-7-estimate-write-hot-path-slim-pricing: backlog
   17-8-deferred-cost-reconciler-task: backlog
   17-9-cost-consumers-read-new-states: backlog
