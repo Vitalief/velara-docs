@@ -9,7 +9,7 @@ baseline_commit_note: velara-api head has Story 17.1 (platform tracing, `app/cor
 
 # Story 17.2: AI Adapter Emits LangSmith-Traced Skill Bundles
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -506,8 +506,174 @@ All paths under `velara-api/` (backend-only; NOT committed by dev-story — code
 - `_bmad-output/implementation-artifacts/stories/17-2-ai-adapter-emits-langsmith-traced-skill-bundles.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` — 17.2 → in-progress → review.
 
+## Review Findings
+
+Code review 2026-07-29 (bmad-code-review, adversarial 3-layer + triage). Tests were run in the
+CI-equivalent env (files copied into the `api` container, `set -a; . ./.env.test`).
+
+- [x] [Review][Patch] FIXED 2026-07-29 (resolved from Decision → option (a), structural redact) **AC3
+  "metadata-only unconditionally" is not enforced by construction, and its two proof-tests FAIL**
+  [app/core/tracing.py:236-243, tests/unit/core/test_tracing.py:424,
+  tests/unit/services/test_code_driven_executor.py:870] — `record_code_driven_span` never sets
+  `content_inputs`/`content_outputs`, but `_emit_span` still evaluates
+  `if settings.LANGSMITH_TRACE_CONTENT:`. With content enabled the code-driven span emits `inputs={}` /
+  `outputs={"output": None}` — NOT the `{"redacted": True}` the two AC3 tests assert, so both tests fail
+  (`assert {} == {'redacted': True}`, verified by execution). This ALSO falsifies the Dev Agent Record's
+  "full suite 1630 passed / 3 skipped / 0 failed" claim. AC3 requires the content branch to be one "that
+  cannot exist here"; today it is reachable and merely happens to carry `None`. Two legitimate fixes,
+  needs a call: **(a)** make redaction structural — give `_emit_span` a per-call-site force-redact for
+  `code_driven_hybrid` (or have `record_code_driven_span` pass an explicit redact flag) so the guarantee
+  holds by construction regardless of `LANGSMITH_TRACE_CONTENT`, matching the AC wording; **(b)** accept
+  the current shape as "no content" and fix the two tests to assert `inputs == {}` /
+  `outputs == {"output": None}`, downgrading AC3's "branch cannot exist" wording to "branch carries no
+  content." Given AC3's explicit contract, (a) is the spec-faithful choice.
+
+- [x] [Review][Patch] FIXED 2026-07-29 **Partial usage report (model present, one token count None) makes
+  the span fabricate a cost/total that contradicts the run's authoritative NULL**
+  [app/services/code_driven_executor.py:777, app/core/tracing.py] —
+  The span gate is `envelope.usage is not None and envelope.usage.model is not None`; it does NOT require
+  both token counts. A report `{model: "claude-opus-4-8", input_tokens: 5000, output_tokens: None}` passes,
+  and `_emit_span` → `compute_cost_usd` coalesces `None → 0`, posting a CONCRETE `cost_usd` and
+  `total_tokens=5000` to LangSmith. Meanwhile the authoritative pricing seam
+  `execution_tasks._extract_cost_fields:177-182` deliberately treats an incomplete report (model OR either
+  count missing) as unpriceable → cost NULL, precisely to avoid "the '$0 for an LLM run' lie Story 15.5
+  exists to prevent." The observability figure therefore lies about cost for the identical run — the exact
+  partial-usage None-as-present bug class flagged in Epic 15's review. Fix (unambiguous): gate the span on
+  all three fields present (`model is not None and input_tokens is not None and output_tokens is not None`),
+  mirroring `_extract_cost_fields`'s own rule, so a partial report emits NO span (consistent with it pricing
+  NULL).
+
+- [x] [Review][Defer] **Span name hardcodes `anthropic.` prefix for a possibly-non-Anthropic self-reported
+  model** [app/core/tracing.py:320] — deferred, pre-existing. `_emit_span` builds
+  `name=f"anthropic.{call_site}"` (a Story 17.1 construction, unchanged by this diff). A code-driven hybrid
+  self-reports an arbitrary `model` and may have called a non-Anthropic provider, so
+  `anthropic.code_driven_hybrid` can mislabel the provider in LangSmith views. Observability-cosmetic;
+  belongs to the shared `_emit_span` naming decision, broader than this story.
+
+**Dismissed as noise (not persisted):** (1) latency is whole-run wall-clock incl. S3 upload on an `llm`
+span — AC1 explicitly mandates reusing the whole-run `duration_ms`, by design; (2) empty-string `model`
+passes the `is not None` gate — prices NULL + one warning log, same as any unrecognized model, negligible
+and subsumed by the partial-report patch; (3) "second `compute_cost_usd` invocation breaks single-source-
+of-truth" — identical to how 17.1's platform spans already price, not a divergence.
+
+## Post-Review Design Reversal — In-Sandbox Tracing (2026-07-29, operator-directed)
+
+**During post-review live testing the operator hit a real regression that reframed this story's central
+design decision.** Documented here in full because it REVERSES the "worker-side, never sandbox-side"
+choice this story was built on (Scope section above), and because the original rejection rationale was
+found to be partly incorrect.
+
+### What the live test exposed
+
+The operator ran the protocol-extractor skill (v2.2.0, priced $1.68 correctly), then re-ran the AI
+adapter on the same bundle and re-ran it (v2.3.0) — cost came back as `--` (NULL). Root-caused via
+worker logs + pulling both stored adapters from the skill bucket:
+
+- v2.2.0 adapter lifted usage from the client's **flat** metadata (`metadata["input_tokens"]` etc.) —
+  correct, matched the real client output shape.
+- v2.3.0 adapter (re-synthesized by the **opus** adapter) read a **nested** `metadata["usage"]` dict that
+  **does not exist** in the client's output → `usage` never set → envelope `usage_present=False` →
+  `code_driven_usage_contract_violation` warning → cost priced NULL → Run Console `--`.
+
+This was **AI-adapter non-determinism**: the same skill, re-adapted, produced a semantically-broken
+usage-lift. This story's worker-side span design *rests entirely on* that self-reported `usage` being
+present and correct, with **no gate** verifying it — Task 1's prompt clause ("an incomplete/invented
+report silently loses both") was prose, not enforcement. The live incident proved the seam fragile.
+
+### The rejection rationale was partly wrong
+
+This story rejected a sandbox-side wrapper partly on: *"would put a Vitalief-internal credential inside
+untrusted third-party bundle code for the first time ever."* **That is false.** The platform ALREADY
+injects `ANTHROPIC_API_KEY` into the sandbox `injected_env` (`code_driven_executor.py:~449`) — a strictly
+MORE sensitive credential than a LangSmith trace-write key. The credential boundary was already crossed;
+the only honest remaining objections to sandbox-side were (a) reliance on the non-deterministic adapter
+to rewrite call sites, and (b) not retroactive-for-free — both weaker than "security". The operator
+correctly challenged the security framing; it was dropped.
+
+### The reversed design (what was BUILT this iteration, no new story per operator directive)
+
+Sandbox-side per-call tracing + a platform-owned usage shim, PLUS a proposal gate so the regression
+cannot recur:
+
+1. **Adapter model → Sonnet 5.** New `settings.ADAPTER_MODEL="claude-sonnet-5"` +
+   `get_adapter_llm_provider()`; the `/integration-assistant/propose` endpoint uses it (new `AdapterLlm`
+   dependency). Platform-wide `ANTHROPIC_MODEL` (opus) is untouched — only the adapter authoring model
+   changed.
+2. **`velara_trace` shim** (`app/services/sandbox_assets/velara_trace.py`, platform-owned, NOT
+   bundle-shipped). Wraps the Anthropic client: traces every `.messages.create` to LangSmith
+   (metadata-only, `call_site="code_driven_hybrid_call"`, redacted content, no-op when LangSmith unset,
+   error-swallowed) AND accumulates token usage across all calls. `totals()` returns the authoritative
+   `{input_tokens, output_tokens, model}` for the envelope — so Jobs/Run Console cost stays consistent
+   and is no longer re-derived from the skill's private metadata shape.
+3. **Sandbox wiring** (`code_driven_executor.py`): injects `LANGSMITH_TRACING`/`LANGSMITH_API_KEY`/
+   `LANGSMITH_PROJECT` next to the already-present `ANTHROPIC_API_KEY` (only when tracing is configured);
+   writes the shim into `bundle_dir` so `import velara_trace` resolves (runner's `sys.path.insert(0,
+   os.getcwd())`, cwd=`bundle_dir`). `LANGSMITH_TRACE_CONTENT` deliberately NOT injected — in-sandbox
+   spans are metadata-only always.
+4. **Adapter prompts rewritten** (both `_SYSTEM_PROMPT` and `_SYNTHESIS_SYSTEM_PROMPT`): the
+   usage-reporting rule now MANDATES routing calls through `velara_trace.client()` and setting
+   `result["usage"] = velara_trace.totals()`, and explicitly FORBIDS hand-parsing the client's own
+   metadata (the exact thing that broke v2.3.0).
+5. **Proposal gate** (`_validate_adapter_wires_tracing` in `skill_integration_assistant.py`):
+   `propose_adapter` now REJECTS (`AdapterProposalParseError`, fail-closed) any adapter whose manifest
+   declares `reports_usage: true` but whose source does not reference `velara_trace` AND set
+   `result["usage"]`. A silent cost-to-`--` regression can no longer ship. Skipped for
+   `reports_usage: false` (honest no-LLM skills).
+
+The worker-side span from the review-patched section above is RETAINED as a fallback for bundles not yet
+re-adapted to the shim (they still price/trace from their self-reported envelope `usage`, gated on all
+three fields per the review patch).
+
+### Relationship to the ACs
+AC3's sandbox-surface claim ("zero new credential/module/import in `injected_env`") is now
+**intentionally superseded** for the traced case: `LANGSMITH_*` + the shim DO enter the sandbox, by
+operator decision, justified because `ANTHROPIC_API_KEY` already does. AC1/AC2/AC4's outcomes are
+preserved and strengthened (cost is now authoritative-from-shim, not guessed; re-adapt can't regress it).
+
+### Tests + gates
+6 shim tests (`tests/unit/services/test_velara_trace_shim.py`) + 3 proposal-gate tests
+(`test_skill_integration_assistant.py`) + updated integration fixtures to the post-17.2 adapter contract
+(`test_skills.py`). **Full suite 1654 passed / 3 skipped / 0 failed** on a recreated `velara_test` DB in
+the CI-equivalent env; **ruff clean repo-wide**. Container image rebuilt so changes survive restart.
+
+### Follow-up / caveats
+- **Existing v2.3.0 bundle does NOT retroactively get the shim** — it has no `velara_trace` wiring baked
+  in. Must be RE-ADAPTED once (now Sonnet 5 + gated) to get correct cost + per-call spans. The gate
+  guarantees the new proposal wires usage or is rejected.
+- Two-model attribution: if a skill uses >1 model across calls, `totals()` reports the last model seen
+  (best-effort single-model envelope, mirroring the pre-existing single-`model` envelope contract).
+  Per-call spans still carry each call's own model/cost.
+- The synthesis path (`_synthesize_manifest`) was NOT gated (only `propose_adapter`) — the live incident
+  went through `propose_adapter`. If synthesis ever authors usage-reporting adapters directly, extend the
+  gate there too (logged as a follow-up).
+
 ## Change Log
 
+- 2026-07-29 — **Post-review design reversal (operator-directed): in-sandbox tracing.** Live testing
+  surfaced a cost-→`--` regression from AI-adapter non-determinism (re-adapt read a nonexistent nested
+  `metadata["usage"]`). Reversed the worker-side-only design: adapter model → Sonnet 5; new platform-owned
+  `velara_trace` shim (per-call LangSmith spans + authoritative usage `totals()`) written into the sandbox;
+  `LANGSMITH_*` injected next to the already-present `ANTHROPIC_API_KEY` (the story's "credential boundary"
+  rejection rationale was found incorrect — that boundary was already crossed); adapter prompts rewritten to
+  mandate the shim; `propose_adapter` gate rejects a `reports_usage:true` adapter that doesn't wire it.
+  Worker-side span retained as fallback for not-yet-re-adapted bundles. New files:
+  `app/services/sandbox_assets/{__init__,velara_trace}.py`, `tests/unit/services/test_velara_trace_shim.py`.
+  Modified: `config.py`, `anthropic_client.py`, `dependencies.py`, `api/v1/skills.py`,
+  `code_driven_executor.py`, `skill_integration_assistant.py`, `tests/.../test_skill_integration_assistant.py`,
+  `tests/integration/api/test_skills.py`. Full suite 1654 passed / 3 skipped; ruff clean; image rebuilt.
+  See "Post-Review Design Reversal" section above for full reasoning. Existing v2.3.0 bundle must be
+  re-adapted once to pick up the shim.
+- 2026-07-29 — Code review (bmad-code-review). 3-layer adversarial review + triage: 1 decision-needed
+  (high — AC3 content guarantee not structural + 2 failing tests, falsifying the "0 failed" record),
+  1 patch (high — partial-usage report fabricates span cost/total vs authoritative NULL), 1 deferred
+  (pre-existing `anthropic.` span-name prefix), 3 dismissed. **Both patches applied:** (1) `_emit_span`
+  now force-redacts `call_site="code_driven_hybrid"` regardless of `LANGSMITH_TRACE_CONTENT` (structural
+  AC3 guarantee — the 2 previously-failing content tests now pass as written); (2) the span gate in
+  `run_code_driven_hybrid` now requires all three of model/input_tokens/output_tokens present, mirroring
+  `execution_tasks._extract_cost_fields`, so a partial report emits no span (added a 3-case parametrized
+  test). Gates re-run in the CI-equivalent env on a freshly-recreated `velara_test` DB: **full suite
+  1646 passed / 3 skipped / 0 failed**, ruff clean. OpenAPI gate unaffected (zero new API surface; the
+  pre-existing 17.3 spec drift remains logged in `deferred-work.md`). Status → done.
 - 2026-07-29 — Implemented (dev-story). All 5 tasks / 4 ACs complete. New
   `app/core/tracing.record_code_driven_span` emits a metadata-only LangSmith span
   (`call_site="code_driven_hybrid"`, `run_kind="execution"`) from a code-driven hybrid's self-reported

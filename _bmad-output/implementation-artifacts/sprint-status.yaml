@@ -54,6 +54,14 @@
 
 generated: 2026-06-02
 last_updated: 2026-07-29
+# 2026-07-29: 17-2-ai-adapter-emits-langsmith-traced-skill-bundles moved to done (code-review).
+#   Two patches applied during review: (1) _emit_span force-redacts call_site="code_driven_hybrid"
+#   so AC3's metadata-only guarantee is structural, not reliant on record_code_driven_span leaving
+#   content fields None (2 AC3 tests were FAILING in review — dev's "0 failed" claim was false);
+#   (2) span gate now requires all 3 usage fields (model+both token counts), mirroring
+#   execution_tasks._extract_cost_fields, so a partial report emits no span instead of posting a
+#   fabricated cost/total that contradicts the run's authoritative NULL. Full suite 1646 passed /
+#   3 skipped on a recreated velara_test DB; ruff clean.
 # 2026-07-27: 17-3-certification-dry-run-evidence-gate moved to review (dev-story). Full-stack
 #   implementation of the story as drafted, with one implementation correction discovered during
 #   development: the planned certification_dry_run context flag on InvocationRequest was NOT built
@@ -534,5 +542,22 @@ development_status:
   # ─────────────────────────────────────────────────────────
   epic-17: in-progress
   17-1-langsmith-tracing-for-platform-llm-calls: done
-  17-2-ai-adapter-emits-langsmith-traced-skill-bundles: review
+  17-2-ai-adapter-emits-langsmith-traced-skill-bundles: done
   17-3-certification-dry-run-evidence-gate: done
+  # 2026-07-29: LLM cost-tracking RE-ARCHITECTURE via correct-course
+  #   (sprint-change-proposal-2026-07-29.md; architecture spine
+  #   architecture-Velara-2026-07-29/ARCHITECTURE-SPINE.md, status final).
+  #   Live testing of 17.2 exposed cost bugs the hand-rolled tracing couldn't
+  #   fix (NULL cost on re-adapt; single-call undercount 32013/110; multi-model
+  #   mispricing). New paradigm: estimate-then-reconcile — instant local estimate
+  #   for UX, LangSmith total_cost reconciled in as authoritative, cost_usd still
+  #   persisted in Postgres. 6 dependency-ordered stories (17-4..17-9) STUBBED
+  #   (run bmad-create-story to fill full context before dev). This SUPERSEDES the
+  #   worker-side/hand-rolled tracing of 17.1/17.2. Recommended first: 17-5
+  #   (wrap_anthropic seam, dependency-free, fixes the live cost bug).
+  17-4-cost-tracking-schema-run-id-and-estimated-flag: backlog
+  17-5-wrap-anthropic-seam-delete-hand-rolled-tracing: backlog
+  17-6-invocation-scoped-trace-sandbox-header-propagation: backlog
+  17-7-estimate-write-hot-path-slim-pricing: backlog
+  17-8-deferred-cost-reconciler-task: backlog
+  17-9-cost-consumers-read-new-states: backlog
